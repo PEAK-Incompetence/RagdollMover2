@@ -1,0 +1,40 @@
+RagdollPoser = RagdollPoser or {}
+RagdollPoser.Mode = "ragdollposer"
+
+local root = "ragdollposer/"
+
+---Recursive include from https://github.com/2048khz-gachi-rmx/ImprovedAdminPhysgun/blob/7774d0f4ca70818adebe2718c37238784f25efae/lua/autorun/pgun_impr.lua#L6
+---@param sub string
+---@param cl boolean?
+---@param sv boolean?
+local function recInc(sub, cl, sv)
+	local path = (root .. sub):gsub("/$", "") .. "/" -- force a / at the end
+
+	local shouldInc = CLIENT and (cl == nil or cl) or SERVER and (sv == nil or sv)
+
+	local shouldShare = SERVER and (cl == nil or cl)
+
+	for k, v in ipairs(file.Find(path .. "*.lua", "LUA")) do
+		local fn = path .. v
+		if fn:match("/_.+%.lua$") then
+			continue
+		end -- ignore lua files starting with _
+
+		if shouldInc then
+			include(fn)
+		end
+
+		if shouldShare then
+			AddCSLuaFile(fn)
+		end
+	end
+end
+
+local function initialize()
+	recInc("shared", true, true) -- everything in root is shared
+	recInc("server", false, true)
+	recInc("client", true, false)
+end
+
+initialize()
+initialize()

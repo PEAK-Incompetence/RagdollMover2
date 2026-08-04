@@ -58,10 +58,10 @@ RagdollPoser.Networking.DefineReceiver("SendSubPose2", function(len, ply)
 	print("Get sub pose2")
 end)
 
-gameevent.Listen("player_connect")
-hook.Add("player_connect", "RagdollPoser_ReportPlayerData", function(data)
-	local pl = Entity(data.index + 1)
-	RagdollPoser.Data.Players[pl] = {}
+hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
+	if not RagdollPoser.Data.Players[pl] then
+		RagdollPoser.Data.Players[pl] = {}
+	end
 end)
 
 hook.Add("PlayerDisconnected", "RagdollPoser_RemovePlayerData", function(pl)

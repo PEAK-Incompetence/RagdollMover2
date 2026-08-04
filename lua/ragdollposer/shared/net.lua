@@ -74,7 +74,7 @@ end
 ---@param name string
 ---@return NetStarter
 function MGR.DefineSender(name)
-	print("define sender", name)
+	-- print("define sender", name)
 	local count = SenderToID[name]
 	if not count then
 		count = #Senders
@@ -98,10 +98,10 @@ function MGR.DefineReceiver(name, callback)
 	ReceiverCallbackBuffer[name] = callback
 	-- Suppose the server/client already defined the network string first,
 	-- then give the id to the callback
-	print("define receiver", name)
-	PrintTable(ReceiverNameToID)
+	-- print("define receiver", name)
+	-- PrintTable(ReceiverNameToID)
 	if ReceiverNameToID[name] then
-		print(ReceiverNameToID[name], "defined earlier, so let's set it")
+		-- print(ReceiverNameToID[name], "defined earlier, so let's set it")
 		Receivers[ReceiverNameToID[name]] = callback
 	end
 end
@@ -117,7 +117,7 @@ local function addReceiver()
 	local name = net.ReadString()
 	local id = net.ReadUInt(12)
 	-- If we already defined a receiver with a specific name
-	print("add receiver", name, id)
+	-- print("add receiver", name, id)
 	if ReceiverCallbackBuffer[name] then
 		Receivers[id] = ReceiverCallbackBuffer[name]
 	end
@@ -125,24 +125,24 @@ local function addReceiver()
 	-- When we define it later, then assign it
 	ReceiverIDToName[id] = name
 	ReceiverNameToID[name] = id
-	PrintTable(ReceiverIDToName)
-	PrintTable(ReceiverNameToID)
-	PrintTable(ReceiverCallbackBuffer)
+	-- PrintTable(ReceiverIDToName)
+	-- PrintTable(ReceiverNameToID)
+	-- PrintTable(ReceiverCallbackBuffer)
 end
 net.Receive("RagdollPoser_AddReceiver", addReceiver)
 
 ---@type NetReceiver
 local function netReceiver(len, ply)
-	print("receive message")
+	-- print("receive message")
 	local index = net.ReadUInt(MGR.GetSenderCountBits())
-	print(index)
-	PrintTable(ReceiverNameToID)
-	PrintTable(ReceiverIDToName)
-	PrintTable(ReceiverCallbackBuffer)
+	-- print(index)
+	-- PrintTable(ReceiverNameToID)
+	-- PrintTable(ReceiverIDToName)
+	-- PrintTable(ReceiverCallbackBuffer)
 	if Receivers[index] then
 		Receivers[index](len, ply)
 	else
-		print("set it")
+		-- print("set it")
 		if ReceiverIDToName[index] then
 			Receivers[index] = ReceiverCallbackBuffer[ReceiverIDToName[index]]
 		else
@@ -154,7 +154,7 @@ net.Receive("RagdollPoser", netReceiver)
 
 if CLIENT then
 	hook.Add("CreateMove", "RagdollPoser_InitializeServerReceiver", function(_)
-		print("setup")
+		-- print("setup")
 		net.Start("RagdollPoser_AddSender")
 		net.SendToServer()
 

@@ -3,17 +3,25 @@ TOOL.Category = "Poser"
 TOOL.Command = nil
 TOOL.ConfigName = ""
 
+---@param pl Player
+---@param entity Entity
+---@param bone any
+---@param entities any
 local function refreshEntities(pl, entity, bone, entities)
-	if SERVER then
-		RagdollPoser.Networking.SendAssemblyInfo()
-		net.WriteEntity(entity)
-		net.WriteUInt(bone, 8)
-		net.WriteUInt(#entities, 10)
-		for i = 1, #entities do
-			net.WriteEntity(entities[i])
-		end
-		net.Send(pl)
+	RagdollPoser.Networking.SendAssemblyInfo()
+	net.WriteEntity(entity)
+	net.WriteUInt(bone, 8)
+	net.WriteUInt(#entities, 10)
+	for i = 1, #entities do
+		net.WriteEntity(entities[i])
 	end
+	net.Send(pl)
+end
+
+---@param entity Entity
+local function validateEntity(entity)
+	-- Send only entities with a model
+	return entity.GetModel and entity:GetModel()
 end
 
 ---@param tr TraceResult
@@ -27,11 +35,6 @@ function TOOL:LeftClick(tr)
 	})
 
 	if CLIENT then
-		-- RagdollPoser.Gizmo:SelectBone()
-		-- Test moving things around
-		if tr.HitPos then
-			RagdollPoser.Gizmo:SetPosition(tr.HitPos)
-		end
 		return false
 	end
 
@@ -48,10 +51,12 @@ function TOOL:LeftClick(tr)
 		local constrainedTab = constraint.GetAllConstrainedEntities(entity)
 		local constrainedList = {}
 		for _, ent in pairs(constrainedTab) do
-			table.insert(constrainedList, ent)
+			if validateEntity(ent) then
+				table.insert(constrainedList, ent)
+			end
 		end
 
-		PrintTable(constrainedList)
+		-- PrintTable(constrainedList)
 		if not entity.rgpbonecached then -- also taken from locrotscale. some hacky way to cache the bones?
 			pl.rgpSwep = self.SWEP
 			local p = pl.rgpSwep:GetParent()
@@ -81,7 +86,9 @@ function TOOL:Deploy()
 			local entity = RagdollPoser.Data.Players[pl][1]
 			local bone = RagdollPoser.Data.Players[pl][2]
 			local entities = RagdollPoser.Data.Players[pl][3]
-			refreshEntities(pl, entity, bone, entities)
+			if entity then
+				refreshEntities(pl, entity, bone, entities)
+			end
 		end
 	end
 end
@@ -96,11 +103,5 @@ function TOOL.BuildCPanel(self, cPanel) end
 
 -- Gizmo rendering entrypoint
 function TOOL:DrawHUD()
-	cam.Start3D()
-	RagdollPoser.Gizmo:Draw()
-	cam.End3D()
-
-	cam.Start2D()
-	RagdollPoser.Gizmo:DrawBones()
-	cam.End2D()
+	RagdollPoser.Gizmo:Render()
 end

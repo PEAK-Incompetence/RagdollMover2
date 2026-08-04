@@ -1,13 +1,21 @@
+---@class RGPEntity: Entity
+---@field rgp_client ClientEntity
+---@field rgp_index integer
+
+---@class ClientEntity: Entity
+---@field rgp_isclient true
+---@field rgp_bonecallback integer
+
 ---@type Entity[]
 local Entities = {}
----@type Entity[]
+---@type ClientEntity[]
 local ClientEntities = {}
 
----@type {[Entity]: Entity}
+---@type {[ClientEntity]: Entity}
 local ClientToEntity = {}
----@type {[Entity]: Entity}
+---@type {[Entity]: ClientEntity}
 local EntityToClient = {}
----@type {[Entity]: boolean}
+---@type {[ClientEntity]: boolean}
 local ClientFirstSet = {}
 
 ---@type {[Entity]: VMatrix[]}
@@ -72,13 +80,14 @@ end
 
 function MGR.CreateEntities()
 	for _, entity in ipairs(ClientEntities) do
-		entity:RemoveCallback("BuildBonePositions", entity.bonecallback)
+		entity:RemoveCallback("BuildBonePositions", entity.rgp_bonecallback)
 		entity:Remove()
 	end
 	ClientEntities = {}
 
 	local dirty = false
 	for i, entity in ipairs(Entities) do
+		---@cast entity RGPEntity
 		if entity:IsMarkedForDeletion() then
 			dirty = true
 			continue
@@ -88,7 +97,8 @@ function MGR.CreateEntities()
 		EntityRenderBounds[entity] = { min, max }
 
 		local client = ents.CreateClientProp()
-		client:SetModel(entity:GetModel())
+		---@cast client ClientEntity
+		client:SetModel(entity:GetModel()) ---@diagnostic disable-line: param-type-mismatch
 		client:SetupBones()
 		client:InvalidateBoneCache()
 		client:Spawn()
@@ -99,7 +109,8 @@ function MGR.CreateEntities()
 		ClientToEntity[client] = entity
 		ClientFirstSet[client] = false
 		EntityToClient[entity] = client
-		client.bonecallback = client:AddCallback("BuildBonePositions", clientBoneManipulator)
+		client.rgp_bonecallback = client:AddCallback("BuildBonePositions", clientBoneManipulator)
+		clientBoneManipulator(client, client:GetBoneCount())
 
 		entity.rgp_client = client
 		entity.rgp_index = i
@@ -110,12 +121,12 @@ function MGR.CreateEntities()
 	end
 end
 
+hook.Remove("EntityRemoved", "RagdollPoser_EntityRemoved")
 hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", function(ent, fullUpdate)
 	if fullUpdate then
 		return
 	end
-
-	print(ent.rgp_client)
+	---@cast ent RGPEntity
 	if IsValid(ent.rgp_client) then
 		table.remove(Entities, ent.rgp_index)
 		ent.rgp_client:Remove()
@@ -123,29 +134,27 @@ hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", function(ent, fullUpdate
 	end
 end)
 
+---Bone indices for the matrices are offset by 1, i.e.
+---
+---```lua
+---	local matrices = RagdollPoser.Entity.GetMatrices(entity)
+---	local matrix = matrices[b + 1]
+---```
 ---@param entity Entity
 ---@return VMatrix[]
 function MGR.GetMatrices(entity)
 	return EntityMatrices[entity]
 end
 
-hook.Add("RagdollPoser_GizmoPositionSet", "RagdollPoser_SetBonePosition", function(pos)
-	local entity = RagdollPoser.Gizmo._entity
-	if IsValid(entity) then
-		local client = EntityToClient[entity]
-		local matrix = EntityMatrices[entity][RagdollPoser.Gizmo._bone + 1]
-		print(RagdollPoser.Gizmo._bone)
-		if matrix then
-			matrix:SetTranslation(pos)
-		end
-	end
-end)
-
 ---Get all entities of the selected assembly
 ---@param entities Entity[]
 function MGR.RefreshEntities(entities)
+	hook.Run("RagdollPoser_Entity_PreRefresh", ClientToEntity)
+
 	Entities = entities
 	MGR.CreateEntities()
+
+	hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 end
 
 ---@return Entity[]
@@ -171,10 +180,11 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", function(len, ply)
 	for i = 1, count do
 		entities[i] = net.ReadEntity()
 	end
-	print(ent, bone)
 	if IsValid(ent) and bone then
 		MGR.RefreshEntities(entities)
-		RagdollPoser.Gizmo:Select(ent, bone)
+		if not RagdollPoser.Selection:GetSelection()[1] then
+			RagdollPoser.Selection:SelectOne(bone, ent)
+		end
 	end
 end)
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo2", function(len, ply)
@@ -182,6 +192,7 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo2", function(len, ply)
 end)
 
 for _, ent in ipairs(ents.GetAll()) do
+	---@cast ent Entity|ClientEntity
 	if ent.rgp_isclient then
 		ent:Remove()
 	end

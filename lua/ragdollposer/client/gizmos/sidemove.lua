@@ -1,0 +1,36 @@
+-- Instead of drawing an arrow from vertices, let's draw a quad
+-- oriented along its side while always facing us (beam). We'll use a
+-- erode / dilate shader algorithm to shrink and grow the arrow.
+
+---@module "base"
+---@class GizmoSideMove: GizmoBase
+local sidemove = include("base.lua")
+
+---@param pos Vector
+---@param ang Angle
+---@param orientation GizmoOrientation
+function sidemove:Draw(pos, ang, orientation) end
+
+-- Orient the directions
+function sidemove:PreTransform(directions) end
+
+---@param directions Vector[][]
+---@param delta number[]
+---@param transforms VMatrix[]
+function sidemove:Transform(directions, delta, transforms)
+	for j, d in ipairs(delta) do
+		for i, matrix in ipairs(transforms) do
+			matrix:SetTranslation((directions[i][j] or directions[1][j]) * d)
+		end
+	end
+end
+
+---@param direction Vector Vector(1, 0, 0) = XY, Vector(0, 1, 0) = YZ, Vector(0, 0, 1) = ZX
+---@return GizmoSideMove
+local function initialize(direction)
+	local base = sidemove:Init()
+	---@cast base GizmoSideMove
+	return base
+end
+
+return initialize

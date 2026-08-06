@@ -34,6 +34,10 @@ local OUTLINE_WIDTH = 1
 local BLACK = Color(0, 0, 0, 255)
 local FLOAT_1DIVIDE540 = 0.00185185185
 
+---[CLIENT]
+---
+---Gizmo transform
+---
 ---@class RagdollPoser.Gizmo
 local MGR = {
 	_pos = Vector(),
@@ -52,6 +56,8 @@ local MGR = {
 	_moving = false,
 	_enabled = true,
 
+	_mode = 0,
+
 	_directions = {},
 }
 
@@ -61,6 +67,8 @@ MGR.Mode = {
 	Rotation = 1,
 	Scale = 2,
 }
+
+local numModes = table.Count(MGR.Mode)
 
 ---@type {[GizmoMode]: fun(): GizmoBase}
 local modeToInitializer = {
@@ -94,6 +102,12 @@ function MGR:OnModeChanged(mode)
 			self._directions[i] = modeToInitializerSide[mode](v)
 		end
 	end
+	PrintTable(self._directions)
+end
+
+function MGR:CycleMode()
+	self._mode = (self._mode + 1) % numModes
+	return self._mode
 end
 
 ---@param pos Vector
@@ -374,6 +388,12 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	timer.Simple(0, function()
 		setPositionFromSelection(RagdollPoser.Selection:GetSelection())
 	end)
+end)
+
+hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", function(action)
+	if action == RagdollPoser.Actions.CycleGizmo then
+		MGR:OnModeChanged(MGR:CycleMode())
+	end
 end)
 
 RagdollPoser.Gizmo = MGR

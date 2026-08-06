@@ -14,7 +14,13 @@ local function recInc(sub, cl, sv)
 
 	local shouldShare = SERVER and (cl == nil or cl)
 
-	for k, v in ipairs(file.Find(path .. "*.lua", "LUA")) do
+	local files, folders = file.Find(path .. "*", "LUA")
+	for _, folder in ipairs(folders) do
+		recInc(sub .. "/" .. folder, cl, sv)
+	end
+
+	for k, v in ipairs(files) do
+		---@type string
 		local fn = path .. v
 		if fn:match("/_.+%.lua$") then
 			continue

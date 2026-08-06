@@ -2,12 +2,17 @@
 ---
 ---Handle input events by sending them through one place for other systems to hook onto
 ---
+---Requirements
+--- - There shall only be one keybind per action
+---
 ---@class RagdollPoser.Input
 ---@
 local MGR = {}
 
 ---@type {[BUTTON_CODE]: InputAction}
 MGR.KeyBinds = MGR.KeyBinds or {}
+---@type {[InputAction]: BUTTON_CODE}
+MGR.BoundActions = MGR.BoundActions or table.Flip(MGR.KeyBinds)
 
 ---@type BUTTON_CODE[]
 local activeKeybinds = {}
@@ -23,6 +28,11 @@ end
 ---@param keycode BUTTON_CODE
 function MGR:RegisterKey(action, keycode)
 	MGR.KeyBinds[keycode] = action
+	-- If we are reassigning an action to another key, we need to remove it from the keybinds
+	if MGR.BoundActions[action] and MGR.BoundActions[action] ~= keycode then
+		MGR.KeyBinds[MGR.BoundActions[action]] = nil
+	end
+	MGR.BoundActions[action] = keycode
 	refreshKeyBinds()
 	RagdollPoser.Log("Registered keybind ", input.GetKeyName(keycode), " for ", RagdollPoser.ActionName[action])
 end

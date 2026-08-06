@@ -147,7 +147,6 @@ hook.Add("EntityRemoved", "RagdollPoser_Entity_EntityRemoved", function(ent, ful
 	if IsValid(EntityToClient[ent]) then
 		table.remove(Entities, ent.rgp_index)
 		EntityToClient[ent]:Remove()
-		EntityToClient[ent] = nil
 		MGR.RefreshEntities(Entities)
 	end
 end)
@@ -172,6 +171,12 @@ function MGR.RefreshEntities(entities)
 	Entities = entities
 	MGR.CreateEntities()
 
+	for entity, client in pairs(EntityToClient) do
+		if not IsValid(client) then
+			EntityToClient[entity] = nil
+		end
+	end
+
 	hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 end
 
@@ -195,6 +200,7 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", function(len, ply)
 	local bone = net.ReadUInt(8)
 	local count = net.ReadUInt(10)
 	local entities = {}
+	print(ent, bone, count)
 	for i = 1, count do
 		entities[i] = net.ReadEntity()
 	end

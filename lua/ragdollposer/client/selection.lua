@@ -12,6 +12,10 @@ local MAX_BONE_COLLISION = RagdollPoser.Constants.MAX_BONE_COLLISION ^ 2
 
 ---@alias Selection {[1]: integer, [2]: Entity}
 
+---[CLIENT]
+---
+---System for the currently selected bones and affiliated entities
+---
 ---@class RagdollPoser.Selection
 local MGR = {
 	_enabled = false,
@@ -36,10 +40,12 @@ end
 ---@param bone integer
 ---@param entity Entity
 function MGR:SelectOne(bone, entity)
+	RagdollPoser.Log("selected", bone, entity)
 	-- Accumulate selections if we want to manipulate them all at once
 	if input.IsShiftDown() then
-		entityBonePairs[#entityBonePairs + 1] = bone
-		entityBonePairs[#entityBonePairs + 1] = entity
+		local count = #entityBonePairs + 1
+		entityBonePairs[count] = bone
+		entityBonePairs[count + 1] = entity
 	else
 		entityBonePairs = { bone, entity }
 	end
@@ -55,11 +61,11 @@ function MGR:SelectGroup(selection)
 	end
 	local count = accumulate and #entityBonePairs or 0
 	for i = 1, #selection - 1, 2 do
-		entityBonePairs[count + i] = selection[i]
-		entityBonePairs[count + i + 1] = selection[i + 1]
+		local bone, entity = selection[i], selection[i + 1]
+		entityBonePairs[count + i] = bone
+		entityBonePairs[count + i + 1] = entity
 	end
 
-	print("group select")
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
 end
 
@@ -67,22 +73,33 @@ function MGR:GetSelection()
 	return entityBonePairs
 end
 
-function MGR:RefreshSelection(entities, entityToClient) end
+function MGR:Unselect()
+	entityBonePairs = {}
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
+end
 
 ---Temporary list for refreshing entities when re-deploying the tool
 local entityIndices = {}
 hook.Add("RagdollPoser_Entity_PreRefresh", "Selection", function(clientToEntity)
 	for i = 2, #entityBonePairs, 2 do
-		table.insert(entityIndices, clientToEntity[entityBonePairs[i]])
+		local entity = clientToEntity[entityBonePairs[i]]
+		table.insert(entityIndices, entity)
 		table.insert(entityIndices, i)
 	end
 end)
 
 hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient)
 	for i = 1, #entityIndices - 1, 2 do
-		entityBonePairs[entityIndices[i + 1]] = entityToClient[entityIndices[i]]
+		local client = entityToClient[entityIndices[i]]
+		-- If the entity we're selecting is about to be removed, then stop refresh
+		if client:IsMarkedForDeletion() then
+			entityBonePairs = {}
+			break
+		end
+		entityBonePairs[entityIndices[i + 1]] = client
 	end
 	entityIndices = {}
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
 end)
 
 function MGR:GetEnabled()
@@ -175,6 +192,7 @@ local function handleMultipleBones(selection)
 	end
 
 	local x = input.GetCursorPos()
+	-- Open it twice. Why? So that we can offset it when the internals performs all the positioning
 	menu:Open(x)
 	local w = menu:GetWide()
 	x = math.min(x, ScrW()) - w * 0.99

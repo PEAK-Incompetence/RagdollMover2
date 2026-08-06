@@ -1,10 +1,8 @@
 ---@class RGPEntity: Entity
----@field rgp_client ClientEntity
 ---@field rgp_index integer
 
 ---@class ClientEntity: Entity
 ---@field rgp_isclient true
----@field rgp_bonecallback integer
 
 ---@type Entity[]
 local Entities = {}
@@ -17,11 +15,28 @@ local ClientToEntity = {}
 local EntityToClient = {}
 ---@type {[ClientEntity]: boolean}
 local ClientFirstSet = {}
+---@type {[ClientEntity]: integer}
+local ClientBoneCallbacks = {}
+
+local function refreshClientData()
+	ClientEntities = {}
+	ClientToEntity = {}
+	ClientFirstSet = {}
+	ClientBoneCallbacks = {}
+end
 
 ---@type {[Entity]: VMatrix[]}
 local EntityMatrices = {}
 local EntityRenderBounds = {}
 
+---[CLIENT]
+---
+---Stores and displays client representations of server entities
+---
+---Modify the matrices of the client representation. Then send the
+---matrices of the modified result to the server
+---
+---@class RagdollPoser.Entity
 local MGR = {}
 
 local static = CreateClientConVar(
@@ -50,10 +65,10 @@ local function renderOverride(self, flags)
 	cam.IgnoreZ(false)
 end
 
----@param self Entity
+---@param self ClientEntity
 ---@param numbones integer
 local function clientBoneManipulator(self, numbones)
-	local firstSet = self.rgp_firstSet
+	local firstSet = ClientFirstSet[self]
 	local entity = ClientToEntity[self]
 	local matrixSet = EntityMatrices[entity]
 	local renderBounds = EntityRenderBounds[entity]
@@ -73,17 +88,19 @@ local function clientBoneManipulator(self, numbones)
 			self:SetBoneMatrix(b, m)
 		end
 	end
-	self.rgp_firstSet = true
+	ClientFirstSet[self] = true
 
 	self:SetRenderBounds(renderBounds[1], renderBounds[2])
 end
 
 function MGR.CreateEntities()
-	for _, entity in ipairs(ClientEntities) do
-		entity:RemoveCallback("BuildBonePositions", entity.rgp_bonecallback)
-		entity:Remove()
+	for _, client in ipairs(ClientEntities) do
+		client:RemoveCallback("BuildBonePositions", ClientBoneCallbacks[client])
+		client:Remove()
+		ClientToEntity[client] = nil
+		ClientFirstSet[client] = nil
 	end
-	ClientEntities = {}
+	refreshClientData()
 
 	local dirty = false
 	for i, entity in ipairs(Entities) do
@@ -109,10 +126,9 @@ function MGR.CreateEntities()
 		ClientToEntity[client] = entity
 		ClientFirstSet[client] = false
 		EntityToClient[entity] = client
-		client.rgp_bonecallback = client:AddCallback("BuildBonePositions", clientBoneManipulator)
+		ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
 		clientBoneManipulator(client, client:GetBoneCount())
 
-		entity.rgp_client = client
 		entity.rgp_index = i
 
 		client.rgp_isclient = true
@@ -121,15 +137,17 @@ function MGR.CreateEntities()
 	end
 end
 
-hook.Remove("EntityRemoved", "RagdollPoser_EntityRemoved")
-hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", function(ent, fullUpdate)
+hook.Remove("EntityRemoved", "RagdollPoser_Entity_EntityRemoved")
+hook.Add("EntityRemoved", "RagdollPoser_Entity_EntityRemoved", function(ent, fullUpdate)
 	if fullUpdate then
 		return
 	end
+
 	---@cast ent RGPEntity
-	if IsValid(ent.rgp_client) then
+	if IsValid(EntityToClient[ent]) then
 		table.remove(Entities, ent.rgp_index)
-		ent.rgp_client:Remove()
+		EntityToClient[ent]:Remove()
+		EntityToClient[ent] = nil
 		MGR.RefreshEntities(Entities)
 	end
 end)
@@ -183,7 +201,7 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", function(len, ply)
 	if IsValid(ent) and bone then
 		MGR.RefreshEntities(entities)
 		if not RagdollPoser.Selection:GetSelection()[1] then
-			RagdollPoser.Selection:SelectOne(bone, ent)
+			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent])
 		end
 	end
 end)

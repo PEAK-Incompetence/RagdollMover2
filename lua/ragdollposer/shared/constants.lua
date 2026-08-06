@@ -1,3 +1,7 @@
+---[SERVER AND CLIENT]
+---
+---Dictionary of known values
+---
 ---@class RagdollPoser.Constants
 RagdollPoser.Constants = {
 	VECTOR_FRONT = Vector(1, 0, 0),

@@ -13,6 +13,14 @@ end
 ---@alias NetStarter function
 ---@alias NetReceiver fun(len: integer, ply: Player)
 
+---[SERVER AND CLIENT]
+---
+---Networking helpers which bypass the 4096 network string limitation with uints
+---
+---This module improves on the legacy version by allowing one to define network senders / receivers
+---anywhere in the codebase, rather than in one single file.
+---
+---
 ---@class RagdollPoser.Networking
 ---@field SenderToID {[string]: integer}
 ---@field ReceiverIDToName {[integer]: string}

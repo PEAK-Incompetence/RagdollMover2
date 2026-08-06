@@ -3,27 +3,6 @@ TOOL.Category = "Poser"
 TOOL.Command = nil
 TOOL.ConfigName = ""
 
----@param pl Player
----@param entity Entity
----@param bone any
----@param entities any
-local function refreshEntities(pl, entity, bone, entities)
-	RagdollPoser.Networking.SendAssemblyInfo()
-	net.WriteEntity(entity)
-	net.WriteUInt(bone, 8)
-	net.WriteUInt(#entities, 10)
-	for i = 1, #entities do
-		net.WriteEntity(entities[i])
-	end
-	net.Send(pl)
-end
-
----@param entity Entity
-local function validateEntity(entity)
-	-- Send only entities with a model
-	return entity.GetModel and entity:GetModel()
-end
-
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
 	local pl = self:GetOwner()
@@ -48,13 +27,7 @@ function TOOL:LeftClick(tr)
 		and phys
 		and entity:GetPhysicsObjectNum(phys)
 	then
-		local constrainedTab = constraint.GetAllConstrainedEntities(entity)
-		local constrainedList = {}
-		for _, ent in pairs(constrainedTab) do
-			if validateEntity(ent) then
-				table.insert(constrainedList, ent)
-			end
-		end
+		local constrainedList, constrainedTab = RagdollPoser.Data.GetConstrainedEntities(entity)
 
 		-- PrintTable(constrainedList)
 		if not entity.rgpbonecached then -- also taken from locrotscale. some hacky way to cache the bones?
@@ -66,11 +39,9 @@ function TOOL:LeftClick(tr)
 		end
 
 		-- Send entity info to the client
-		local bone = entity:TranslatePhysBoneToBone(phys)
-		refreshEntities(pl, entity, bone, constrainedList)
-
-		-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
-		RagdollPoser.Data.Players[pl] = { entity, bone, constrainedList, constrainedTab }
+		local bone = math.max(entity:TranslatePhysBoneToBone(phys), 0)
+		RagdollPoser.Data.RefreshEntities(pl, entity, bone, constrainedList)
+		RagdollPoser.Data:Update(pl, entity, bone, constrainedList, constrainedTab)
 	end
 
 	return false
@@ -85,9 +56,10 @@ function TOOL:Deploy()
 		if RagdollPoser.Data.Players[pl] then
 			local entity = RagdollPoser.Data.Players[pl][1]
 			local bone = RagdollPoser.Data.Players[pl][2]
-			local entities = RagdollPoser.Data.Players[pl][3]
+			local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
 			if entity then
-				refreshEntities(pl, entity, bone, entities)
+				RagdollPoser.Data.RefreshEntities(pl, entity, bone, entities)
+				RagdollPoser.Data:Update(pl, entity, bone, entities, constrainedEntities)
 			end
 		end
 	end
@@ -97,9 +69,20 @@ if SERVER then
 	return
 end
 
----@param self TOOL
+local firstBuilt = false
+function TOOL:Think()
+	if not firstBuilt then
+		firstBuilt = true
+		self:RebuildControlPanel()
+	end
+end
+
+local ui = RagdollPoser.UI
+
 ---@param cPanel ControlPanel
-function TOOL.BuildCPanel(self, cPanel) end
+function TOOL.BuildCPanel(cPanel)
+	ui:Initialize(cPanel)
+end
 
 -- Gizmo rendering entrypoint
 function TOOL:DrawHUD()

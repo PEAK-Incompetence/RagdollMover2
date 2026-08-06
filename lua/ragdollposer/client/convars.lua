@@ -27,5 +27,5 @@ end
 hook.Add("CreateMove", "RagdollPoser_InitializeServerReceiver", function(_)
 	refreshKeys()
 
-	hook.Remove("CreateMove", "RagdollPoser_InitializeServerReceiver")
+	hook.Remove("CreateMove", "RagdollPoser_InitializeKeys")
 end)

@@ -10,7 +10,7 @@
 local MGR = {}
 
 ---@type {[Player]: PlayerData}
-MGR.Players = RagdollPoser.Data.Players or {}
+MGR.Players = RagdollPoser.Data and RagdollPoser.Data.Players or {}
 
 ---@alias PlayerData {[1]: Entity, [2]: integer, [3]: Entity[], [4]: {[Entity]: Entity}}
 

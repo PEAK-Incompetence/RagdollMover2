@@ -6,10 +6,9 @@
 ---@class GizmoSideMove: GizmoBase
 local sidemove = include("base.lua")
 
----@param pos Vector
----@param ang Angle
+---@param props GizmoProps
 ---@param orientation GizmoOrientation
-function sidemove:Draw(pos, ang, orientation) end
+function sidemove:Draw(props, orientation) end
 
 -- Orient the directions
 function sidemove:PreTransform(directions) end

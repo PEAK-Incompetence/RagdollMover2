@@ -52,10 +52,9 @@ local function drawQuad(linepos, mat, color, pos, normal, scale, width)
 	render.DrawQuad(verts[1], verts[2], verts[3], verts[4], color)
 end
 
----@param pos Vector
----@param ang Angle
+---@param props GizmoProps
 ---@param orientation GizmoOrientation
-function disc:Draw(pos, ang, orientation) end
+function disc:Draw(props, orientation) end
 
 ---Convert directions to quaternions
 function disc:PreTransform() end
@@ -74,7 +73,9 @@ function disc:Transform(directions, delta, transforms)
 end
 
 ---@param axis Vector
-function disc:SetRotationAxis(axis) end
+function disc:SetRotationAxis(axis)
+	self._direction = axis
+end
 
 ---@param v Vector? axis of rotation
 ---@return GizmoDisc

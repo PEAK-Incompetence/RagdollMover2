@@ -6,10 +6,9 @@
 ---@class GizmoSideScale: GizmoBase
 local scale = include("base.lua")
 
----@param pos Vector
----@param ang Angle
+---@param props GizmoProps
 ---@param orientation GizmoOrientation
-function scale:Draw(pos, ang, orientation) end
+function scale:Draw(props, orientation) end
 
 -- Orient the directions
 function scale:PreTransform(directions) end

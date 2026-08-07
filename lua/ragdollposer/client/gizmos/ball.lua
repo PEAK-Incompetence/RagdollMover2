@@ -4,10 +4,9 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
----@param pos Vector
----@param ang Angle
+---@param props GizmoProps
 ---@param orientation GizmoOrientation
-function ball:Draw(pos, ang, orientation) end
+function ball:Draw(props, orientation) end
 
 ---Convert directions to quaternions
 function ball:PreTransform() end

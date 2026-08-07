@@ -1,6 +1,6 @@
 screenspace_general
 {
-    $vertexshader "rgp_disc_vs20"
+    $vertexshader "rgp_vs20"
 	$pixshader "rgp_disc_ps20b"
 
 	$depthtest	1

@@ -163,6 +163,18 @@ function MGR.GetMatrices(entity)
 	return EntityMatrices[entity]
 end
 
+---Bone indices for the matrices are offset by 1, i.e.
+---
+---```lua
+---	local matrices = RagdollPoser.Entity.GetMatrices(client)
+---	local matrix = matrices[b + 1]
+---```
+---@param client ClientEntity
+---@return VMatrix[]
+function MGR.GetMatricesFromClient(client)
+	return EntityMatrices[ClientToEntity[client]]
+end
+
 ---Get all entities of the selected assembly
 ---@param entities Entity[]
 function MGR.RefreshEntities(entities)

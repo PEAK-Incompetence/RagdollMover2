@@ -6,10 +6,9 @@
 ---@class GizmoScale: GizmoBase
 local scale = include("base.lua")
 
----@param pos Vector
----@param ang Angle
+---@param props GizmoProps
 ---@param orientation GizmoOrientation
-function scale:Draw(pos, ang, orientation) end
+function scale:Draw(props, orientation) end
 
 ---Scales are with respect to the bone. If we want to make this scale
 ---in different ways (i.e. wrt world, wrt view), we need to calculate

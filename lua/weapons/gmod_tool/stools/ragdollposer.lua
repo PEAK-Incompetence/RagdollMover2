@@ -3,6 +3,10 @@ TOOL.Category = "Poser"
 TOOL.Command = nil
 TOOL.ConfigName = ""
 
+TOOL.ClientConVar["width"] = 0.25
+TOOL.ClientConVar["scale"] = 30
+TOOL.ClientConVar["partial"] = 1
+
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
 	local pl = self:GetOwner()
@@ -56,8 +60,8 @@ function TOOL:Deploy()
 		if RagdollPoser.Data.Players[pl] then
 			local entity = RagdollPoser.Data.Players[pl][1]
 			local bone = RagdollPoser.Data.Players[pl][2]
-			local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
-			if entity then
+			if IsValid(entity) then
+				local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
 				RagdollPoser.Data.RefreshEntities(pl, entity, bone, entities)
 				RagdollPoser.Data:Update(pl, entity, bone, entities, constrainedEntities)
 			end
@@ -69,6 +73,8 @@ if SERVER then
 	return
 end
 
+local cvars = TOOL:BuildConVarList()
+
 local firstBuilt = false
 function TOOL:Think()
 	if not firstBuilt then
@@ -77,14 +83,17 @@ function TOOL:Think()
 	end
 end
 
-local ui = RagdollPoser.UI
-
 ---@param cPanel ControlPanel
 function TOOL.BuildCPanel(cPanel)
-	ui:Initialize(cPanel)
+	RagdollPoser.UI:Initialize(cPanel)
 end
 
 -- Gizmo rendering entrypoint
 function TOOL:DrawHUD()
 	RagdollPoser.Gizmo:Render()
 end
+
+hook.Add("RagdollPoser_UI_Refresh", "ToolUI", function()
+	local tool = LocalPlayer():GetTool(RagdollPoser.Mode)
+	tool:RebuildControlPanel()
+end)

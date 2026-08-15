@@ -118,7 +118,7 @@ local rotationQuaternion = quaternion.new(1)
 ---@param transforms VMatrix[]
 ---@param accumulations number[]
 ---@param props GizmoProps
-function disc:Transform(directions, start, endPos, transforms, accumulations, props)
+function disc:Transform(directions, start, endPos, transforms, accumulations, initials, props)
 	local delta = endPos - start
 
 	for i, matrix in ipairs(transforms) do

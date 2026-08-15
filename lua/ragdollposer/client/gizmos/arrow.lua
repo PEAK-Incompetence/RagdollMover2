@@ -89,7 +89,7 @@ end
 ---@param endPos Vector
 ---@param transforms VMatrix[]
 ---@param accumulations number[]
-function arrow:Transform(directions, start, endPos, transforms, accumulations, props)
+function arrow:Transform(directions, start, endPos, transforms, accumulations, initials, props)
 	local forward = -MainEyeAngles():Forward()
 	local eyePos = MainEyePos()
 	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)

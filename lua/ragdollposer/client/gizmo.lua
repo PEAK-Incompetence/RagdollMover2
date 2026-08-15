@@ -399,6 +399,7 @@ function MGR:PreTransform()
 	self._matrices = {}
 	self._matrixIndex = {}
 	self._localMatrices = {}
+	self._initials = {}
 	self._parents = {}
 	self._accumulations = {}
 
@@ -450,10 +451,12 @@ function MGR:PreTransform()
 			self._matrixIndex[client] = self._matrixIndex[client] or {}
 			self._localMatrices[client] = self._localMatrices[client] or {}
 			self._parents[client] = self._parents[client] or {}
+			self._initials[client] = {}
 			for _, bone in ipairs(bones) do
 				self._matrices[client][bone] = self._matrices[client][bone] or {}
 				self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
 				self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
+				self._initials[client][bone] = self._initials[client][bone] or {}
 				recursiveMatrixCopy(
 					client,
 					matrices,
@@ -486,11 +489,6 @@ function MGR:PreTransform()
 		end
 	end
 
-	for i, pivot in ipairs(self._pivots) do
-		self._pivots[i] = gizmo:PreTransform(pivot)
-		self._accumulations[i] = 0
-	end
-
 	-- Also operate with entity matrices for the mirrored bones, using the same settings for the above, except
 	-- these must be relative to where the entity is facing
 	-- The desired mirror plane might not be the same for all models, so we'll give the option to change the mirror plane so we get proper
@@ -499,8 +497,17 @@ function MGR:PreTransform()
 		-- TODO: add mirror operations
 	end
 
+	for i, pivot in ipairs(self._pivots) do
+		self._pivots[i] = gizmo:PreTransform(pivot, self._initials)
+		self._accumulations[i] = 0
+	end
+
 	local x, y = input.GetCursorPos()
 	self.start = gui.ScreenToVector(x, y)
+
+	PrintTable(selection)
+	PrintTable(self._matrixIndex)
+	PrintTable(self._parents)
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
@@ -522,6 +529,7 @@ function MGR:Transform()
 				newPoint,
 				self._matrices[client][bone],
 				self._accumulations,
+				self._initials[client][bone],
 				self._gizmoProps
 			)
 			gizmo:PostTransform(

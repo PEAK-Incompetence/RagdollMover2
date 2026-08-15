@@ -28,11 +28,13 @@ end
 
 ---Convert directions to quaternions
 ---@param direction Vector
+---@param initials VMatrix[]
 ---@return any
-function ball:PreTransform(direction)
+function ball:PreTransform(direction, initials)
 	local x, y = input.GetCursorPos()
 	self.xi, self.yi = x, y
 	self.xDelta, self.yDelta = 0, 0
+
 	return Vector()
 end
 
@@ -45,7 +47,7 @@ local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 ---@param start Vector
 ---@param endPos Vector
 ---@param transforms VMatrix[]
-function ball:Transform(directions, start, endPos, transforms, accumulations, props)
+function ball:Transform(directions, start, endPos, transforms, accumulations, initials, props)
 	local x, y = input.GetCursorPos()
 	local scale = props.scale
 	self.xDelta = self.xDelta + RagdollPoser.Input.xMove
@@ -71,16 +73,14 @@ function ball:Transform(directions, start, endPos, transforms, accumulations, pr
 
 	debugoverlay.BoxAngles(props.pos, min, max, rotationQuaternion:Angle(), 0.2)
 
-	-- Store initial orientation
-	self.startQuaternions = self.startQuaternions or {}
-
 	for i, matrix in ipairs(transforms) do
-		local quat = self.startQuaternions[i]
-		if not self.startQuaternions[i] then
+		local quat = initials[i]
+
+		if not quat then
 			local qi = quaternion.fromAngle(matrix:GetAngles())
 			local w, x, y, z = qi:Unpack()
 			quat = quaternion.new(w, x, y, z)
-			self.startQuaternions[i] = quat
+			initials[i] = quat
 		end
 
 		local accumulationIndex = accumulations[i] and i or 1
@@ -110,9 +110,7 @@ function ball:PostTransform(transforms, locals, indices, parents)
 	end
 end
 
-function ball:FinishTransform()
-	self.startQuaternions = {}
-end
+function ball:FinishTransform() end
 
 function ball:GetDirection()
 	return Vector()

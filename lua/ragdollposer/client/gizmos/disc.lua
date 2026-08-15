@@ -95,7 +95,7 @@ end
 
 function disc:UpdateOrientation(orientation, props)
 	if orientation == RagdollPoser.Gizmo.Orientation.Local then
-		self._axis = WorldToLocal(self._direction, angle_zero, vector_origin, props.ang)
+		self._axis = LocalToWorld(self._direction, angle_zero, vector_origin, props.ang)
 	else
 		self._axis:Set(self._direction)
 	end

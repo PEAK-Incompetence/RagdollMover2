@@ -6,6 +6,7 @@ TOOL.ConfigName = ""
 TOOL.ClientConVar["width"] = 0.25
 TOOL.ClientConVar["scale"] = 30
 TOOL.ClientConVar["partial"] = 1
+TOOL.ClientConVar["local"] = 0
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)

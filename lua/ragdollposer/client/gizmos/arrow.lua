@@ -5,6 +5,7 @@
 ---@module "base"
 ---@class GizmoArrow: GizmoBase
 ---@field _direction Vector
+---@field _axis Vector
 ---@field _color Color
 local arrow = include("base.lua")
 
@@ -33,7 +34,7 @@ function arrow:Intersect(eyepos, direction, props)
 		eyepos,
 		direction * 16384,
 		props.pos,
-		props.ang,
+		props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero,
 		tempMin + self._direction * scale * centerPadding,
 		tempMax + self._direction * scale
 	)
@@ -46,14 +47,12 @@ end
 local YELLOW = Color(255, 255, 0)
 
 ---@param props GizmoProps
----@param orientation GizmoOrientation
-function arrow:Draw(props, orientation, selected)
-	-- print(self._direction)
-
+---@param selected boolean
+function arrow:Draw(props, selected)
 	local mat = arrowMaterial
 	local color = selected and YELLOW or self._color
 
-	local endPos = props.pos + self._direction * props.scale
+	local endPos = props.pos + self._axis * props.scale
 
 	mat:SetFloat("$c0_x", props.width)
 	mat:SetFloat("$c0_y", color.r)
@@ -64,16 +63,24 @@ function arrow:Draw(props, orientation, selected)
 	render.SetMaterial(mat)
 
 	render.DrawBeam(props.pos, endPos, props.scale * 0.5, 0, 1)
-	-- render.DrawBox(props.pos, props.ang, -tempMax, tempMax + self._direction * props.scale)
-	-- render.DrawBox(props.pos, props.ang, tempMin, tempMax)
 end
 
-function arrow:GetDirection()
-	return self._direction
+---@param props GizmoProps
+---@return Vector
+function arrow:GetDirection(props)
+	return self._axis
 end
 
 function arrow:PreTransform(v)
 	return v
+end
+
+function arrow:UpdateOrientation(orientation, props)
+	if orientation == RagdollPoser.Gizmo.Orientation.Local then
+		self._axis = WorldToLocal(self._direction, angle_zero, vector_origin, props.ang)
+	else
+		self._axis:Set(self._direction)
+	end
 end
 
 ---@param directions Vector[]
@@ -109,6 +116,7 @@ local function initialize(direction)
 
 	if direction then
 		base._direction = direction
+		base._axis = direction
 		base._color = direction:ToColor()
 		RagdollPoser.Log("Set arrow direction to ", direction)
 	end

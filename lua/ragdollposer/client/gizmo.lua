@@ -49,6 +49,8 @@ local MGR = {
 		offset = Vector(),
 		partial = false,
 		sensitivity = 1,
+		---@type GizmoOrientation
+		orientation = 0,
 	},
 
 	_moving = false,
@@ -56,8 +58,6 @@ local MGR = {
 
 	---@type GizmoBase[]
 	_directions = {},
-	---@type GizmoOrientation
-	_orientation = 0,
 	---@type GizmoMode
 	_mode = 0,
 	---@type GizmoPivot
@@ -81,6 +81,37 @@ local MGR = {
 	---@type Vector[]
 	_pivots = {},
 }
+
+---@param selection table
+local function setPositionFromSelection(selection)
+	local pos = Vector()
+
+	PrintTable(selection)
+	local count = #selection * 0.5
+	for i = 1, #selection - 1, 2 do
+		local bone = selection[i]
+		local entity = selection[i + 1]
+		---@cast bone integer
+		---@cast entity Entity
+		local matrix = entity:GetBoneMatrix(bone)
+
+		if matrix then
+			pos:Add(matrix:GetTranslation())
+		end
+	end
+	pos:Div(count)
+	MGR:SetPosition(pos)
+end
+
+---@param selection table
+local function setAngleFromSelection(selection)
+	local count = #selection
+	local bone, entity = selection[count - 1], selection[count]
+	local matrix = entity:GetBoneMatrix(bone)
+	if matrix then
+		MGR:SetAngles(matrix:GetAngles())
+	end
+end
 
 ---How the gizmo is rotated when selecting a bone
 ---@enum GizmoOrientation
@@ -127,25 +158,40 @@ function MGR:SetScale(scale)
 	self._gizmoProps.scale = scale
 end
 
+function MGR:UpdateOrientation()
+	local props = self._gizmoProps
+	local orientation = props.orientation
+	for _, direction in ipairs(self._directions) do
+		direction:UpdateOrientation(orientation, props)
+	end
+end
+
 ---@param mode GizmoMode
 function MGR:OnModeChanged(mode)
 	self._directions = {}
+
 	for i = 1, 3 do
 		local v = Vector()
 		v[i] = 1
-		self._directions[i] = modeToInitializer[mode](v)
+		local gizmoType = modeToInitializer[mode](v)
+
+		self._directions[i] = gizmoType
 	end
 	if mode == self.Mode.Rotation then
 		-- Big disc
-		self._directions[4] = disc()
-		self._directions[5] = ball()
+
+		local disc, ball = disc(), ball()
+		self._directions[4] = disc
+		self._directions[5] = ball
 	elseif mode == self.Mode.Scale or mode == self.Mode.Translation then
 		for i = 4, 6 do
 			local v = Vector()
 			v[i - 3] = 1
-			self._directions[i] = modeToInitializerSide[mode](v)
+			local gizmoType = modeToInitializerSide[mode](v)
+			self._directions[i] = gizmoType
 		end
 	end
+	self:UpdateOrientation()
 end
 
 function MGR:CycleMode()
@@ -156,6 +202,12 @@ end
 ---@param pos Vector
 function MGR:SetPosition(pos)
 	self._gizmoProps.pos = pos
+end
+
+---@param ang Angle
+function MGR:SetAngles(ang)
+	self._gizmoProps.ang = ang
+	self:UpdateOrientation()
 end
 
 ---@param state boolean
@@ -185,6 +237,10 @@ local function sendSubPoseResponse()
 		RagdollPoser.Entity.UpdateRenderBounds(entity)
 	end
 	entityBuffer = {}
+
+	local selection = RagdollPoser.Selection:GetSelection()
+	setPositionFromSelection(selection)
+	setAngleFromSelection(selection)
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
 
@@ -256,12 +312,12 @@ function MGR:Draw()
 
 		if self:IsMoving() then
 			local direction = self._directions[self._gizmoIndex]
-			direction:Draw(props, self._orientation, true)
+			direction:Draw(props, true)
 		else
 			local selected = false
 			for _, direction in ipairs(self._directions) do
 				local hitPos = direction:Intersect(eyepos, eyevec, props)
-				direction:Draw(props, self._orientation, not selected and hitPos ~= nil)
+				direction:Draw(props, not selected and hitPos ~= nil)
 			end
 		end
 	end
@@ -404,19 +460,20 @@ function MGR:PreTransform()
 	end
 
 	local gizmo = self._directions[self._gizmoIndex]
+	local props = self._gizmoProps
 
 	-- After getting our entity matrices, we need to calculate the directions which we do the transform
-	self._pivots = { gizmo:GetDirection() }
+	self._pivots = { gizmo:GetDirection(props) }
 
 	-- Check gizmo pivot
 	if self._pivot == self.Pivot.Individual then
-		if self._orientation == self.Orientation.Local then
+		if props.orientation == self.Orientation.Local then
 			-- We need to get a bunch of direction vectors, using the direction we passed to move bones individually on their own axes
 			-- or to rotate them on their own axes
 			-- So iterate over all selected bones to get their local, individual directions
 		end
 	else
-		if self._orientation == self.Orientation.World then
+		if props.orientation == self.Orientation.World then
 		end
 	end
 
@@ -499,27 +556,6 @@ hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
 hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
----@param selection table
-local function setPositionFromSelection(selection)
-	local pos = Vector()
-
-	PrintTable(selection)
-	local count = #selection * 0.5
-	for i = 1, #selection - 1, 2 do
-		local bone = selection[i]
-		local entity = selection[i + 1]
-		---@cast bone integer
-		---@cast entity Entity
-		local matrix = entity:GetBoneMatrix(bone)
-
-		if matrix then
-			pos:Add(matrix:GetTranslation())
-		end
-	end
-	pos:Div(count)
-	MGR:SetPosition(pos)
-end
-
 local boneMatrix = Matrix()
 
 -- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
@@ -571,11 +607,6 @@ local function sendSubPose(selection)
 		end
 	end
 
-	print("entities")
-	PrintTable(entities)
-	print("bones")
-	PrintTable(bones)
-
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
@@ -589,13 +620,10 @@ local function sendSubPose(selection)
 			local matrix = matrices[b + 1]
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			print(b, physbone)
 			if physbone >= 0 then
-				print("send world transforms", b)
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
-				print("send bone armature", b)
 				RagdollPoser.Helpers.GetNonPhysicalBonePose(
 					RagdollPoser.Entity.GetClientFromEntity(entity),
 					b,
@@ -616,7 +644,7 @@ function MGR:PostTransform()
 	end
 
 	local selection = RagdollPoser.Selection:GetSelection()
-	setPositionFromSelection(selection)
+
 	sendSubPose(selection)
 	print("post transform!")
 end
@@ -775,6 +803,7 @@ end
 
 hook.Add("RagdollPoser_Selection_Selected", "Gizmo", function(selection)
 	setPositionFromSelection(selection)
+	setAngleFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)
 	hovered = {}
@@ -784,7 +813,9 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	-- FIXME: I would like to have this run after I get the new client entities. Just doing things these way is really hacky
 	-- unless we have hook priorities
 	timer.Simple(0, function()
-		setPositionFromSelection(RagdollPoser.Selection:GetSelection())
+		local selection = RagdollPoser.Selection:GetSelection()
+		setPositionFromSelection(selection)
+		setAngleFromSelection(selection)
 	end)
 end)
 
@@ -802,6 +833,8 @@ local function initializeGizmo()
 	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
 	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
 	MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
+	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
+		or MGR.Orientation.World
 	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
@@ -823,5 +856,13 @@ local function updateScale(_, old, new)
 end
 cvars.RemoveChangeCallback("ragdollposer_scale", "ragdollposer_scale_callback")
 cvars.AddChangeCallback("ragdollposer_scale", updateScale, "ragdollposer_scale_callback")
+
+local function updateOrientation(_, old, new)
+	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World
+	MGR._gizmoProps.orientation = newOrientation
+	MGR:UpdateOrientation()
+end
+cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_scale_callback")
+cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_scale_callback")
 
 RagdollPoser.Gizmo = MGR

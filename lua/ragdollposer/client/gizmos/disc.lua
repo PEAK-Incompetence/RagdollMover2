@@ -1,6 +1,7 @@
 ---@module "base"
 ---@class GizmoDisc: GizmoBase
----@field _direction Vector
+---@field _direction Vector canonical axis with respect to the world
+---@field _axis Vector axis determined by orientation mode
 ---@field _color Color
 ---@field _facesUs boolean
 local disc = include("base.lua")
@@ -62,7 +63,7 @@ end
 local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
 
 function disc:Intersect(eyepos, direction, props)
-	local hitPos = util.IntersectRayWithPlane(eyepos, direction * 16384, props.pos, self._direction)
+	local hitPos = util.IntersectRayWithPlane(eyepos, direction * 16384, props.pos, self._axis)
 	local distSqr = hitPos and hitPos:DistToSqr(props.pos) or -1
 	local halfScale = (self._facesUs and 0.625 or 0.5) * props.scale
 
@@ -76,17 +77,28 @@ end
 local YELLOW = Color(255, 255, 0)
 
 ---@param props GizmoProps
----@param orientation GizmoOrientation
-function disc:Draw(props, orientation, selected)
+---@param selected boolean
+function disc:Draw(props, selected)
 	local color = selected and YELLOW or self._color
 
 	local mat = props.partial and DiscMaterialPartial or DiscMaterial
 	local discScale = 1
 	if self._facesUs then
-		self:SetRotationAxis(-MainEyeAngles():Forward())
+		local forward = -MainEyeAngles():Forward()
+		self._axis = forward
+		self._direction = forward
 		discScale = 1.25
 	end
-	drawQuad(mat, color, props.pos, self._direction, discScale * props.scale, props.width)
+
+	drawQuad(mat, color, props.pos, self._axis, discScale * props.scale, props.width)
+end
+
+function disc:UpdateOrientation(orientation, props)
+	if orientation == RagdollPoser.Gizmo.Orientation.Local then
+		self._axis = WorldToLocal(self._direction, angle_zero, vector_origin, props.ang)
+	else
+		self._axis:Set(self._direction)
+	end
 end
 
 ---Convert directions to quaternions
@@ -110,9 +122,9 @@ function disc:Transform(directions, start, endPos, transforms, accumulations, pr
 		local direction = directions[i] or directions[1]
 		local accumulationIndex = accumulations[i] and i or 1
 
-		local startHit = (util.IntersectRayWithPlane(MainEyePos(), start * 16384, props.pos, self._direction) or start)
+		local startHit = (util.IntersectRayWithPlane(MainEyePos(), start * 16384, props.pos, self._axis) or start)
 			- props.pos
-		local endHit = (util.IntersectRayWithPlane(MainEyePos(), endPos * 16384, props.pos, self._direction) or endPos)
+		local endHit = (util.IntersectRayWithPlane(MainEyePos(), endPos * 16384, props.pos, self._axis) or endPos)
 			- props.pos
 
 		startHit:Normalize()
@@ -151,16 +163,11 @@ function disc:PostTransform(transforms, locals, indices, parents)
 	end
 end
 
----@param axis Vector
-function disc:SetRotationAxis(axis)
-	self._direction = axis
-end
-
 function disc:GetDirection()
 	if self._facesUs then
 		return -MainEyeAngles():Forward()
 	end
-	return self._direction
+	return self._axis
 end
 
 ---@param v Vector? axis of rotation
@@ -171,12 +178,14 @@ local function initialize(v)
 
 	-- If we don't define a rotation axis, then have it face us all the time
 	if v then
-		base:SetRotationAxis(v)
+		base._direction = v
+		base._axis = v
 		base._color = v:ToColor()
 		RagdollPoser.Log("Set rotation axis to ", v)
 	else
 		base._facesUs = true
-		base:SetRotationAxis(-MainEyeAngles():Forward())
+		base._direction = -MainEyeAngles():Forward()
+		base._axis = -MainEyeAngles():Forward()
 		base._color = Color(192, 192, 192, 255)
 	end
 

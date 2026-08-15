@@ -24,6 +24,8 @@ function MGR:BuildCPanel(cpanel)
 	keyBinder(cpanel, "#tool.ragdollposer.cycle", "ragdollposer_cycle_key", RagdollPoser.Actions.CycleGizmo)
 	keyBinder(cpanel, "#tool.ragdollposer.select", "ragdollposer_select_key", RagdollPoser.Actions.SelectBone)
 
+	cpanel:CheckBox("#tool.ragdollposer.local", "ragdollposer_local")
+
 	cpanel:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
 	cpanel:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 end

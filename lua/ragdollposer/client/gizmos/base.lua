@@ -13,8 +13,9 @@ end
 ---@return Vector?
 function Base:Intersect(eyepos, direction, props) end
 
+---@param props GizmoProps
 ---@return Vector
-function Base:GetDirection()
+function Base:GetDirection(props)
 	return vector_zero
 end
 
@@ -22,10 +23,14 @@ function Base:FinishTransform() end
 
 function Base:SendVertexMetaData(vertexObject, vertexProps) end
 
----@param props GizmoProps
+-- When we switch the orientation, change the `_direction` field
 ---@param orientation GizmoOrientation
+---@param props GizmoProps
+function Base:UpdateOrientation(orientation, props) end
+
+---@param props GizmoProps
 ---@param selected boolean
-function Base:Draw(props, orientation, selected) end
+function Base:Draw(props, selected) end
 
 ---Calculate and cache before performing the transform
 ---@param direction Vector

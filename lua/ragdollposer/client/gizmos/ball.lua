@@ -18,8 +18,8 @@ function ball:Intersect(eyepos, direction, props)
 end
 
 ---@param props GizmoProps
----@param orientation GizmoOrientation
-function ball:Draw(props, orientation, selected)
+---@param selected boolean
+function ball:Draw(props, selected)
 	local color = selected and self._selectedColor or self._color
 
 	render.SetColorMaterialIgnoreZ()

@@ -328,13 +328,28 @@ function MGR:TestIntersect()
 	end
 
 	local targetIndex, closestDistance = 0, math.huge
-	for i = 1, #directions do
+	-- first, only go through the first 3. prioritize these guys over the special gizmos
+	for i = 1, 3 do
 		local hitpos = intersections[i]
 		if hitpos then
 			local distance = hitpos:LengthSqr()
 			if distance < closestDistance then
 				closestDistance = distance
 				targetIndex = i
+			end
+		end
+	end
+
+	if targetIndex <= 0 then
+		-- Go through the special ones if we didn't get an intersection earlier
+		for i = 4, #directions do
+			local hitpos = intersections[i]
+			if hitpos then
+				local distance = hitpos:LengthSqr()
+				if distance < closestDistance then
+					closestDistance = distance
+					targetIndex = i
+				end
 			end
 		end
 	end

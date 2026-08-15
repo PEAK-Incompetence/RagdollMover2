@@ -103,13 +103,16 @@ end
 
 ---Convert directions to quaternions
 ---@param direction Vector
+---@param initials table
 ---@return any
-function disc:PreTransform(direction)
-	local quat = quaternion.new(1)
-	return quat:SetAngleAxis(0, direction)
+function disc:PreTransform(direction, initials)
+	return direction
 end
 
----@param directions Quaternion[]
+-- Define it here and modify the angle axis, so we don't have to create a quaternion every frame
+local rotationQuaternion = quaternion.new(1)
+
+---@param directions Vector[]
 ---@param start Vector
 ---@param endPos Vector
 ---@param transforms VMatrix[]
@@ -132,16 +135,15 @@ function disc:Transform(directions, start, endPos, transforms, accumulations, pr
 
 		local qi = quaternion.fromAngle(matrix:GetAngles())
 
-		local _, axis = direction:AngleAxis()
+		local axis = direction
 		local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
 		local degrees = math.deg(angle)
 		local newRot = accumulations[accumulationIndex] + degrees
 		accumulations[accumulationIndex] = newRot
-		local rotation = quaternion.new(1)
-		rotation:SetAngleAxis(degrees, axis)
-		rotation:Mul(qi)
+		rotationQuaternion:SetAngleAxis(degrees, axis)
+		rotationQuaternion:Mul(qi)
 
-		matrix:SetAngles(rotation:Angle())
+		matrix:SetAngles(rotationQuaternion:Angle())
 	end
 end
 
@@ -181,7 +183,7 @@ local function initialize(v)
 		base._direction = v
 		base._axis = v
 		base._color = v:ToColor()
-		RagdollPoser.Log("Set rotation axis to ", v)
+		-- RagdollPoser.Log("Set rotation axis to ", v)
 	else
 		base._facesUs = true
 		base._direction = -MainEyeAngles():Forward()

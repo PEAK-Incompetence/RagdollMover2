@@ -86,7 +86,6 @@ local MGR = {
 local function setPositionFromSelection(selection)
 	local pos = Vector()
 
-	PrintTable(selection)
 	local count = #selection * 0.5
 	for i = 1, #selection - 1, 2 do
 		local bone = selection[i]
@@ -303,21 +302,17 @@ function MGR:Draw()
 
 	local props = self._gizmoProps
 
-	-- print(self._pos)
 	if props.pos then
 		-- render.SetColorMaterialIgnoreZ()
 		-- render.CullMode(MATERIAL_CULLMODE_NONE)
 		-- render.DrawBox(props.pos, props.ang, tempMin, tempMax)
-		local eyepos, eyevec, eyeang = RagdollPoser.View:GetView()
-
 		if self:IsMoving() then
 			local direction = self._directions[self._gizmoIndex]
 			direction:Draw(props, true)
 		else
-			local selected = false
-			for _, direction in ipairs(self._directions) do
-				local hitPos = direction:Intersect(eyepos, eyevec, props)
-				direction:Draw(props, not selected and hitPos ~= nil)
+			local selected = self:TestIntersect()
+			for i, direction in ipairs(self._directions) do
+				direction:Draw(props, selected and i == self._gizmoIndex)
 			end
 		end
 	end
@@ -332,7 +327,6 @@ function MGR:TestIntersect()
 		intersections[i] = direction:Intersect(eyepos, eyevec, self._gizmoProps)
 	end
 
-	local min = math.min
 	local targetIndex, closestDistance = 0, math.huge
 	for i = 1, #directions do
 		local hitpos = intersections[i]
@@ -429,7 +423,6 @@ function MGR:PreTransform()
 		for bone, count in SortedPairsByValue(bones) do
 			table.insert(entityBones[client], bone)
 		end
-		-- PrintTable(entityBones[client])
 	end
 
 	-- iterate over every selected bone in order from root bone to descendant bone
@@ -534,7 +527,6 @@ function MGR:Transform()
 		end
 	end
 
-	-- PrintTable(self._localMatrices)
 	-- After caching our directions,
 	-- Do transform to initial copy, and apply new transform to
 	-- entity matrices so that we see the effect on the ghost client entity
@@ -692,6 +684,7 @@ function MGR:DrawHovered()
 	end
 end
 
+-- TODO: Move drawing functions into another file? render.lua
 function MGR:DrawSelected()
 	local selection = RagdollPoser.Selection:GetSelection()
 	for i = 1, #selection - 1, 2 do
@@ -801,13 +794,19 @@ function MGR:Render()
 	-- Draw selected bone
 end
 
-hook.Add("RagdollPoser_Selection_Selected", "Gizmo", function(selection)
+local function selected(selection)
+	print("section")
+	PrintTable(selection)
 	setPositionFromSelection(selection)
+	--- FIXME: this errors because the selection table gets emptied everytime we select a new entity
+	--- which is due to some overlapping logic when selecting a new entity and refreshing entities
 	setAngleFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)
+	MGR:OnModeChanged(MGR._mode)
 	hovered = {}
-end)
+end
+hook.Add("RagdollPoser_Selection_Selected", "Gizmo", selected)
 
 hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	-- FIXME: I would like to have this run after I get the new client entities. Just doing things these way is really hacky

@@ -24,9 +24,10 @@ function arrow:Intersect(eyepos, direction, props)
 	render.SetColorMaterialIgnoreZ()
 	local scale = props.scale
 
+	local angle = props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero
 	render.DrawBox(
 		props.pos,
-		props.ang,
+		angle,
 		tempMin + self._direction * scale * centerPadding,
 		tempMax + self._direction * scale
 	)
@@ -34,7 +35,7 @@ function arrow:Intersect(eyepos, direction, props)
 		eyepos,
 		direction * 16384,
 		props.pos,
-		props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero,
+		angle,
 		tempMin + self._direction * scale * centerPadding,
 		tempMax + self._direction * scale
 	)

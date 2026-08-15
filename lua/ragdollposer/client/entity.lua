@@ -62,6 +62,9 @@ end, "RagdollPoser_StaticCVarChanged")
 ---@param self Entity
 local function renderOverride(self, flags)
 	if RagdollPoser.Helpers.Equipped() then
+		-- Draw the entity underneath the ghost
+		local entity = ClientToEntity[self]
+		entity:DrawModel(flags)
 		cam.IgnoreZ(true)
 		render.OverrideColorWriteEnable(true, false)
 		self:DrawModel(flags)
@@ -272,8 +275,6 @@ function MGR.RefreshEntities(entities)
 			EntityToClient[entity] = nil
 		end
 	end
-
-	hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 end
 
 ---@param client ClientEntity
@@ -318,6 +319,7 @@ local function sendAssemblyInfo()
 		if not RagdollPoser.Selection:GetSelection()[1] then
 			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent])
 		end
+		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 	end
 end
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)

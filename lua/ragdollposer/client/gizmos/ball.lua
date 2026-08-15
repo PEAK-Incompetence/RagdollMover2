@@ -6,14 +6,14 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
-local BALL_SCALE = 0.40
+local BALL_SCALE = 0.45
 
 function ball:Intersect(eyepos, direction, props)
 	local hit1, hit2 = util.IntersectRayWithSphere(eyepos, direction * 16384, props.pos, props.scale * BALL_SCALE)
 
 	if hit1 then
 		-- debugoverlay.Sphere(eyepos + direction * hit1 * 16384, 2, 0.2, self._selectedColor, true)
-		return eyepos + direction * hit1
+		return eyepos + direction * hit1 * 16384
 	end
 end
 

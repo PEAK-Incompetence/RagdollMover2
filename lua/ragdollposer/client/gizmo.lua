@@ -365,6 +365,7 @@ end
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()
 
+---Do some setup (caching) before we start transforming
 function MGR:PreTransform()
 	-- Get an initial copy of the entity matrices
 
@@ -502,6 +503,7 @@ function MGR:PreTransform()
 	self.start = gui.ScreenToVector(x, y)
 end
 
+---Transform the selected bones of the selected entities, after triggering a move operation
 function MGR:Transform()
 	local x, y = input.GetCursorPos()
 	local newPoint = gui.ScreenToVector(x, y)
@@ -512,6 +514,8 @@ function MGR:Transform()
 		local selection = RagdollPoser.Selection:GetSelection()
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
+			-- print(i, client:GetBoneName(bone))
+			-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 			gizmo:Transform(
 				self._pivots,
 				self.start,
@@ -552,7 +556,7 @@ local function doTransform()
 	-- FIXME: Make this not run while we are holstering
 	-- We can also just disable the input system when we are holstering, to prevent the left-click event altogether
 	local equipped = RagdollPoser.Helpers.Equipped()
-	if equipped and MGR:IsMoving() then
+	if equipped and MGR:IsEnabled() and MGR:IsMoving() then
 		MGR:Transform()
 	end
 end
@@ -644,6 +648,7 @@ local function sendSubPose(selection)
 	net.SendToServer()
 end
 
+---Send our results after the transformation
 function MGR:PostTransform()
 	local gizmo = self._directions[self._gizmoIndex]
 	if gizmo then
@@ -659,7 +664,7 @@ end
 ---@type InputCallback
 local function onLeftClickDown(x, y, tr)
 	-- If we're not accepting drag selections, then don't do anything
-	if not MGR:IsMoving() and MGR:TestIntersect() then
+	if MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
 		-- Click on gizmo and do stuff
 		MGR:SetMoving(true)
 		MGR:PreTransform()

@@ -45,6 +45,7 @@ function TOOL:LeftClick(tr)
 		-- Send entity info to the client
 		local bone = math.max(entity:TranslatePhysBoneToBone(phys), 0)
 		RagdollPoser.Data.RefreshEntities(pl, entity, bone, constrainedList)
+		RagdollPoser.Data.UpdatePhysBoneCount(entity)
 		RagdollPoser.Data:Update(pl, entity, bone, constrainedList, constrainedTab)
 	end
 

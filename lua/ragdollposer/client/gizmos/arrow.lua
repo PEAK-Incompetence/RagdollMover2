@@ -72,12 +72,32 @@ function arrow:GetDirection()
 	return self._direction
 end
 
+function arrow:PreTransform(v)
+	return v
+end
+
 ---@param directions Vector[]
----@param delta number
+---@param start Vector
+---@param endPos Vector
 ---@param transforms VMatrix[]
-function arrow:Transform(directions, delta, transforms)
+---@param accumulations number[]
+function arrow:Transform(directions, start, endPos, transforms, accumulations, props)
+	local forward = -MainEyeAngles():Forward()
+	local eyePos = MainEyePos()
+	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, forward) or endPos)
+
+	local delta = endHit - startHit
 	for i, matrix in ipairs(transforms) do
-		matrix:SetTranslation((directions[i] or directions[1]) * delta)
+		local vector = directions[i] or directions[1]
+		local accumulationIndex = accumulations[i] and i or 1
+
+		local movement = vector * vector:Dot(delta)
+		accumulations[accumulationIndex] = accumulations[accumulationIndex] + movement:Length()
+		movement:Rotate(matrix:GetInverse():GetAngles())
+		matrix:Translate(movement)
+		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
+		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + vector * 10, 0.5)
 	end
 end
 

@@ -14,60 +14,51 @@ MGR.Players = RagdollPoser.Data and RagdollPoser.Data.Players or {}
 
 ---@alias PlayerData {[1]: Entity, [2]: integer, [3]: Entity[], [4]: {[Entity]: Entity}}
 
----@type {[string]: {[integer]: integer}}
-local boneToPhysMap = {}
+RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
+RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")
 
----@param ent Entity Entity to translate bone
----@param bone integer Bone id
----@return integer physBone Physics object id
-local function BoneToPhysBone(ent, bone)
-	local model = ent:GetModel()
-	if boneToPhysMap[model] and boneToPhysMap[model][bone] then
-		return boneToPhysMap[model][bone]
-	else
-		boneToPhysMap[model] = boneToPhysMap[model] or {}
-		for i = 0, ent:GetPhysicsObjectCount() - 1 do
-			local b = ent:TranslatePhysBoneToBone(i)
-			if bone == b then
-				boneToPhysMap[model][b] = i
-				return i
+local function sendSubPose(len, ply)
+	local entityCount = net.ReadUInt(13)
+
+	for _ = 1, entityCount do
+		local entity = net.ReadEntity()
+		local matrixCount = net.ReadUInt(8)
+		---@type VMatrix[]
+		local matrices = {}
+		local bones = {}
+		for _ = 1, matrixCount do
+			local b = net.ReadUInt(8)
+			table.insert(bones, b)
+			matrices[b] = net.ReadMatrix()
+		end
+
+		-- PrintTable(matrices)
+		-- PrintTable(bones)
+
+		for _, b in ipairs(bones) do
+			local matrix = matrices[b]
+			-- print(matrix)
+			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
+			local po = entity:GetPhysicsObjectNum(physBone)
+			if matrix then
+				if po then
+					po:SetPos(matrix:GetTranslation())
+					po:SetAngles(matrix:GetAngles())
+					po:Wake()
+					po:EnableMotion(false)
+				else
+					entity:ManipulateBonePosition(b, matrix:GetTranslation())
+					entity:ManipulateBoneAngles(b, matrix:GetAngles())
+				end
+				entity:ManipulateBoneScale(b, matrix:GetScale())
 			end
 		end
-		boneToPhysMap[model][bone] = -1
-		return -1
 	end
+
+	RagdollPoser.Networking.SendSubPoseResponse()
+	net.Send(ply)
 end
-
-RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
-RagdollPoser.Networking.SendAssemblyInfo2 = RagdollPoser.Networking.DefineSender("SendAssemblyInfo2")
-
-RagdollPoser.Networking.DefineReceiver("SendSubPose", function(len, ply)
-	local entity = net.ReadEntity()
-	local matrixCount = net.ReadUInt(8)
-	---@type VMatrix[]
-	local matrices = {}
-	for i = 1, matrixCount do
-		matrices[i - 1] = net.ReadMatrix()
-	end
-
-	for b = 0, entity:GetBoneCount() - 1 do
-		local matrix = matrices[b]
-		-- print(matrix)
-		local physBone = BoneToPhysBone(entity, b)
-		local po = entity:GetPhysicsObjectNum(physBone)
-		if po and matrix then
-			print(entity:GetBoneName(b))
-			po:SetPos(matrix:GetTranslation())
-			po:SetAngles(matrix:GetAngles())
-			po:Wake()
-			po:EnableMotion(false)
-		end
-	end
-end)
-
-RagdollPoser.Networking.DefineReceiver("SendSubPose2", function(len, ply)
-	print("Get sub pose2")
-end)
+RagdollPoser.Networking.DefineReceiver("SendSubPose", sendSubPose)
 
 hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
 	if not MGR.Players[pl] then
@@ -143,5 +134,25 @@ function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 	-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
 	RagdollPoser.Data.Players[pl] = { entity, bone, entities, constrainedEntities }
 end
+
+RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSender("EntityPhysBoneCount")
+
+---@param entity Entity
+function MGR.UpdatePhysBoneCount(entity)
+	RagdollPoser.Networking.EntityPhysBoneCount()
+	-- print("entityphysbonecount send", entity, entity:GetPhysicsObjectCount())
+	net.WriteEntity(entity)
+	net.WriteUInt(entity:GetPhysicsObjectCount(), 5)
+	net.Broadcast()
+end
+
+local function sendPhysBoneCount(entity)
+	timer.Simple(0, function()
+		if IsValid(entity) and entity.GetModel and entity:GetModel() and entity:GetPhysicsObjectCount() > 0 then
+			MGR.UpdatePhysBoneCount(entity)
+		end
+	end)
+end
+hook.Add("OnEntityCreated", "RagdollPoser_SendPhysBone", sendPhysBoneCount)
 
 RagdollPoser.Data = MGR

@@ -7,7 +7,10 @@
 ---
 ---@class RagdollPoser.Input
 ---@
-local MGR = {}
+local MGR = {
+	xMove = 0,
+	yMove = 0,
+}
 
 ---@type {[BUTTON_CODE]: InputAction}
 MGR.KeyBinds = MGR.KeyBinds or {}
@@ -46,9 +49,7 @@ local lastCheck = RealTime()
 ---@param cmd CUserCmd
 local function mouseInput(cmd)
 	local pl = LocalPlayer()
-	local weap = pl:GetActiveWeapon()
-	local tool = pl:GetTool()
-	local equipped = IsValid(weap) and weap:GetClass() == "gmod_tool" and tool and tool:GetMode() == RagdollPoser.Mode
+	local equipped = RagdollPoser.Helpers.Equipped()
 	if equipped then
 		local eyePos = MainEyePos()
 		util.TraceLine({
@@ -88,12 +89,15 @@ hook.Add("CreateMove", "RagdollPoser_MouseInput", mouseInput)
 
 local keysDown = {}
 local function keyboardInput()
-	for _, key in ipairs(activeKeybinds) do
-		if input.IsKeyDown(key) and not keysDown[key] then
-			keysDown[key] = true
-			hook.Run("RagdollPoser_Input_KeyPress", MGR.KeyBinds[key])
-		elseif not input.IsKeyDown(key) and keysDown[key] then
-			keysDown[key] = false
+	local equipped = RagdollPoser.Helpers.Equipped()
+	if equipped then
+		for _, key in ipairs(activeKeybinds) do
+			if input.IsKeyDown(key) and not keysDown[key] then
+				keysDown[key] = true
+				hook.Run("RagdollPoser_Input_KeyPress", MGR.KeyBinds[key])
+			elseif not input.IsKeyDown(key) and keysDown[key] then
+				keysDown[key] = false
+			end
 		end
 	end
 end
@@ -101,5 +105,11 @@ hook.Remove("PlayerButtonDown", "RagdollPoser_KeyboardInput")
 hook.Remove("KeyPress", "RagdollPoser_KeyboardInput")
 hook.Remove("Think", "RagdollPoser_KeyboardInput")
 hook.Add("Think", "RagdollPoser_KeyboardInput", keyboardInput)
+
+local function mouseDelta(cmd, x, y, ang)
+	MGR.xMove = x
+	MGR.yMove = y
+end
+hook.Add("InputMouseApply", "RagdollPoser_MouseDelta", mouseDelta)
 
 RagdollPoser.Input = MGR

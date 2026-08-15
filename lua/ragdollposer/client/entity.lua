@@ -17,6 +17,12 @@ local EntityToClient = {}
 local ClientFirstSet = {}
 ---@type {[ClientEntity]: integer}
 local ClientBoneCallbacks = {}
+---@type {[Entity]: integer}
+local EntityPhysBoneCount = {}
+
+---@alias BonePoseInfo {[1]: Vector, [2]: Angle, [3]: Vector, [4]: Angle, [5]: integer, [6]: integer}
+---@type {[string]: BonePoseInfo[]}
+local PoseTrees = {}
 
 local function refreshClientData()
 	ClientEntities = {}
@@ -55,14 +61,16 @@ end, "RagdollPoser_StaticCVarChanged")
 
 ---@param self Entity
 local function renderOverride(self, flags)
-	cam.IgnoreZ(true)
-	render.OverrideColorWriteEnable(true, false)
-	self:DrawModel(flags)
-	render.OverrideColorWriteEnable(false, false)
-	render.SetBlend(0.75)
-	self:DrawModel(flags)
-	render.SetBlend(1)
-	cam.IgnoreZ(false)
+	if RagdollPoser.Helpers.Equipped() then
+		cam.IgnoreZ(true)
+		render.OverrideColorWriteEnable(true, false)
+		self:DrawModel(flags)
+		render.OverrideColorWriteEnable(false, false)
+		render.SetBlend(0.75)
+		self:DrawModel(flags)
+		render.SetBlend(1)
+		cam.IgnoreZ(false)
+	end
 end
 
 ---@param self ClientEntity
@@ -147,6 +155,7 @@ hook.Add("EntityRemoved", "RagdollPoser_Entity_EntityRemoved", function(ent, ful
 	if IsValid(EntityToClient[ent]) then
 		table.remove(Entities, ent.rgp_index)
 		EntityToClient[ent]:Remove()
+		EntityRenderBounds[ent] = nil
 		MGR.RefreshEntities(Entities)
 	end
 end)
@@ -161,6 +170,81 @@ end)
 ---@return VMatrix[]
 function MGR.GetMatrices(entity)
 	return EntityMatrices[entity]
+end
+
+---
+---
+---@param entity Entity
+function MGR.UpdateRenderBounds(entity)
+	print(entity)
+	PrintTable(EntityRenderBounds)
+	local renderBounds = EntityRenderBounds[entity]
+	if renderBounds then
+		renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
+	end
+end
+
+---Source: https://github.com/NO-LOAFING/AnimpropOverhaul/blob/a3a6268a5d57655611a8b8ed43dcf43051ecd93a/lua/entities/prop_animated.lua#L3550
+---@param ent Entity|CSEnt Entity in reference pose
+---@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
+local function getDefaultPoseTree(ent)
+	local defaultPose = {}
+	local entPos = ent:GetPos()
+	local entAngles = ent:GetAngles()
+	for b = 0, ent:GetBoneCount() - 1 do
+		local parent = ent:GetBoneParent(b)
+		local isPhysBone = b == ent:TranslatePhysBoneToBone(ent:TranslateBoneToPhysBone(b))
+		local bMatrix = ent:GetBoneMatrix(b)
+		if bMatrix then
+			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), entPos, entAngles)
+			local pos2, ang2 = pos1 * 1, ang1 * 1
+			if parent > -1 then
+				local pMatrix = ent:GetBoneMatrix(parent)
+				pos2, ang2 = WorldToLocal(
+					bMatrix:GetTranslation(),
+					bMatrix:GetAngles(),
+					pMatrix:GetTranslation(),
+					pMatrix:GetAngles()
+				)
+			end
+
+			defaultPose[b + 1] = { pos1, ang1, pos2, ang2, parent, isPhysBone }
+		else
+			defaultPose[b + 1] = { vector_origin, angle_zero, vector_origin, angle_zero, -1, false }
+		end
+	end
+
+	return defaultPose
+end
+
+---Get the default pose of an entity
+---
+---```lua
+---	local poseTree = GetDefaultPoseTreeFor(entity)
+---	PrintTable(poseTree[b + 1])
+---```
+---
+---@param entity Entity
+---@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
+function MGR.GetDefaultPoseTreeFor(entity)
+	local model = entity:GetModel()
+	local tree = PoseTrees[model]
+	if tree then
+		return tree
+	end
+
+	---@diagnostic disable
+	local csModel = ClientsideModel(entity:GetModel())
+	csModel:DrawModel()
+	csModel:SetupBones()
+	csModel:InvalidateBoneCache()
+	tree = getDefaultPoseTree(csModel)
+	csModel:Remove()
+
+	PoseTrees[model] = tree
+	---@diagnostic enable
+
+	return tree
 end
 
 ---Bone indices for the matrices are offset by 1, i.e.
@@ -192,6 +276,18 @@ function MGR.RefreshEntities(entities)
 	hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 end
 
+---@param client ClientEntity
+---@return Entity
+function MGR.GetEntityFromClient(client)
+	return ClientToEntity[client]
+end
+
+---@param entity Entity
+---@return ClientEntity
+function MGR.GetClientFromEntity(entity)
+	return EntityToClient[entity]
+end
+
 ---@return Entity[]
 function MGR.GetEntities()
 	return Entities
@@ -207,7 +303,8 @@ end
 -- a) stay put, or
 -- b) track the ragdoll pose
 
-RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", function(len, ply)
+---@type NetReceiver
+local function sendAssemblyInfo()
 	local ent = net.ReadEntity()
 	local bone = net.ReadUInt(8)
 	local count = net.ReadUInt(10)
@@ -222,10 +319,29 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", function(len, ply)
 			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent])
 		end
 	end
-end)
-RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo2", function(len, ply)
-	print("Get assembly info2")
-end)
+end
+RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)
+
+---@param entity Entity
+---@return integer
+function MGR.GetPhysBoneCount(entity)
+	local model = entity:GetModel()
+	return EntityPhysBoneCount[model]
+end
+
+local function getPhysBoneCount(len, ply)
+	local entity = net.ReadEntity()
+	local count = net.ReadUInt(5)
+	print("entityphysbonecount receive", entity, count)
+	if IsValid(entity) then
+		local model = entity:GetModel()
+
+		if model then
+			EntityPhysBoneCount[model] = count
+		end
+	end
+end
+RagdollPoser.Networking.DefineReceiver("EntityPhysBoneCount", getPhysBoneCount)
 
 for _, ent in ipairs(ents.GetAll()) do
 	---@cast ent Entity|ClientEntity

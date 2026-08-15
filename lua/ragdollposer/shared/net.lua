@@ -28,6 +28,8 @@ end
 ---@field ReceiverCallbackBuffer {[string]: NetReceiver}
 ---@field Receivers NetReceiver[]
 ---@field Senders string[]
+---@field ServerSenderCount integer
+---@field ClientSenderCount integer
 local MGR = RagdollPoser.Networking
 	or {
 		SenderToID = {},
@@ -36,6 +38,9 @@ local MGR = RagdollPoser.Networking
 		ReceiverCallbackBuffer = {},
 		Receivers = {},
 		Senders = {},
+
+		ServerSenderCount = 0,
+		ClientSenderCount = 0,
 	}
 
 local SenderToID = MGR.SenderToID
@@ -51,7 +56,15 @@ local function empty() end
 ---@package
 ---@return integer
 function MGR.GetSenderCountBits()
-	return math.ceil(math.log(#Senders + 1, 2))
+	local count = math.ceil(math.log(#Senders + 1, 2))
+	return count
+end
+
+---@package
+---@return integer
+function MGR.GetReceiverCountBits()
+	local count = math.ceil(math.log((SERVER and MGR.ClientSenderCount or MGR.ServerSenderCount) + 1, 2))
+	return count
 end
 
 ---@param name string
@@ -61,6 +74,7 @@ local function sendReceiver(name, count, ply)
 	local function send()
 		net.Start("RagdollPoser_AddReceiver")
 		net.WriteString(name)
+		-- print("send receiver", count)
 		net.WriteUInt(count, 12)
 		if SERVER then
 			if ply then
@@ -93,6 +107,7 @@ function MGR.DefineSender(name)
 
 	---@type NetStarter
 	local function netStarter()
+		-- print(count, name)
 		net.Start("RagdollPoser", true)
 		net.WriteUInt(count, MGR.GetSenderCountBits())
 	end
@@ -136,17 +151,33 @@ local function addReceiver()
 	-- PrintTable(ReceiverIDToName)
 	-- PrintTable(ReceiverNameToID)
 	-- PrintTable(ReceiverCallbackBuffer)
+
+	-- We always increment server / client counts, so everytime we get a receiver, we're monotonically increasing our counts
+	if SERVER then
+		MGR.ClientSenderCount = id + 1
+	else
+		MGR.ServerSenderCount = id + 1
+	end
 end
 net.Receive("RagdollPoser_AddReceiver", addReceiver)
 
 ---@type NetReceiver
 local function netReceiver(len, ply)
 	-- print("receive message")
-	local index = net.ReadUInt(MGR.GetSenderCountBits())
-	-- print(index)
+	-- If receiving from client, get ClientSenderCount; otherwise, get ServerSenderCount
+	local index = net.ReadUInt(MGR.GetReceiverCountBits())
+	-- print("index", index)
+	-- print("receiver id to name", ReceiverIDToName[index])
 	-- PrintTable(ReceiverNameToID)
 	-- PrintTable(ReceiverIDToName)
 	-- PrintTable(ReceiverCallbackBuffer)
+
+	-- This will only happen when the client does not have any info about the server immediately, such as on hooks like
+	-- `OnEntityCreated` during server startup. You'll have to wait until after this server loads for you to get entity
+	-- info
+	if not index then
+		return
+	end
 	if Receivers[index] then
 		Receivers[index](len, ply)
 	else

@@ -48,13 +48,7 @@ local MGR = {
 		width = 0.25,
 		offset = Vector(),
 		partial = false,
-	},
-
-	_linePositions = {
-		Vector(0, 1, 1),
-		Vector(0, -1, 1),
-		Vector(0, -1, -1),
-		Vector(0, 1, -1),
+		sensitivity = 1,
 	},
 
 	_moving = false,
@@ -152,7 +146,6 @@ function MGR:OnModeChanged(mode)
 			self._directions[i] = modeToInitializerSide[mode](v)
 		end
 	end
-	PrintTable(self._directions)
 end
 
 function MGR:CycleMode()
@@ -183,7 +176,17 @@ function MGR:SetEnabled(enabled)
 end
 
 RagdollPoser.Networking.SendSubPose = RagdollPoser.Networking.DefineSender("SendSubPose")
-RagdollPoser.Networking.SendSubPose2 = RagdollPoser.Networking.DefineSender("SendSubPose2")
+
+local entityBuffer = {}
+
+---@type NetReceiver
+local function sendSubPoseResponse()
+	for _, entity in ipairs(entityBuffer) do
+		RagdollPoser.Entity.UpdateRenderBounds(entity)
+	end
+	entityBuffer = {}
+end
+RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
 
 -- Instead of creating a matrix with `GetMatrix`, copy the values
 -- to this one, to reduce garbace collection cycles
@@ -294,10 +297,12 @@ function MGR:TestIntersect()
 	return false
 end
 
-local IDENTITY_MATRIX = Matrix():Identity()
+local IDENTITY_MATRIX = Matrix()
+IDENTITY_MATRIX:Identity()
 
 function MGR:PreTransform()
 	-- Get an initial copy of the entity matrices
+
 	print("pretransform")
 
 	local selection = RagdollPoser.Selection:GetSelection()
@@ -306,57 +311,102 @@ function MGR:PreTransform()
 	---@param bone integer
 	---@param store VMatrix[]
 	---@param storeLocal {[integer]: VMatrix}
-	local function recursiveMatrixCopy(entity, matrices, bone, store, storeLocal)
+	---@param indexer integer[]
+	---@param parents {[integer]: integer}
+	local function recursiveMatrixCopy(entity, matrices, bone, store, storeLocal, indexer, parents)
 		local m = matrices[bone + 1]
 		if m then
 			-- copy the matrix
-			table.insert(store, m * IDENTITY_MATRIX)
+			indexer[bone] = table.insert(store, m * IDENTITY_MATRIX)
 		end
 		for _, childBone in ipairs(entity:GetChildBones(bone)) do
-			recursiveMatrixCopy(entity, matrices, childBone, store, storeLocal)
+			recursiveMatrixCopy(entity, matrices, childBone, store, storeLocal, indexer, parents)
 			local childMatrix = matrices[childBone + 1]
 			if childMatrix and m then
 				storeLocal[childBone] = m:GetInverse() * childMatrix
+				parents[childBone] = bone
 			end
 		end
 	end
-
-	---@param entity Entity
-	---@param bone integer
-	---@param bones integer[]
-	local function recursiveBoneCopy(entity, bone, bones)
-		table.insert(bones, bone)
-		for _, childBone in ipairs(entity:GetChildBones(bone)) do
-			recursiveBoneCopy(entity, childBone, bones)
-		end
-	end
-
+	-- TODO: Maybe simplify the tables used below for doing transforms?
+	-- There could be a simpler, possibly more performant way to doing things
 	self._matrices = {}
+	self._matrixIndex = {}
 	self._localMatrices = {}
+	self._parents = {}
+	self._accumulations = {}
 
 	-- Collection of bones per entity, starting from the selected root bone index to the selected descendant bone index
-	---@type {[Entity]: integer[]}
 	local entityBones = {}
-	---@type {[Entity]: {[integer]: true}}
+	---@type {[Entity]: {[integer]: integer}}
 	local entityBoneSet = {}
 
 	-- First, we need to select all bones and do our iteration with the root first, and then the descendants, for each entity
 	-- After we do that, then we can copy our matrices over. Then what will happen is that we process the root matrices first,
 	-- and then the descendant matrices
+	-- Problem, bone selections are not ordered. We need to figure out the order using the client bone hierarchy
 	for i = 1, #selection - 1, 2 do
 		local bone, client = selection[i], selection[i + 1]
+		---@cast bone integer
+		---@cast client ClientEntity
 		entityBones[client] = entityBones[client] or {}
 		entityBoneSet[client] = entityBoneSet[client] or {}
-		local walk = bone
+		entityBoneSet[client][bone] = 0
+	end
 
+	for i = 1, #selection - 1, 2 do
+		local bone, client = selection[i], selection[i + 1]
+		local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
+
+		local count = 0
+		local walk = bone
+		while tree[walk + 1] do
+			if entityBoneSet[client][walk] then
+				count = count + 1
+			end
+			walk = tree[walk + 1][5]
+		end
+		entityBoneSet[client][bone] = count
+	end
+	-- sort entity bone set per client by number of bones
+	for client, bones in pairs(entityBoneSet) do
+		for bone, count in SortedPairsByValue(bones) do
+			table.insert(entityBones[client], bone)
+		end
+		-- PrintTable(entityBones[client])
+	end
+
+	-- iterate over every selected bone in order from root bone to descendant bone
+	-- and get their matrices
+	for client, bones in pairs(entityBones) do
 		local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 		if matrices then
-			recursiveMatrixCopy(client, matrices, bone, self._matrices, self._localMatrices)
+			self._matrices[client] = self._matrices[client] or {}
+			self._matrixIndex[client] = self._matrixIndex[client] or {}
+			self._localMatrices[client] = self._localMatrices[client] or {}
+			self._parents[client] = self._parents[client] or {}
+			for _, bone in ipairs(bones) do
+				self._matrices[client][bone] = self._matrices[client][bone] or {}
+				self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
+				self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
+				recursiveMatrixCopy(
+					client,
+					matrices,
+					bone,
+					self._matrices[client][bone],
+					self._localMatrices[client][bone],
+					self._matrixIndex[client][bone],
+					self._parents[client]
+				)
+				self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
+			end
 		end
 	end
 
+	local gizmo = self._directions[self._gizmoIndex]
+
 	-- After getting our entity matrices, we need to calculate the directions which we do the transform
-	self._pivots = { self._directions[self._gizmoIndex]:GetDirection() }
+	self._pivots = { gizmo:GetDirection() }
 
 	-- Check gizmo pivot
 	if self._pivot == self.Pivot.Individual then
@@ -365,6 +415,14 @@ function MGR:PreTransform()
 			-- or to rotate them on their own axes
 			-- So iterate over all selected bones to get their local, individual directions
 		end
+	else
+		if self._orientation == self.Orientation.World then
+		end
+	end
+
+	for i, pivot in ipairs(self._pivots) do
+		self._pivots[i] = gizmo:PreTransform(pivot)
+		self._accumulations[i] = 0
 	end
 
 	-- Also operate with entity matrices for the mirrored bones, using the same settings for the above, except
@@ -374,30 +432,192 @@ function MGR:PreTransform()
 	if self._mirror then
 		-- TODO: add mirror operations
 	end
+
+	local x, y = input.GetCursorPos()
+	self.start = gui.ScreenToVector(x, y)
 end
 
 function MGR:Transform()
+	local x, y = input.GetCursorPos()
+	local newPoint = gui.ScreenToVector(x, y)
+	self.delta = newPoint - self.start
+
 	local gizmo = self._directions[self._gizmoIndex]
 	if gizmo then
-		gizmo:Transform(self._pivots, delta, self._matrices, locals)
+		local selection = RagdollPoser.Selection:GetSelection()
+		for i = 1, #selection - 1, 2 do
+			local bone, client = selection[i], selection[i + 1]
+			gizmo:Transform(
+				self._pivots,
+				self.start,
+				newPoint,
+				self._matrices[client][bone],
+				self._accumulations,
+				self._gizmoProps
+			)
+			gizmo:PostTransform(
+				self._matrices[client][bone],
+				self._localMatrices[client][bone],
+				self._matrixIndex[client][bone],
+				self._parents[client]
+			)
+
+			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+
+			if matrices then
+				for b, indices in pairs(self._matrixIndex[client]) do
+					for index, bb in ipairs(indices) do
+						local targetMatrix = matrices[bb + 1]
+						if targetMatrix then
+							targetMatrix:Set(self._matrices[client][b][index])
+						end
+					end
+				end
+			end
+		end
 	end
 
-	PrintTable(self._localMatrices)
+	-- PrintTable(self._localMatrices)
 	-- After caching our directions,
 	-- Do transform to initial copy, and apply new transform to
 	-- entity matrices so that we see the effect on the ghost client entity
-	print("transform!")
+	self.start = newPoint
 end
 
 local function doTransform()
-	if MGR:IsMoving() then
+	-- FIXME: Make this not run while we are holstering
+	-- We can also just disable the input system when we are holstering, to prevent the left-click event altogether
+	local equipped = RagdollPoser.Helpers.Equipped()
+	if equipped and MGR:IsMoving() then
 		MGR:Transform()
 	end
 end
+
+-- HACK: using 2 hooks to get mouse input from locked and unlocked cursor states
+hook.Remove("Think", "RagdollPoser_Gizmo_Transform")
 hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
+hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
+hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
+
+---@param selection table
+local function setPositionFromSelection(selection)
+	local pos = Vector()
+
+	PrintTable(selection)
+	local count = #selection * 0.5
+	for i = 1, #selection - 1, 2 do
+		local bone = selection[i]
+		local entity = selection[i + 1]
+		---@cast bone integer
+		---@cast entity Entity
+		local matrix = entity:GetBoneMatrix(bone)
+
+		if matrix then
+			pos:Add(matrix:GetTranslation())
+		end
+	end
+	pos:Div(count)
+	MGR:SetPosition(pos)
+end
+
+local boneMatrix = Matrix()
+
+-- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
+-- anywhere else
+local function sendSubPose(selection)
+	-- Selection structure
+	-- Entity A
+	-- Bones
+	-- Matrix
+	-- Entity B
+	-- ...
+
+	---@type Entity[]
+	local entities = entityBuffer
+	---@type {[Entity]: integer[]}
+	local bones = {}
+	---@type {[Entity]: {[integer]: true}}
+	local boneSet = {}
+
+	---@param entity Entity
+	---@param bone integer
+	local function addChildBones(entity, bone, arr, set)
+		table.insert(arr, bone)
+		set[bone] = true
+		for _, childBone in ipairs(entity:GetChildBones(bone)) do
+			if not set[childBone] then
+				addChildBones(entity, childBone, arr, set)
+			end
+		end
+	end
+
+	for i = 1, #selection - 1, 2 do
+		local bone = selection[i]
+		local client = selection[i + 1]
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+
+		local arr = bones[entity]
+		local set = boneSet[entity]
+		if not bones[entity] then
+			arr = {}
+			set = {}
+			bones[entity] = arr
+			boneSet[entity] = set
+			table.insert(entities, entity)
+		end
+
+		if not set[bone] then
+			addChildBones(entity, bone, arr, set)
+		end
+	end
+
+	print("entities")
+	PrintTable(entities)
+	print("bones")
+	PrintTable(bones)
+
+	RagdollPoser.Networking.SendSubPose()
+	net.WriteUInt(#entities, 13)
+	for _, entity in ipairs(entities) do
+		net.WriteEntity(entity)
+		local matrices = RagdollPoser.Entity.GetMatrices(entity)
+		local bs = bones[entity]
+		local count = #bs
+		net.WriteUInt(count, 8)
+		for _, b in ipairs(bs) do
+			net.WriteUInt(b, 8)
+			local matrix = matrices[b + 1]
+
+			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
+			print(b, physbone)
+			if physbone >= 0 then
+				print("send world transforms", b)
+				-- Send world transforms and everything
+				net.WriteMatrix(matrix)
+			else
+				print("send bone armature", b)
+				RagdollPoser.Helpers.GetNonPhysicalBonePose(
+					RagdollPoser.Entity.GetClientFromEntity(entity),
+					b,
+					boneMatrix
+				)
+				boneMatrix:SetScale(matrix:GetScale())
+				net.WriteMatrix(boneMatrix)
+			end
+		end
+	end
+	net.SendToServer()
+end
 
 function MGR:PostTransform()
-	-- Set entity matrices
+	local gizmo = self._directions[self._gizmoIndex]
+	if gizmo then
+		gizmo:FinishTransform()
+	end
+
+	local selection = RagdollPoser.Selection:GetSelection()
+	setPositionFromSelection(selection)
+	sendSubPose(selection)
 	print("post transform!")
 end
 
@@ -551,27 +771,6 @@ function MGR:Render()
 	cam.End3D()
 
 	-- Draw selected bone
-end
-
----@param selection table
-local function setPositionFromSelection(selection)
-	local pos = Vector()
-
-	PrintTable(selection)
-	local count = #selection * 0.5
-	for i = 1, #selection - 1, 2 do
-		local bone = selection[i]
-		local entity = selection[i + 1]
-		---@cast bone integer
-		---@cast entity Entity
-		local matrix = entity:GetBoneMatrix(bone)
-
-		if matrix then
-			pos:Add(matrix:GetTranslation())
-		end
-	end
-	pos:Div(count)
-	MGR:SetPosition(pos)
 end
 
 hook.Add("RagdollPoser_Selection_Selected", "Gizmo", function(selection)

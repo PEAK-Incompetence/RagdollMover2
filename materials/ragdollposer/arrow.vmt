@@ -1,7 +1,7 @@
 screenspace_general
 {
     $vertexshader "rgp_vs20"
-	$pixshader "rgp_arrow12_ps20b"
+	$pixshader "rgp_arrow_ps20b"
 
 	$basetexture "ragdollposer/arrow2"
 	$alphatest 1

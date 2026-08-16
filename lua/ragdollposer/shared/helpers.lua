@@ -79,6 +79,12 @@ function MGR.BoneToPhysBone(ent, bone)
 		boneToPhysMap[model] = boneToPhysMap[model] or {}
 		local count = SERVER and ent:GetPhysicsObjectCount() or RagdollPoser.Entity.GetPhysBoneCount(ent)
 		print(count)
+		if CLIENT then
+			-- On the frame that this is called, force the entity to
+			-- show all hidden bones, like `weapon_bone`
+			ent:SetupBones()
+			ent:InvalidateBoneCache()
+		end
 		for i = 0, count - 1 do
 			local b = ent:TranslatePhysBoneToBone(i)
 			if bone == b then

@@ -618,6 +618,10 @@ local function sendSubPose(selection)
 		local bone = selection[i]
 		local client = selection[i + 1]
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		client:SetupBones()
+		client:InvalidateBoneCache()
+		entity:SetupBones()
+		entity:InvalidateBoneCache()
 
 		local arr = bones[entity]
 		local set = boneSet[entity]

@@ -146,6 +146,8 @@ local function getBones(x, y)
 	selectionBuffer = {}
 	local entities = RagdollPoser.Entity.GetClientEntities()
 	for _, entity in ipairs(entities) do
+		entity:SetupBones()
+		entity:InvalidateBoneCache()
 		for b = 0, entity:GetBoneCount() - 1 do
 			if entity:GetBoneName(b) == "__INVALIDBONE__" then
 				continue

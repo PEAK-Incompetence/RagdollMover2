@@ -261,6 +261,9 @@ function MGR:DrawBones()
 				continue
 			end
 
+			ent:SetupBones()
+			ent:InvalidateBoneCache()
+
 			table.insert(mouseHovered, ent)
 			for b = 0, ent:GetBoneCount() - 1 do
 				local name = ent:GetBoneName(b)
@@ -518,6 +521,8 @@ function MGR:Transform()
 
 	local gizmo = self._directions[self._gizmoIndex]
 	if gizmo then
+		-- TODO: Replace selection with the entities we want to manipulate, which includes selected entities/bones and any entities constrained
+		-- to our selected
 		local selection = RagdollPoser.Selection:GetSelection()
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
@@ -577,9 +582,12 @@ hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
 local boneMatrix = Matrix()
 
--- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
--- anywhere else
+---Send update bone transforms of the selected bone hierarchy
+---@param selection any
 local function sendSubPose(selection)
+	-- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
+	-- anywhere else
+
 	-- Selection structure
 	-- Entity A
 	-- Bones
@@ -717,6 +725,9 @@ function MGR:DrawSelected()
 	local selection = RagdollPoser.Selection:GetSelection()
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
+
+		entity:SetupBones()
+		entity:InvalidateBoneCache()
 		local matrix = entity:GetBoneMatrix(bone)
 		local data = matrix:GetTranslation():ToScreen()
 		if not data.visible then

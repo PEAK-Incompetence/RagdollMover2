@@ -106,9 +106,11 @@ end
 local function setAngleFromSelection(selection)
 	local count = #selection
 	local bone, entity = selection[count - 1], selection[count]
-	local matrix = entity:GetBoneMatrix(bone)
-	if matrix then
-		MGR:SetAngles(matrix:GetAngles())
+	if entity then
+		local matrix = entity:GetBoneMatrix(bone)
+		if matrix then
+			MGR:SetAngles(matrix:GetAngles())
+		end
 	end
 end
 
@@ -372,9 +374,12 @@ IDENTITY_MATRIX:Identity()
 function MGR:PreTransform()
 	-- Get an initial copy of the entity matrices
 
+	local selection = RagdollPoser.Selection:GetSelection()
+	if not selection[1] then
+		return
+	end
 	print("pretransform")
 
-	local selection = RagdollPoser.Selection:GetSelection()
 	---@param entity Entity
 	---@param matrices VMatrix[]
 	---@param bone integer
@@ -569,7 +574,7 @@ local function doTransform()
 	-- FIXME: Make this not run while we are holstering
 	-- We can also just disable the input system when we are holstering, to prevent the left-click event altogether
 	local equipped = RagdollPoser.Helpers.Equipped()
-	if equipped and MGR:IsEnabled() and MGR:IsMoving() then
+	if equipped and RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and MGR:IsMoving() then
 		MGR:Transform()
 	end
 end
@@ -676,15 +681,16 @@ function MGR:PostTransform()
 	end
 
 	local selection = RagdollPoser.Selection:GetSelection()
-
-	sendSubPose(selection)
-	print("post transform!")
+	if selection[1] then
+		sendSubPose(selection)
+		print("post transform!")
+	end
 end
 
 ---@type InputCallback
 local function onLeftClickDown(x, y, tr)
 	-- If we're not accepting drag selections, then don't do anything
-	if MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
+	if RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
 		-- Click on gizmo and do stuff
 		MGR:SetMoving(true)
 		MGR:PreTransform()
@@ -872,11 +878,20 @@ end
 hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", onKeyPress)
 
 local function initializeGizmo()
+	-- Refresh gizmos
+	disc = include("ragdollposer/client/gizmos/disc.lua")
+	arrow = include("ragdollposer/client/gizmos/arrow.lua")
+	scale = include("ragdollposer/client/gizmos/scale.lua")
+	ball = include("ragdollposer/client/gizmos/ball.lua")
+	sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
+	sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
+
 	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
 	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
 	MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
 	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
 		or MGR.Orientation.World
+	MGR:OnModeChanged(MGR._mode)
 	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
@@ -906,5 +921,9 @@ local function updateOrientation(_, old, new)
 end
 cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_scale_callback")
 cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_scale_callback")
+
+concommand.Add("ragdollposer_resetgizmo", function()
+	initializeGizmo()
+end, nil, "Reset the gizmo. Useful for debugging.")
 
 RagdollPoser.Gizmo = MGR

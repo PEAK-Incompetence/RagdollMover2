@@ -160,6 +160,7 @@ hook.Add("EntityRemoved", "RagdollPoser_Entity_EntityRemoved", function(ent, ful
 		EntityToClient[ent]:Remove()
 		EntityRenderBounds[ent] = nil
 		MGR.RefreshEntities(Entities)
+		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 	end
 end)
 

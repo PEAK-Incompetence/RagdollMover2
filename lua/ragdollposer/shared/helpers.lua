@@ -102,7 +102,7 @@ if CLIENT then
 	---
 	---Check if the player has the RagdollPoser tool equipped
 	---
-	---@return boolean
+	---@return boolean toolEquipped
 	function MGR.Equipped()
 		local pl = LocalPlayer()
 		local weap = pl:GetActiveWeapon()

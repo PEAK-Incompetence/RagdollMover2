@@ -19,7 +19,7 @@ local centerPadding = 0.05
 ---@param eyepos Vector
 ---@param direction Vector
 ---@param props GizmoProps
----@return Vector?
+---@return Vector? intersectionPoint
 function arrow:Intersect(eyepos, direction, props)
 	render.SetColorMaterialIgnoreZ()
 	local scale = props.scale
@@ -67,7 +67,7 @@ function arrow:Draw(props, selected)
 end
 
 ---@param props GizmoProps
----@return Vector
+---@return Vector axis
 function arrow:GetDirection(props)
 	return self._axis
 end
@@ -110,7 +110,7 @@ function arrow:Transform(directions, start, endPos, transforms, accumulations, i
 end
 
 ---@param direction Vector
----@return GizmoArrow
+---@return GizmoArrow arrow
 local function initialize(direction)
 	local base = arrow:Init()
 	---@cast base GizmoArrow

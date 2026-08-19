@@ -173,7 +173,7 @@ function disc:GetDirection()
 end
 
 ---@param v Vector? axis of rotation
----@return GizmoDisc
+---@return GizmoDisc disc
 local function initialize(v)
 	local base = disc:Init()
 	---@cast base GizmoDisc

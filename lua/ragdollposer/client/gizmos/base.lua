@@ -10,11 +10,11 @@ end
 ---@param eyepos Vector
 ---@param direction Vector
 ---@param props GizmoProps
----@return Vector?
+---@return Vector? intersectionPoint
 function Base:Intersect(eyepos, direction, props) end
 
 ---@param props GizmoProps
----@return Vector
+---@return Vector axis
 function Base:GetDirection(props)
 	return vector_zero
 end

@@ -170,7 +170,7 @@ end)
 ---	local matrix = matrices[b + 1]
 ---```
 ---@param entity Entity
----@return VMatrix[]
+---@return VMatrix[] entityMatrices
 function MGR.GetMatrices(entity)
 	return EntityMatrices[entity]
 end
@@ -257,7 +257,7 @@ end
 ---	local matrix = matrices[b + 1]
 ---```
 ---@param client ClientEntity
----@return VMatrix[]
+---@return VMatrix[] clientMatrices
 function MGR.GetMatricesFromClient(client)
 	return EntityMatrices[ClientToEntity[client]]
 end
@@ -278,23 +278,23 @@ function MGR.RefreshEntities(entities)
 end
 
 ---@param client ClientEntity
----@return Entity
+---@return Entity entity
 function MGR.GetEntityFromClient(client)
 	return ClientToEntity[client]
 end
 
 ---@param entity Entity
----@return ClientEntity
+---@return ClientEntity client
 function MGR.GetClientFromEntity(entity)
 	return EntityToClient[entity]
 end
 
----@return Entity[]
+---@return Entity[] entities
 function MGR.GetEntities()
 	return Entities
 end
 
----@return Entity[]
+---@return Entity[] clients
 function MGR.GetClientEntities()
 	return ClientEntities
 end
@@ -325,7 +325,7 @@ end
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)
 
 ---@param entity Entity
----@return integer
+---@return integer physBoneCount
 function MGR.GetPhysBoneCount(entity)
 	local model = entity:GetModel()
 	return EntityPhysBoneCount[model]

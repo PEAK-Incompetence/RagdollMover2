@@ -99,8 +99,8 @@ function MGR.ValidateModelEntity(entity)
 end
 
 ---@param entity Entity
----@return Entity[]
----@return {[Entity]: Entity}
+---@return Entity[] constrainedList Network-friendly constrained list
+---@return {[Entity]: Entity} constrainedTable Duplicator-friendly constrained list
 function MGR.GetConstrainedEntities(entity)
 	local constrainedTab = constraint.GetAllConstrainedEntities(entity)
 	local constrainedList = {}

@@ -2,7 +2,7 @@
 ---
 ---Net requirements
 --- - For every sender, there **must** be a receiver.
---- - Every sender name must be unique.
+--- - Every sender name must be unique. (Can't have define two senders with the same name: `DefineSender("abc")` `DefineSender("abc")` is disallowed)
 
 if SERVER then
 	util.AddNetworkString("RagdollPoser")
@@ -53,15 +53,17 @@ local Senders = MGR.Senders
 ---@type NetReceiver
 local function empty() end
 
+---Use this for net.Send operations
 ---@package
----@return integer
+---@return integer senderCountBits
 function MGR.GetSenderCountBits()
 	local count = math.ceil(math.log(#Senders + 1, 2))
 	return count
 end
 
+---Use this for net.Receive operations
 ---@package
----@return integer
+---@return integer receiverCountBits
 function MGR.GetReceiverCountBits()
 	local count = math.ceil(math.log((SERVER and MGR.ClientSenderCount or MGR.ServerSenderCount) + 1, 2))
 	return count
@@ -93,8 +95,23 @@ local function sendReceiver(name, count, ply)
 	end
 end
 
+---Start a net message by calling a function instead of `net.Start("message")`
+---
+---What this does is remove bypass the 4096 net message limit using an unsigned integer. This ensures compatibility with other addons.
+---
+---Usage:
+---```lua
+--- -- In server/client
+---	local senderMessage = RagdollPoser.Networking.DefineSender("MyMessage")
+---
+--- -- some code later
+---
+--- senderMessage()
+--- net.WriteVector(v)
+--- net.Send(ply)
+---```
 ---@param name string
----@return NetStarter
+---@return NetStarter netStarterHeader
 function MGR.DefineSender(name)
 	-- print("define sender", name)
 	local count = SenderToID[name]
@@ -115,6 +132,14 @@ function MGR.DefineSender(name)
 	return netStarter
 end
 
+---Receive a message from the other realm. It works like `net.Receive`, but it handles the net message ids underneath.
+---
+---Usage (this continues off from `DefineSender`):
+---```lua
+--- RagdollPoser.Networking.DefineReceiver("MyMessage", function(len, ply)
+--- 	local v = net.ReadVector(v)
+--- end)
+---```
 ---@param name string
 ---@param callback NetReceiver
 function MGR.DefineReceiver(name, callback)
@@ -129,6 +154,7 @@ function MGR.DefineReceiver(name, callback)
 	end
 end
 
+---Debugging function
 function MGR.GetNetworkInfo()
 	PrintTable(ReceiverCallbackBuffer)
 	PrintTable(ReceiverIDToName)
@@ -161,6 +187,7 @@ local function addReceiver()
 end
 net.Receive("RagdollPoser_AddReceiver", addReceiver)
 
+---General net receiving function which handles the id handling
 ---@type NetReceiver
 local function netReceiver(len, ply)
 	-- print("receive message")

@@ -116,7 +116,7 @@ function ball:GetDirection()
 	return Vector()
 end
 
----@return GizmoBall
+---@return GizmoBall ball
 local function initialize()
 	local base = ball:Init()
 

@@ -25,7 +25,7 @@ function scale:Transform(directions, delta, transforms)
 end
 
 ---@param direction Vector
----@return GizmoScale
+---@return GizmoScale scale
 local function initialize(direction)
 	local base = scale:Init()
 	---@cast base GizmoScale

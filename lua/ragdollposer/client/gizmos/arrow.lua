@@ -100,8 +100,9 @@ function arrow:Transform(directions, start, endPos, transforms, accumulations, i
 		local vector = directions[i] or directions[1]
 		local accumulationIndex = accumulations[i] and i or 1
 
-		local movement = vector * vector:Dot(delta)
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + movement:Length()
+		local length = vector:Dot(delta)
+		local movement = vector * length
+		accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
 		movement:Rotate(matrix:GetInverse():GetAngles())
 		matrix:Translate(movement)
 		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)

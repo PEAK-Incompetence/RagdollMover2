@@ -116,9 +116,12 @@ end
 local function constraintRemoved(ent)
 	if ent:IsConstraint() then
 		local ent1, ent2 = ent:GetConstrainedEntities()
+		if not ent1 and not ent2 then
+			return
+		end
 		for player, data in pairs(RagdollPoser.Data.Players) do
 			local targetEnt = data[1]
-			if ent1 == targetEnt or ent2 == targetEnt then
+			if targetEnt and (ent1 == targetEnt or ent2 == targetEnt) then
 				timer.Simple(0, function()
 					local constrainedList, constrainedTab = RagdollPoser.Data.GetConstrainedEntities(targetEnt)
 					RagdollPoser.Data.RefreshEntities(player, targetEnt, data[2], constrainedList)

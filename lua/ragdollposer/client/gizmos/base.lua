@@ -32,19 +32,32 @@ function Base:UpdateOrientation(orientation, props) end
 ---@param selected boolean
 function Base:Draw(props, selected) end
 
+---@class DeltaProps
+---@field [1] Vector delta
+---@field [2] Vector start
+---@field [3] Vector endPos
+
+---@param start Vector
+---@param endPos Vector
+---@param props GizmoProps
+---@param mirrorAxis integer
+---@return DeltaProps deltaProps
+function Base:ProcessDelta(start, endPos, props, mirrorAxis)
+	return {}
+end
+
 ---Calculate and cache before performing the transform
 ---@param direction Vector
 ---@param initials table
 function Base:PreTransform(direction, initials) end
 
 ---@param directions Vector[] The directions of transformation--either a vector or an axis of rotation. This is an array because we might want to transform multiple bones in different directions
----@param start Vector The amount of transformation, from x and y axes
----@param endPos Vector The amount of transformation, from x and y axes
+---@param deltaProps DeltaProps
 ---@param transforms VMatrix[] The initial state to mutate
 ---@param accumulations table Accumulation of translation or rotation, which we can use for snapping behaviors
 ---@param initials table Accumulation of translation or rotation, which we can use for snapping behaviors
----@param props GizmoProps
-function Base:Transform(directions, start, endPos, transforms, accumulations, initials, props) end
+---@param gizmoProps GizmoProps
+function Base:Transform(directions, deltaProps, transforms, accumulations, initials, gizmoProps) end
 
 ---@param transforms VMatrix[]
 ---@param locals VMatrix[] Matrices where the key is the child bone and the value is the child bone matrix relative to its parent

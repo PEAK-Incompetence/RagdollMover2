@@ -72,11 +72,48 @@ function scale:GetDirection(props)
 	return self._axis
 end
 
+local sharedDeltaProps = {
+	Vector(),
+	Vector(),
+	Vector(),
+}
+
+function scale:ProcessDelta(start, endPos, props, mirrorAxis)
+	local forward = -MainEyeAngles():Forward()
+	local eyePos = MainEyePos()
+	if not self.start then
+		self.start = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
+	end
+	if not self.mirrorStart and mirrorAxis >= 0 then
+		self.mirrorStart = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
+	end
+
+	local startHit = mirrorAxis >= 0 and self.mirrorStart or self.start
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, forward) or endPos)
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(MainEyeAngles():Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return { endHit - startHit, startHit, endHit }
+end
+
 ---Scales are with respect to the bone. If we want to make this scale
 ---in different ways (i.e. wrt world, wrt view), we need to calculate
 ---directions with respect to the parent
 function scale:PreTransform(v)
 	self.start = nil
+	self.mirrorStart = nil
 	return v
 end
 
@@ -109,20 +146,10 @@ local VECTOR_ONE = Vector(1, 1, 1)
 local COLOR = Color(255, 0, 0)
 
 ---@param directions Vector[]
----@param start Vector
----@param endPos Vector
+---@param deltaProps DeltaProps
 ---@param transforms VMatrix[]
-function scale:Transform(directions, start, endPos, transforms, accumulations, initials, props)
-	local forward = -MainEyeAngles():Forward()
-	local eyePos = MainEyePos()
-	if not self.start then
-		self.start = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
-	end
-
-	local startHit = self.start
-	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, forward) or endPos)
-
-	local delta = endHit - startHit
+function scale:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+	local delta = deltaProps[1]
 	for i, matrix in ipairs(transforms) do
 		local initialTransformTable = initials[i]
 

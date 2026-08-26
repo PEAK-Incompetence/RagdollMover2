@@ -78,7 +78,7 @@ local MGR = {
 	---Matrices local to parent matrices. Useful for transforms
 	---@type {[integer]: VMatrix}
 	_localMatrices = {},
-	---@type Vector[]
+	---@type {[Entity]: Vector[]}
 	_pivots = {},
 }
 
@@ -410,112 +410,166 @@ function MGR:PreTransform()
 	self._initials = {}
 	self._parents = {}
 	self._accumulations = {}
+	self._pivots = {}
 
-	-- Collection of bones per entity, starting from the selected root bone index to the selected descendant bone index
-	local entityBones = {}
-	---@type {[Entity]: {[integer]: integer}}
-	local entityBoneSet = {}
+	local function collectBones(selection)
+		-- Collection of bones per entity, starting from the selected root bone index to the selected descendant bone index
+		local entityBones = {}
+		---@type {[Entity]: {[integer]: integer}}
+		local entityBoneSet = {}
 
-	-- First, we need to select all bones and do our iteration with the root first, and then the descendants, for each entity
-	-- After we do that, then we can copy our matrices over. Then what will happen is that we process the root matrices first,
-	-- and then the descendant matrices
-	-- Problem, bone selections are not ordered. We need to figure out the order using the client bone hierarchy
-	for i = 1, #selection - 1, 2 do
-		local bone, client = selection[i], selection[i + 1]
-		---@cast bone integer
-		---@cast client ClientEntity
-		entityBones[client] = entityBones[client] or {}
-		entityBoneSet[client] = entityBoneSet[client] or {}
-		entityBoneSet[client][bone] = 0
-	end
+		-- First, we need to select all bones and do our iteration with the root first, and then the descendants, for each entity
+		-- After we do that, then we can copy our matrices over. Then what will happen is that we process the root matrices first,
+		-- and then the descendant matrices
+		-- Problem, bone selections are not ordered. We need to figure out the order using the client bone hierarchy
+		for i = 1, #selection - 1, 2 do
+			local bone, client = selection[i], selection[i + 1]
+			---@cast bone integer
+			---@cast client ClientEntity
+			entityBones[client] = entityBones[client] or {}
+			entityBoneSet[client] = entityBoneSet[client] or {}
+			entityBoneSet[client][bone] = 0
+		end
 
-	for i = 1, #selection - 1, 2 do
-		local bone, client = selection[i], selection[i + 1]
-		local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
+		for i = 1, #selection - 1, 2 do
+			local bone, client = selection[i], selection[i + 1]
+			local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
 
-		local count = 0
-		local walk = bone
-		while tree[walk + 1] do
-			if entityBoneSet[client][walk] then
-				count = count + 1
+			local count = 0
+			local walk = bone
+			while tree[walk + 1] do
+				if entityBoneSet[client][walk] then
+					count = count + 1
+				end
+				walk = tree[walk + 1][5]
 			end
-			walk = tree[walk + 1][5]
+			entityBoneSet[client][bone] = count
 		end
-		entityBoneSet[client][bone] = count
-	end
-	-- sort entity bone set per client by number of bones
-	for client, bones in pairs(entityBoneSet) do
-		for bone, count in SortedPairsByValue(bones) do
-			table.insert(entityBones[client], bone)
-		end
-	end
 
-	-- iterate over every selected bone in order from root bone to descendant bone
-	-- and get their matrices
-	for client, bones in pairs(entityBones) do
-		local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
-		if matrices then
-			self._matrices[client] = self._matrices[client] or {}
-			self._matrixIndex[client] = self._matrixIndex[client] or {}
-			self._localMatrices[client] = self._localMatrices[client] or {}
-			self._parents[client] = self._parents[client] or {}
-			self._initials[client] = {}
-			for _, bone in ipairs(bones) do
-				self._matrices[client][bone] = self._matrices[client][bone] or {}
-				self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
-				self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
-				self._initials[client][bone] = self._initials[client][bone] or {}
-				recursiveMatrixCopy(
-					client,
-					matrices,
-					bone,
-					self._matrices[client][bone],
-					self._localMatrices[client][bone],
-					self._matrixIndex[client][bone],
-					self._parents[client]
-				)
-				self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
+		-- After getting our entity matrices, we need to calculate the directions which we do the transform
+		local gizmo = self._directions[self._gizmoIndex]
+		local props = self._gizmoProps
+
+		-- sort entity bone set per client by number of bones
+		for client, bones in pairs(entityBoneSet) do
+			for bone, count in SortedPairsByValue(bones) do
+				table.insert(entityBones[client], bone)
+			end
+			self._pivots[client] = self._pivots[client] or { gizmo:GetDirection(props) }
+		end
+
+		-- iterate over every selected bone in order from root bone to descendant bone
+		-- and get their matrices
+		for client, bones in pairs(entityBones) do
+			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+			if matrices then
+				self._matrices[client] = self._matrices[client] or {}
+				self._matrixIndex[client] = self._matrixIndex[client] or {}
+				self._localMatrices[client] = self._localMatrices[client] or {}
+				self._parents[client] = self._parents[client] or {}
+				self._initials[client] = self._initials[client] or {}
+				for _, bone in ipairs(bones) do
+					self._matrices[client][bone] = self._matrices[client][bone] or {}
+					self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
+					self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
+					self._initials[client][bone] = self._initials[client][bone] or {}
+					recursiveMatrixCopy(
+						client,
+						matrices,
+						bone,
+						self._matrices[client][bone],
+						self._localMatrices[client][bone],
+						self._matrixIndex[client][bone],
+						self._parents[client]
+					)
+					self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
+				end
+			end
+		end
+
+		-- For mirroring compatibility:
+		-- 1. Store pivot per client
+		-- 2. Iterate over each clients' pivots using root bone data structure
+		-- 3. With root bone known, flip direction of pivots using mirror axis
+
+		-- Check gizmo pivot
+		if self._pivot == self.Pivot.Individual then
+			if props.orientation == self.Orientation.Local then
+				-- We need to get a bunch of direction vectors, using the direction we passed to move bones individually on their own axes
+				-- or to rotate them on their own axes
+				-- So iterate over all selected bones to get their local, individual directions
+			end
+		else
+			if props.orientation == self.Orientation.World then
+			end
+		end
+
+		for client, pivots in pairs(self._pivots) do
+			self._accumulations[client] = self._accumulations[client] or {}
+			for i, pivot in ipairs(pivots) do
+				pivots[i] = gizmo:PreTransform(pivot, self._initials)
+				self._accumulations[client][i] = 0
 			end
 		end
 	end
 
-	local gizmo = self._directions[self._gizmoIndex]
-	local props = self._gizmoProps
+	collectBones(selection)
 
-	-- After getting our entity matrices, we need to calculate the directions which we do the transform
-	self._pivots = { gizmo:GetDirection(props) }
-
-	-- Check gizmo pivot
-	if self._pivot == self.Pivot.Individual then
-		if props.orientation == self.Orientation.Local then
-			-- We need to get a bunch of direction vectors, using the direction we passed to move bones individually on their own axes
-			-- or to rotate them on their own axes
-			-- So iterate over all selected bones to get their local, individual directions
-		end
-	else
-		if props.orientation == self.Orientation.World then
-		end
-	end
-
+	self._mirroredSelection = {}
 	-- Also operate with entity matrices for the mirrored bones, using the same settings for the above, except
 	-- these must be relative to where the entity is facing
 	-- The desired mirror plane might not be the same for all models, so we'll give the option to change the mirror plane so we get proper
 	-- mirroring for every model
 	if self._mirror then
 		-- TODO: add mirror operations
-	end
+		local mirroredSelection = RagdollPoser.Mirror:GetMirrored(selection)
+		self._mirrorAxis = GetConVar("ragdollposer_mirror_axis"):GetInt()
+		collectBones(mirroredSelection)
 
-	for i, pivot in ipairs(self._pivots) do
-		self._pivots[i] = gizmo:PreTransform(pivot, self._initials)
-		self._accumulations[i] = 0
+		---@type {[Entity]: VMatrix}
+		local rootBones = {}
+		local maxIter = 256
+		for i = 1, #mirroredSelection - 1, 2 do
+			local bone, entity = mirroredSelection[i], mirroredSelection[i + 1]
+			---@cast bone integer
+			---@cast entity Entity
+
+			entity:SetupBones()
+			entity:InvalidateBoneCache()
+
+			rootBones[entity] = rootBones[entity] or Matrix()
+			if self._parents[entity] then
+				local iter = 0
+				local walk = bone
+				while walk ~= -1 and iter < maxIter do
+					local parent = entity:GetBoneParent(walk)
+					if parent == -1 then
+						entity:CopyBoneMatrix(walk, rootBones[entity])
+						rootBones[entity]:SetTranslation(vector_origin)
+					end
+					walk = parent
+					iter = iter + 1
+				end
+			end
+		end
+
+		self._mirrorPivots = {}
+		for entity, rootMatrix in pairs(rootBones) do
+			local pivot = self._pivots[entity]
+			self._mirrorPivots[entity] = self._mirrorPivots[entity] or {}
+			for i, p in ipairs(pivot) do
+				local localDirection = rootMatrix:GetInverse() * p
+				localDirection[self._mirrorAxis + 1] = -localDirection[self._mirrorAxis + 1]
+				self._mirrorPivots[entity][i] = rootMatrix * localDirection
+			end
+		end
+		-- PrintTable(self._pivots)
+		-- PrintTable(self._mirrorPivots or {})
+		self._mirroredSelection = mirroredSelection
 	end
 
 	local x, y = input.GetCursorPos()
 	self.start = gui.ScreenToVector(x, y)
-
-	PrintTable(selection)
-	PrintTable(self._matrixIndex)
-	PrintTable(self._parents)
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
@@ -529,38 +583,55 @@ function MGR:Transform()
 		-- TODO: Replace selection with the entities we want to manipulate, which includes selected entities/bones and any entities constrained
 		-- to our selected
 		local selection = RagdollPoser.Selection:GetSelection()
-		for i = 1, #selection - 1, 2 do
-			local bone, client = selection[i], selection[i + 1]
-			-- print(i, client:GetBoneName(bone))
-			-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
-			gizmo:Transform(
-				self._pivots,
-				self.start,
-				newPoint,
-				self._matrices[client][bone],
-				self._accumulations,
-				self._initials[client][bone],
-				self._gizmoProps
-			)
-			gizmo:PostTransform(
-				self._matrices[client][bone],
-				self._localMatrices[client][bone],
-				self._matrixIndex[client][bone],
-				self._parents[client]
-			)
+		local function transformSelected(selection, pivots, doMirror)
+			for i = 1, #selection - 1, 2 do
+				local bone, client = selection[i], selection[i + 1]
+				-- print(i, client:GetBoneName(bone))
+				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
-			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+				-- We'll build the transform step by step
+				-- 1. Process delta
+				-- 2. Perform transform with delta
+				-- 3. Post transform
+				-- 4. Mirroring
+				-- 5. Constraints
 
-			if matrices then
-				for b, indices in pairs(self._matrixIndex[client]) do
-					for index, bb in ipairs(indices) do
-						local targetMatrix = matrices[bb + 1]
-						if targetMatrix then
-							targetMatrix:Set(self._matrices[client][b][index])
+				local deltaProps =
+					gizmo:ProcessDelta(self.start, newPoint, self._gizmoProps, doMirror and self._mirrorAxis or -1)
+
+				gizmo:Transform(
+					pivots[client],
+					deltaProps,
+					self._matrices[client][bone],
+					self._accumulations[client],
+					self._initials[client][bone],
+					self._gizmoProps
+				)
+				gizmo:PostTransform(
+					self._matrices[client][bone],
+					self._localMatrices[client][bone],
+					self._matrixIndex[client][bone],
+					self._parents[client]
+				)
+
+				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+
+				if matrices then
+					for b, indices in pairs(self._matrixIndex[client]) do
+						for index, bb in ipairs(indices) do
+							local targetMatrix = matrices[bb + 1]
+							if targetMatrix then
+								targetMatrix:Set(self._matrices[client][b][index])
+							end
 						end
 					end
 				end
 			end
+		end
+
+		transformSelected(selection, self._pivots, false)
+		if self._mirroredSelection[1] then
+			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
 		end
 	end
 
@@ -681,8 +752,19 @@ function MGR:PostTransform()
 	end
 
 	local selection = RagdollPoser.Selection:GetSelection()
+	local mirrorSelection = self._mirroredSelection or {}
+	PrintTable(selection)
+	PrintTable(mirrorSelection)
+	local complete = table.Copy(selection)
+	PrintTable(complete)
 	if selection[1] then
-		sendSubPose(selection)
+		if mirrorSelection[1] then
+			for i = 1, #mirrorSelection do
+				complete[#complete + 1] = mirrorSelection[i]
+			end
+		end
+		PrintTable(complete)
+		sendSubPose(complete)
 		print("post transform!")
 	end
 end
@@ -889,6 +971,7 @@ local function initializeGizmo()
 	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
 	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
 	MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
+	MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
 	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
 		or MGR.Orientation.World
 	MGR:OnModeChanged(MGR._mode)
@@ -913,6 +996,11 @@ local function updateScale(_, old, new)
 end
 cvars.RemoveChangeCallback("ragdollposer_scale", "ragdollposer_scale_callback")
 cvars.AddChangeCallback("ragdollposer_scale", updateScale, "ragdollposer_scale_callback")
+local function updateMirror(_, old, new)
+	MGR._mirror = tobool(new)
+end
+cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
+cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
 
 local function updateOrientation(_, old, new)
 	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World

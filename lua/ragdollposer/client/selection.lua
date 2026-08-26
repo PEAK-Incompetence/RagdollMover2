@@ -8,6 +8,9 @@
 ---```
 local entityBonePairs = {}
 
+---Entity bone pair set, so that we don't transform a bone more than once
+local entitySelectedBones = {}
+
 local MAX_BONE_COLLISION = RagdollPoser.Constants.MAX_BONE_COLLISION ^ 2
 
 ---@alias Selection {[1]: integer, [2]: Entity}
@@ -42,12 +45,19 @@ end
 function MGR:SelectOne(bone, entity)
 	RagdollPoser.Log("selected", bone, entity)
 	-- Accumulate selections if we want to manipulate them all at once
+
+	entitySelectedBones[entity] = entitySelectedBones[entity] or {}
 	if input.IsShiftDown() then
-		local count = #entityBonePairs + 1
-		entityBonePairs[count] = bone
-		entityBonePairs[count + 1] = entity
+		if not entitySelectedBones[entity][bone] then
+			local count = #entityBonePairs + 1
+			entityBonePairs[count] = bone
+			entityBonePairs[count + 1] = entity
+			entitySelectedBones[entity][bone] = true
+		end
 	else
+		entitySelectedBones[entity] = {}
 		entityBonePairs = { bone, entity }
+		entitySelectedBones[entity][bone] = true
 	end
 
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
@@ -58,12 +68,21 @@ function MGR:SelectGroup(selection)
 	local accumulate = input.IsShiftDown()
 	if not accumulate then
 		entityBonePairs = {}
+		entitySelectedBones = {}
 	end
 	local count = accumulate and #entityBonePairs or 0
+	local j = 0
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
-		entityBonePairs[count + i] = bone
-		entityBonePairs[count + i + 1] = entity
+
+		entitySelectedBones[entity] = entitySelectedBones[entity] or {}
+		if not entitySelectedBones[entity][bone] then
+			j = j + 1
+			entityBonePairs[count + j] = bone
+			entityBonePairs[count + j + 1] = entity
+			j = j + 1
+			entitySelectedBones[entity][bone] = true
+		end
 	end
 
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)

@@ -72,6 +72,40 @@ function arrow:GetDirection(props)
 	return self._axis
 end
 
+local sharedDeltaProps = {
+	Vector(),
+	Vector(),
+	Vector(),
+}
+
+local mirrorMatrix = Matrix()
+mirrorMatrix:Identity()
+
+function arrow:ProcessDelta(start, endPos, props, mirrorAxis)
+	local forward = MainEyeAngles():Forward()
+	local back = -forward
+	local eyePos = MainEyePos()
+
+	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, back) or start)
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, back) or endPos)
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(MainEyeAngles():Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
 function arrow:PreTransform(v)
 	return v
 end
@@ -85,17 +119,11 @@ function arrow:UpdateOrientation(orientation, props)
 end
 
 ---@param directions Vector[]
----@param start Vector
----@param endPos Vector
+---@param deltaProps DeltaProps
 ---@param transforms VMatrix[]
 ---@param accumulations number[]
-function arrow:Transform(directions, start, endPos, transforms, accumulations, initials, props)
-	local forward = -MainEyeAngles():Forward()
-	local eyePos = MainEyePos()
-	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
-	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, forward) or endPos)
-
-	local delta = endHit - startHit
+function arrow:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+	local delta = deltaProps[1]
 	for i, matrix in ipairs(transforms) do
 		local vector = directions[i] or directions[1]
 		local accumulationIndex = accumulations[i] and i or 1

@@ -112,29 +112,56 @@ end
 -- Define it here and modify the angle axis, so we don't have to create a quaternion every frame
 local rotationQuaternion = quaternion.new(1)
 
+local sharedDeltaProps = {
+	Vector(),
+	Vector(),
+	Vector(),
+}
+
+local mirrorMatrix = Matrix()
+mirrorMatrix:Identity()
+
+function disc:ProcessDelta(start, endPos, props, mirrorAxis)
+	local startHit = (util.IntersectRayWithPlane(MainEyePos(), start * 16384, props.pos, self._axis) or start)
+		- props.pos
+	local endHit = (util.IntersectRayWithPlane(MainEyePos(), endPos * 16384, props.pos, self._axis) or endPos)
+		- props.pos
+
+	local mirrorNormal = vector_origin
+	if mirrorAxis == 0 then
+		mirrorNormal = MainEyeAngles():Right()
+	elseif mirrorAxis == 1 then
+		mirrorNormal = MainEyeAngles():Up()
+	end
+	if mirrorAxis >= 0 then
+		startHit = startHit - 2 * mirrorNormal:Dot(startHit) * mirrorNormal
+		endHit = endHit - 2 * mirrorNormal:Dot(endHit) * mirrorNormal
+	end
+
+	startHit:Normalize()
+	endHit:Normalize()
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
 ---@param directions Vector[]
----@param start Vector
----@param endPos Vector
+---@param deltaProps DeltaProps
 ---@param transforms VMatrix[]
 ---@param accumulations number[]
 ---@param props GizmoProps
-function disc:Transform(directions, start, endPos, transforms, accumulations, initials, props)
-	local delta = endPos - start
+function disc:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+	local startHit, endHit = deltaProps[2], deltaProps[3]
 
 	for i, matrix in ipairs(transforms) do
 		local direction = directions[i] or directions[1]
 		local accumulationIndex = accumulations[i] and i or 1
 
-		local startHit = (util.IntersectRayWithPlane(MainEyePos(), start * 16384, props.pos, self._axis) or start)
-			- props.pos
-		local endHit = (util.IntersectRayWithPlane(MainEyePos(), endPos * 16384, props.pos, self._axis) or endPos)
-			- props.pos
-
-		startHit:Normalize()
-		endHit:Normalize()
-
 		local qi = quaternion.fromAngle(matrix:GetAngles())
-
 		local axis = direction
 		local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
 		local degrees = math.deg(angle)
@@ -142,6 +169,16 @@ function disc:Transform(directions, start, endPos, transforms, accumulations, in
 		accumulations[accumulationIndex] = newRot
 		rotationQuaternion:SetAngleAxis(degrees, axis)
 		rotationQuaternion:Mul(qi)
+		debugoverlay.Line(
+			matrix:GetTranslation(),
+			matrix:GetTranslation() + rotationQuaternion.__axis * 10,
+			0.2,
+			nil,
+			true
+		)
+		if i == 1 then
+			debugoverlay.Axis(matrix:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
+		end
 
 		matrix:SetAngles(rotationQuaternion:Angle())
 	end

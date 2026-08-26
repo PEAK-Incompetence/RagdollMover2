@@ -8,6 +8,10 @@ local quaternion = include("ragdollposer/shared/quaternion.lua")
 
 local BALL_SCALE = 0.45
 
+function ball:ProcessDelta(start, endPos)
+	return endPos - start, start, endPos
+end
+
 function ball:Intersect(eyepos, direction, props)
 	local hit1, hit2 = util.IntersectRayWithSphere(eyepos, direction * 16384, props.pos, props.scale * BALL_SCALE)
 
@@ -24,6 +28,24 @@ function ball:Draw(props, selected)
 
 	render.SetColorMaterialIgnoreZ()
 	render.DrawSphere(props.pos, props.scale * BALL_SCALE, 12, 12, color)
+end
+
+function ball:ProcessDelta(start, endPos, props, mirrorAxis)
+	local x, y = input.GetCursorPos()
+	self.xDelta = self.xDelta + RagdollPoser.Input.xMove
+	self.yDelta = self.yDelta + RagdollPoser.Input.yMove
+
+	local xSign, ySign = 1, 1
+	if mirrorAxis == 0 then
+		xSign = -xSign
+	elseif mirrorAxis == 1 then
+		ySign = -ySign
+	end
+
+	self.dx = xSign * ((x - self.xi) * 18 + self.xDelta * 4)
+	self.dy = ySign * ((y - self.yi) * 18 + self.yDelta * 4)
+
+	return { endPos - start, start, endPos }
 end
 
 ---Convert directions to quaternions
@@ -44,25 +66,19 @@ local rotationQuaternion = quaternion.new(1)
 local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 
 ---@param directions Quaternion[]
----@param start Vector
----@param endPos Vector
+---@param deltaProps DeltaProps
 ---@param transforms VMatrix[]
-function ball:Transform(directions, start, endPos, transforms, accumulations, initials, props)
-	local x, y = input.GetCursorPos()
-	local scale = props.scale
-	self.xDelta = self.xDelta + RagdollPoser.Input.xMove
-	self.yDelta = self.yDelta + RagdollPoser.Input.yMove
+function ball:Transform(directions, deltaProps, transforms, accumulations, initials, props)
 	local eyeang = MainEyeAngles()
 	local left = -eyeang:Right()
 	local up = eyeang:Up()
 
+	local dx, dy = self.dx, self.dy
+
 	-- The closer we are to the gizmo, the more precise the movement should be
 	local eyedist = MainEyePos():Distance(props.pos) / 60
-
-	local dx = (x - self.xi) * 18 + self.xDelta * 4
-	local dy = (y - self.yi) * 18 + self.yDelta * 4
-
 	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
+	local scale = props.scale
 	-- The smaller the ball, the more rotation we give
 	local angle = distance / scale * eyedist
 

@@ -16,7 +16,7 @@ function Base:Intersect(eyepos, direction, props) end
 ---@param props GizmoProps
 ---@return Vector axis
 function Base:GetDirection(props)
-	return vector_zero
+	return vector_origin
 end
 
 function Base:FinishTransform() end

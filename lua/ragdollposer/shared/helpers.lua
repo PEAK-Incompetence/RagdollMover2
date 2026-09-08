@@ -78,7 +78,6 @@ function MGR.BoneToPhysBone(ent, bone)
 	else
 		boneToPhysMap[model] = boneToPhysMap[model] or {}
 		local count = SERVER and ent:GetPhysicsObjectCount() or RagdollPoser.Entity.GetPhysBoneCount(ent)
-		print(count)
 		if CLIENT then
 			-- On the frame that this is called, force the entity to
 			-- show all hidden bones, like `weapon_bone`
@@ -107,6 +106,7 @@ if CLIENT then
 		local pl = LocalPlayer()
 		local weap = pl:GetActiveWeapon()
 		local tool = pl:GetTool()
+		---@cast tool TOOL
 		return IsValid(weap) and weap:GetClass() == "gmod_tool" and tool and tool:GetMode() == RagdollPoser.Mode
 	end
 end

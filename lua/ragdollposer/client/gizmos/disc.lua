@@ -1,4 +1,4 @@
----@module "base"
+---@module "gizmo/base"
 ---@class GizmoDisc: GizmoBase
 ---@field _direction Vector canonical axis with respect to the world
 ---@field _axis Vector axis determined by orientation mode

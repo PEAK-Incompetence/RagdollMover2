@@ -3,7 +3,7 @@
 ---@class RagdollPoser.Constants
 local MGR = {}
 
----@enum Space
+---@alias Space integer
 MGR.Space = {
 	World = 0,
 	Custom = 1,

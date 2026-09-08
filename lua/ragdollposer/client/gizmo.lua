@@ -115,21 +115,21 @@ local function setAngleFromSelection(selection)
 end
 
 ---How the gizmo is rotated when selecting a bone
----@enum GizmoOrientation
+---@alias GizmoOrientation integer
 MGR.Orientation = {
 	World = 0, -- no orientation
 	Local = 1, -- oriented to bone
 }
 
 ---The point relative to where transforms occur; useful for multiple bones
----@enum GizmoPivot
+---@alias GizmoPivot integer
 MGR.Pivot = {
 	Median = 0,
 	Bounding = 1,
 	Individual = 2,
 }
 
----@enum GizmoMode
+---@alias GizmoMode integer
 MGR.Mode = {
 	Translation = 0,
 	Rotation = 1,
@@ -138,14 +138,14 @@ MGR.Mode = {
 
 local numModes = table.Count(MGR.Mode)
 
----@type {[GizmoMode]: fun(): GizmoBase}
+---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializer = {
 	[MGR.Mode.Translation] = arrow,
 	[MGR.Mode.Rotation] = disc,
 	[MGR.Mode.Scale] = scale,
 }
 
----@type {[GizmoMode]: fun(): GizmoBase}
+---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializerSide = {
 	[MGR.Mode.Translation] = sidemove,
 	[MGR.Mode.Scale] = sidescale,
@@ -232,96 +232,17 @@ RagdollPoser.Networking.SendSubPose = RagdollPoser.Networking.DefineSender("Send
 
 local entityBuffer = {}
 
----@type NetReceiver
 local function sendSubPoseResponse()
 	for _, entity in ipairs(entityBuffer) do
 		RagdollPoser.Entity.UpdateRenderBounds(entity)
 	end
 	entityBuffer = {}
 
-	local selection = RagdollPoser.Selection:GetSelection()
-	setPositionFromSelection(selection)
-	setAngleFromSelection(selection)
+	-- TODO: Update the client entity if we don't have stretching enabled
+
+	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
-
--- Instead of creating a matrix with `GetMatrix`, copy the values
--- to this one, to reduce garbace collection cycles
-local mat = Matrix()
-
-local GREEN = Color(0, 255, 0, 255)
-local YELLOW = Color(255, 255, 0, 255)
-
--- Make sure you are in the 2D rendering context
-function MGR:DrawBones()
-	local mouseHovered = {}
-
-	if RagdollPoser.Selection:GetEnabled() then
-		local ents = RagdollPoser.Entity.GetClientEntities()
-		for _, ent in ipairs(ents) do
-			if not IsValid(ent) then
-				continue
-			end
-
-			ent:SetupBones()
-			ent:InvalidateBoneCache()
-
-			table.insert(mouseHovered, ent)
-			for b = 0, ent:GetBoneCount() - 1 do
-				local name = ent:GetBoneName(b)
-				-- TODO: Get invisible bones (e.g. weapon_bone)
-				if name == "__INVALIDBONE__" then
-					continue
-				end
-
-				ent:CopyBoneMatrix(b, mat)
-				local p = mat:GetTranslation()
-				local data = p:ToScreen()
-				if not data.visible then
-					continue
-				end
-				local tx, ty = data.x, data.y
-				local x, y = input.GetCursorPos()
-				local color = GREEN
-				if RagdollPoser.Selection:RaycastBone(x, y, tx, ty) then
-					color = YELLOW
-					table.insert(mouseHovered, b)
-				end
-
-				-- TODO: Categorize based on bone type
-				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
-			end
-		end
-	end
-
-	return mouseHovered
-end
-
-local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
-
--- Make sure you are in the 3D rendering context
-function MGR:Draw()
-	if not self:IsEnabled() then
-		return
-	end
-
-	local props = self._gizmoProps
-
-	if props.pos then
-		-- render.SetColorMaterialIgnoreZ()
-		-- render.CullMode(MATERIAL_CULLMODE_NONE)
-		-- render.DrawBox(props.pos, props.ang, tempMin, tempMax)
-		if self:IsMoving() then
-			local direction = self._directions[self._gizmoIndex]
-			direction:Draw(props, true)
-		else
-			local selected = self:TestIntersect()
-			for i, direction in ipairs(self._directions) do
-				direction:Draw(props, selected and i == self._gizmoIndex)
-			end
-		end
-	end
-end
 
 function MGR:TestIntersect()
 	-- Gizmos don't have a sense of depth, so we need to measure the depth after collecting depth interests
@@ -534,8 +455,7 @@ function MGR:PreTransform()
 			---@cast bone integer
 			---@cast entity Entity
 
-			entity:SetupBones()
-			entity:InvalidateBoneCache()
+			RagdollPoser.Entity.ExposeBones(entity)
 
 			rootBones[entity] = rootBones[entity] or Matrix()
 			if self._parents[entity] then
@@ -694,10 +614,8 @@ local function sendSubPose(selection)
 		local bone = selection[i]
 		local client = selection[i + 1]
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		client:SetupBones()
-		client:InvalidateBoneCache()
-		entity:SetupBones()
-		entity:InvalidateBoneCache()
+		RagdollPoser.Entity.ExposeBones(client)
+		RagdollPoser.Entity.ExposeBones(entity)
 
 		local arr = bones[entity]
 		local set = boneSet[entity]
@@ -769,7 +687,6 @@ function MGR:PostTransform()
 	end
 end
 
----@type InputCallback
 local function onLeftClickDown(x, y, tr)
 	-- If we're not accepting drag selections, then don't do anything
 	if RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
@@ -787,6 +704,94 @@ local function onLeftClickUp(x, y, tr)
 end
 hook.Add("RagdollPoser_Input_LeftClickDown", "Gizmo", onLeftClickDown)
 hook.Add("RagdollPoser_Input_LeftClickUp", "Gizmo", onLeftClickUp)
+
+-- Instead of creating a matrix with `GetMatrix`, copy the values
+-- to this one, to reduce garbace collection cycles
+local mat = Matrix()
+
+-- TODO: Use new theme module for providing colors
+local GREEN = Color(0, 255, 0, 255)
+local CYAN = Color(0, 128, 255, 255)
+local RED = Color(255, 0, 0, 255)
+local YELLOW = Color(255, 255, 0, 255)
+
+-- Make sure you are in the 2D rendering context
+function MGR:DrawBones()
+	local mouseHovered = {}
+	local bones = RagdollPoser.Bones
+	local boneTypes = bones.BoneType
+
+	if RagdollPoser.Selection:GetEnabled() then
+		local ents = RagdollPoser.Entity.GetClientEntities()
+		for _, ent in ipairs(ents) do
+			if not IsValid(ent) then
+				continue
+			end
+
+			RagdollPoser.Entity.ExposeBones(ent)
+
+			table.insert(mouseHovered, ent)
+			for b = 0, ent:GetBoneCount() - 1 do
+				local name = ent:GetBoneName(b)
+				if name == "__INVALIDBONE__" then
+					continue
+				end
+
+				ent:CopyBoneMatrix(b, mat)
+				local p = mat:GetTranslation()
+				local data = p:ToScreen()
+				if not data.visible then
+					continue
+				end
+				local tx, ty = data.x, data.y
+				local x, y = input.GetCursorPos()
+				local color
+				local boneType = bones:GetBoneType(ent, b)
+				if boneType == boneTypes.Physics then
+					color = GREEN
+				elseif boneType == boneTypes.Manipulate then
+					color = CYAN
+				elseif boneType == boneTypes.Procedural then
+					color = RED
+				end
+
+				if RagdollPoser.Selection:RaycastBone(x, y, tx, ty) then
+					color = YELLOW
+					table.insert(mouseHovered, b)
+				end
+
+				-- TODO: Categorize based on bone type
+				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
+			end
+		end
+	end
+
+	return mouseHovered
+end
+
+-- Make sure you are in the 3D rendering context
+function MGR:Draw()
+	if not self:IsEnabled() then
+		return
+	end
+
+	local props = self._gizmoProps
+
+	if props.pos then
+		-- render.SetColorMaterialIgnoreZ()
+		-- render.CullMode(MATERIAL_CULLMODE_NONE)
+		-- render.DrawBox(props.pos, props.ang, tempMin, tempMax)
+		if self:IsMoving() then
+			local direction = self._directions[self._gizmoIndex]
+			direction:Draw(props, true)
+		else
+			local selected = self:TestIntersect()
+			for i, direction in ipairs(self._directions) do
+				direction:Draw(props, selected and i == self._gizmoIndex)
+			end
+		end
+	end
+end
 
 local hovered = {}
 hook.Add("RagdollPoser_Selection_Hover", "Gizmo", function(bone, entity)
@@ -817,9 +822,10 @@ function MGR:DrawSelected()
 	local selection = RagdollPoser.Selection:GetSelection()
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
+		---@cast bone integer
+		---@cast entity Entity
 
-		entity:SetupBones()
-		entity:InvalidateBoneCache()
+		RagdollPoser.Entity.ExposeBones(entity)
 		local matrix = entity:GetBoneMatrix(bone)
 		local data = matrix:GetTranslation():ToScreen()
 		if not data.visible then
@@ -848,6 +854,7 @@ function MGR:DrawBoneNames(mouseHovered)
 	for i = 1, #mouseHovered do
 		local entry = mouseHovered[i]
 		if isentity(entry) then
+			---@cast entry Entity
 			targetEntity = entry
 		elseif IsValid(targetEntity) then
 			---@cast entry integer
@@ -877,14 +884,15 @@ function MGR:DrawBoneNames(mouseHovered)
 		end
 
 		if isentity(entry) then
-			targetEntity = mouseHovered[i]
-			if isnumber(mouseHovered[i + 1]) then
+			---@cast entry Entity
+			targetEntity = entry
+			if isnumber(nextEntry) then
 				draw.SimpleTextOutlined(
-					targetEntity:GetModel(),
+					targetEntity:GetModel() or "",
 					"RagdollPoserHeaderFont",
 					xPos,
 					yPos,
-					GREEN,
+					color_white,
 					TEXT_ALIGN_LEFT,
 					TEXT_ALIGN_BOTTOM,
 					OUTLINE_WIDTH,
@@ -894,13 +902,22 @@ function MGR:DrawBoneNames(mouseHovered)
 		elseif IsValid(targetEntity) then
 			---@cast entry integer
 			local boneName = targetEntity:GetBoneName(entry)
+			local color = color_white
+			local boneType = RagdollPoser.Bones:GetBoneType(targetEntity, entry)
+			if boneType == RagdollPoser.Bones.BoneType.Physics then
+				color = GREEN
+			elseif boneType == RagdollPoser.Bones.BoneType.Manipulate then
+				color = CYAN
+			elseif boneType == RagdollPoser.Bones.BoneType.Procedural then
+				color = RED
+			end
 
 			draw.SimpleTextOutlined(
 				boneName,
 				"RagdollPoserFont",
 				xPos,
 				yPos,
-				GREEN,
+				color,
 				TEXT_ALIGN_LEFT,
 				TEXT_ALIGN_BOTTOM,
 				OUTLINE_WIDTH,
@@ -925,13 +942,15 @@ function MGR:Render()
 	-- Draw selected bone
 end
 
+function MGR:SetTransformFromSelection(selection)
+	setPositionFromSelection(selection)
+	setAngleFromSelection(selection)
+end
+
 local function selected(selection)
 	print("section")
 	PrintTable(selection)
-	setPositionFromSelection(selection)
-	--- FIXME: this errors because the selection table gets emptied everytime we select a new entity
-	--- which is due to some overlapping logic when selecting a new entity and refreshing entities
-	setAngleFromSelection(selection)
+	MGR:SetTransformFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)
 	MGR:OnModeChanged(MGR._mode)
@@ -943,9 +962,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	-- FIXME: I would like to have this run after I get the new client entities. Just doing things these way is really hacky
 	-- unless we have hook priorities
 	timer.Simple(0, function()
-		local selection = RagdollPoser.Selection:GetSelection()
-		setPositionFromSelection(selection)
-		setAngleFromSelection(selection)
+		MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
 	end)
 end)
 

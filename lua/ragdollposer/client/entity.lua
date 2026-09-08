@@ -14,7 +14,7 @@ local ClientToEntity = {}
 ---@type {[Entity]: ClientEntity}
 local EntityToClient = {}
 ---@type {[ClientEntity]: boolean}
-local ClientFirstSet = {}
+local ClientShouldUpdate = {}
 ---@type {[ClientEntity]: integer}
 local ClientBoneCallbacks = {}
 ---@type {[Entity]: integer}
@@ -27,7 +27,7 @@ local PoseTrees = {}
 local function refreshClientData()
 	ClientEntities = {}
 	ClientToEntity = {}
-	ClientFirstSet = {}
+	ClientShouldUpdate = {}
 	ClientBoneCallbacks = {}
 end
 
@@ -79,7 +79,7 @@ end
 ---@param self ClientEntity
 ---@param numbones integer
 local function clientBoneManipulator(self, numbones)
-	local firstSet = ClientFirstSet[self]
+	local shouldUpdate = ClientShouldUpdate[self]
 	local entity = ClientToEntity[self]
 	local matrixSet = EntityMatrices[entity]
 	local renderBounds = EntityRenderBounds[entity]
@@ -89,7 +89,7 @@ local function clientBoneManipulator(self, numbones)
 			m = Matrix()
 			matrixSet[b + 1] = m
 		end
-		if not firstSet or not static:GetBool() then
+		if shouldUpdate or not static:GetBool() then
 			entity:CopyBoneMatrix(b, m)
 			renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
 		end
@@ -99,7 +99,7 @@ local function clientBoneManipulator(self, numbones)
 			self:SetBoneMatrix(b, m)
 		end
 	end
-	ClientFirstSet[self] = true
+	ClientShouldUpdate[self] = false
 
 	self:SetRenderBounds(renderBounds[1], renderBounds[2])
 end
@@ -109,7 +109,7 @@ function MGR.CreateEntities()
 		client:RemoveCallback("BuildBonePositions", ClientBoneCallbacks[client])
 		client:Remove()
 		ClientToEntity[client] = nil
-		ClientFirstSet[client] = nil
+		ClientShouldUpdate[client] = nil
 	end
 	refreshClientData()
 
@@ -135,7 +135,7 @@ function MGR.CreateEntities()
 		client:SetPos(entity:GetPos())
 
 		ClientToEntity[client] = entity
-		ClientFirstSet[client] = false
+		ClientShouldUpdate[client] = true
 		EntityToClient[entity] = client
 		ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
 		clientBoneManipulator(client, client:GetBoneCount())
@@ -146,6 +146,13 @@ function MGR.CreateEntities()
 
 		table.insert(ClientEntities, client)
 	end
+end
+
+---Helper function which calls SetupBones and InvalidateBoneCache to show invisible bones
+---@param entity Entity
+function MGR.ExposeBones(entity)
+	entity:SetupBones()
+	entity:InvalidateBoneCache()
 end
 
 hook.Remove("EntityRemoved", "RagdollPoser_Entity_EntityRemoved")
@@ -300,16 +307,25 @@ function MGR.GetClientEntities()
 	return ClientEntities
 end
 
+---@param entity Entity
+function MGR.UpdateEntity(entity)
+	local client = EntityToClient[entity]
+	if client and IsValid(client) then
+		ClientShouldUpdate[client] = true
+		clientBoneManipulator(client, client:GetBoneCount())
+	end
+end
+
 -- After receiving entity info, create `prop_dynamic` clones of the given entities,
 -- move it and copy the pose of the ragdoll, and either
 -- a) stay put, or
 -- b) track the ragdoll pose
 
----@type NetReceiver
 local function sendAssemblyInfo()
 	local ent = net.ReadEntity()
 	local bone = net.ReadUInt(8)
 	local count = net.ReadUInt(10)
+	---@type Entity[]
 	local entities = {}
 	print(ent, bone, count)
 	for i = 1, count do
@@ -341,6 +357,7 @@ local function getPhysBoneCount(len, ply)
 
 		if model then
 			EntityPhysBoneCount[model] = count
+			RagdollPoser.Bones:ReportModel(entity, model)
 		end
 	end
 end

@@ -2,7 +2,7 @@
 ---
 ---For every action
 ---
----@enum InputAction
+---@alias InputAction integer
 RagdollPoser.Actions = {
 	CycleGizmo = 0,
 	SelectBone = 1,

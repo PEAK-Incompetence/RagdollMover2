@@ -11,7 +11,6 @@ local MGR = {}
 ---@return DBinder
 local function keyBinder(cpanel, label, cvar, action)
 	local binder = cpanel:KeyBinder(label, cvar)
-	---@cast binder DBinder
 	function binder:OnChange(newKey)
 		print("new key", newKey)
 		RagdollPoser.Input:RegisterKey(action, newKey)

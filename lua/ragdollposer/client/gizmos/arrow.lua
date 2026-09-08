@@ -2,7 +2,7 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
----@module "base"
+---@module "gizmo/base"
 ---@class GizmoArrow: GizmoBase
 ---@field _direction Vector
 ---@field _axis Vector

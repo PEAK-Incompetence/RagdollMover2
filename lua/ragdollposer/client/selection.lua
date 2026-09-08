@@ -1,3 +1,8 @@
+---@alias SelectionEvenIndex Entity
+---@alias SelectionOddIndex integer
+
+---@alias Selection (SelectionEvenIndex|SelectionOddIndex)[]
+
 ---Entity bone pair. The iteration is as follows
 ---
 ---```lua
@@ -6,14 +11,13 @@
 ---     local entity = entityBonePairs[i+1]
 --- end
 ---```
+---@type Selection
 local entityBonePairs = {}
 
 ---Entity bone pair set, so that we don't transform a bone more than once
 local entitySelectedBones = {}
 
 local MAX_BONE_COLLISION = RagdollPoser.Constants.MAX_BONE_COLLISION ^ 2
-
----@alias Selection {[1]: integer, [2]: Entity}
 
 ---[CLIENT]
 ---
@@ -63,7 +67,7 @@ function MGR:SelectOne(bone, entity)
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
 end
 
----@param selection Selection[]
+---@param selection Selection
 function MGR:SelectGroup(selection)
 	local accumulate = input.IsShiftDown()
 	if not accumulate then
@@ -158,6 +162,7 @@ function MGR:RaycastBone(x, y, tx, ty)
 end
 
 local matrix = Matrix()
+---@type Selection
 local selectionBuffer = {}
 ---@param x integer
 ---@param y integer
@@ -165,8 +170,7 @@ local function getBones(x, y)
 	selectionBuffer = {}
 	local entities = RagdollPoser.Entity.GetClientEntities()
 	for _, entity in ipairs(entities) do
-		entity:SetupBones()
-		entity:InvalidateBoneCache()
+		RagdollPoser.Entity.ExposeBones(entity)
 		for b = 0, entity:GetBoneCount() - 1 do
 			if entity:GetBoneName(b) == "__INVALIDBONE__" then
 				continue
@@ -220,7 +224,6 @@ local function handleMultipleBones(selection)
 	menu:Open(x)
 end
 
----@type InputCallback
 local function onLeftClickDown(x, y, tr)
 	if not MGR:GetEnabled() then
 		return
@@ -255,7 +258,11 @@ local function onLeftClickUp(x, y, tr)
 				MGR:SelectGroup(selectionBuffer)
 			end
 		else
-			MGR:SelectOne(selectionBuffer[1], selectionBuffer[2])
+			local bone = selectionBuffer[1]
+			local entity = selectionBuffer[2]
+			---@cast bone SelectionOddIndex
+			---@cast entity SelectionEvenIndex
+			MGR:SelectOne(bone, entity)
 		end
 		MGR:SetWasOnBone(false)
 	else

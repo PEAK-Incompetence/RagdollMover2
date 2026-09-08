@@ -1,7 +1,9 @@
----@module "base"
+---@module "gizmos/base"
 ---@class GizmoBall: GizmoBase
 ---@field _color Color
 ---@field _selectedColor Color
+---@field xDelta integer
+---@field yDelta integer
 local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
@@ -30,6 +32,18 @@ function ball:Draw(props, selected)
 	render.DrawSphere(props.pos, props.scale * BALL_SCALE, 12, 12, color)
 end
 
+---Convert directions to quaternions
+---@param direction Vector
+---@param initials VMatrix[]
+---@return any
+function ball:PreTransform(direction, initials)
+	local x, y = input.GetCursorPos()
+	self.xi, self.yi = x, y
+	self.xDelta, self.yDelta = 0, 0
+
+	return Vector()
+end
+
 function ball:ProcessDelta(start, endPos, props, mirrorAxis)
 	local x, y = input.GetCursorPos()
 	self.xDelta = self.xDelta + RagdollPoser.Input.xMove
@@ -46,18 +60,6 @@ function ball:ProcessDelta(start, endPos, props, mirrorAxis)
 	self.dy = ySign * ((y - self.yi) * 18 + self.yDelta * 4)
 
 	return { endPos - start, start, endPos }
-end
-
----Convert directions to quaternions
----@param direction Vector
----@param initials VMatrix[]
----@return any
-function ball:PreTransform(direction, initials)
-	local x, y = input.GetCursorPos()
-	self.xi, self.yi = x, y
-	self.xDelta, self.yDelta = 0, 0
-
-	return Vector()
 end
 
 -- Define it here and modify the angle axis, so we don't have to create a quaternion every frame
@@ -138,6 +140,12 @@ local function initialize()
 
 	base._color = Color(255, 255, 0, 24)
 	base._selectedColor = Color(255, 255, 0, 48)
+	base.xDelta = 0
+	base.yDelta = 0
+	base.xi = 0
+	base.yi = 0
+	base.dx = 0
+	base.dy = 0
 	---@cast base GizmoBall
 	return base
 end

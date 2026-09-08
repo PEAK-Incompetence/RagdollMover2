@@ -2,7 +2,7 @@
 ---The other weird optimizations against garbage-collection were done by me
 ---It works well.
 
----@module "base"
+---@module "gizmo/base"
 ---@class GizmoScale: GizmoBase
 ---@field _direction Vector
 ---@field _axis Vector
@@ -151,6 +151,7 @@ local COLOR = Color(255, 0, 0)
 function scale:Transform(directions, deltaProps, transforms, accumulations, initials, props)
 	local delta = deltaProps[1]
 	for i, matrix in ipairs(transforms) do
+		---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix}
 		local initialTransformTable = initials[i]
 
 		if not initialTransformTable then
@@ -251,7 +252,7 @@ local function initialize(direction)
 		base._direction = direction
 		base._axis = direction
 		base._color = direction:ToColor()
-		RagdollPoser.Log("Set arrow direction to ", v)
+		RagdollPoser.Log("Set arrow direction to ", direction)
 	end
 	return base
 end

@@ -1,3 +1,7 @@
+---@class TOOL.ragdollposer: TOOL
+---@field SWEP Entity
+local TOOL = TOOL
+
 TOOL.Name = "#tool.ragdollposer.name"
 TOOL.Category = "Poser"
 TOOL.Command = nil
@@ -97,5 +101,6 @@ end
 
 hook.Add("RagdollPoser_UI_Refresh", "ToolUI", function()
 	local tool = LocalPlayer():GetTool(RagdollPoser.Mode)
+	---@cast tool TOOL
 	tool:RebuildControlPanel()
 end)

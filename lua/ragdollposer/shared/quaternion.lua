@@ -421,7 +421,7 @@ function QUATERNION:SLerp(q, alpha)
 	local alphaEnd = alpha
 
 	if dot < 0.0 then
-		---@diagnostic disable-next-line: cast-local-type
+		---@diagnostic disable-next-line: assign-type-mismatch
 		ref = -q
 		dot = -dot
 	end

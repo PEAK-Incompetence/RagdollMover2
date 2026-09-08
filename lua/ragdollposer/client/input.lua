@@ -17,7 +17,7 @@ MGR.KeyBinds = MGR.KeyBinds or {}
 ---@type {[InputAction]: BUTTON_CODE}
 MGR.BoundActions = MGR.BoundActions or table.Flip(MGR.KeyBinds)
 
----@type BUTTON_CODE[]
+---@type table<integer, BUTTON_CODE>
 local activeKeybinds = {}
 
 local function refreshKeyBinds()
@@ -32,6 +32,7 @@ end
 function MGR:RegisterKey(action, keycode)
 	MGR.KeyBinds[keycode] = action
 	-- If we are reassigning an action to another key, we need to remove it from the keybinds
+	-- TODO: Allow multiple actions to run for a single key
 	if MGR.BoundActions[action] and MGR.BoundActions[action] ~= keycode then
 		MGR.KeyBinds[MGR.BoundActions[action]] = nil
 	end
@@ -43,7 +44,11 @@ end
 ---@alias InputCallback fun(x: integer, y: integer, tr: TraceResult)
 
 ---@type TraceResult
-local traceOutput = {}
+local traceOutput = {
+	HitPos = vector_origin,
+	Normal = vector_origin,
+	StartPos = vector_origin
+}
 local lastCheck = RealTime()
 
 ---@param cmd CUserCmd

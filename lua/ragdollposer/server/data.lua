@@ -12,7 +12,11 @@ local MGR = {}
 ---@type {[Player]: PlayerData}
 MGR.Players = RagdollPoser.Data and RagdollPoser.Data.Players or {}
 
----@alias PlayerData {[1]: Entity, [2]: integer, [3]: Entity[], [4]: {[Entity]: Entity}}
+---@class PlayerData {
+---@field [1] Entity 
+---@field [2] integer 
+---@field [3] Entity[] 
+---@field [4] {[Entity]: Entity}}
 
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
 RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")

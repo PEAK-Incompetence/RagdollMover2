@@ -50,7 +50,6 @@ local ReceiverCallbackBuffer = MGR.ReceiverCallbackBuffer
 local Receivers = MGR.Receivers
 local Senders = MGR.Senders
 
----@type NetReceiver
 local function empty() end
 
 ---Use this for net.Send operations
@@ -122,7 +121,6 @@ function MGR.DefineSender(name)
 	end
 	sendReceiver(name, count, CLIENT and LocalPlayer() or nil)
 
-	---@type NetStarter
 	local function netStarter()
 		-- print(count, name)
 		net.Start("RagdollPoser", true)
@@ -161,7 +159,6 @@ function MGR.GetNetworkInfo()
 	PrintTable(ReceiverNameToID)
 end
 
----@type NetReceiver
 local function addReceiver()
 	local name = net.ReadString()
 	local id = net.ReadUInt(12)
@@ -188,7 +185,6 @@ end
 net.Receive("RagdollPoser_AddReceiver", addReceiver)
 
 ---General net receiving function which handles the id handling
----@type NetReceiver
 local function netReceiver(len, ply)
 	-- print("receive message")
 	-- If receiving from client, get ClientSenderCount; otherwise, get ServerSenderCount

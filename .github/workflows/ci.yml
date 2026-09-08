@@ -28,7 +28,11 @@ jobs:
           cd annotations-gmod-glua-ls
           npm install
           npm run scrape-wiki
+          echo "=== VERIFYING SCRAPER OUTPUT ==="
+          ls -la
+          ls -la output || echo "Output directory missing!"
           cd ..
+
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -46,4 +50,6 @@ jobs:
         run: cargo install glua_check
 
       - name: Run check with generated annotations
-        run: glua_check --gmod-annotations ./annotations-gmod-glua-ls/output ./lua
+        run: |
+          # Use an absolute workspace path to prevent any folder resolution bugs
+          glua_check --gmod-annotations "$GITHUB_WORKSPACE/annotations-gmod-glua-ls/output" ./lua

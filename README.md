@@ -1,5 +1,7 @@
 # Ragdoll Mover 2
 
+[![CI](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml)
+
 A lot of breaking changes here
 
 ## Rational

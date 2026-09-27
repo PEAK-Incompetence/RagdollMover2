@@ -79,7 +79,8 @@ end
 
 ---@param self ClientEntity
 ---@param numbones integer
-local function clientBoneManipulator(self, numbones)
+---@param staticProp boolean? Only called from explicitly
+local function clientBoneManipulator(self, numbones, staticProp)
 	local shouldUpdate = ClientShouldUpdate[self]
 	local entity = ClientToEntity[self]
 	local matrixSet = EntityMatrices[entity]
@@ -97,13 +98,30 @@ local function clientBoneManipulator(self, numbones)
 
 		local name = self:GetBoneName(b)
 		if m and name ~= "__INVALIDBONE__" then
-			self:SetBoneMatrix(b, m)
+			if staticProp then
+				self:SetPos(m:GetTranslation())
+				self:SetAngles(m:GetAngles())
+			else
+				self:SetBoneMatrix(b, m)
+			end
 		end
 	end
 	ClientShouldUpdate[self] = false
 
 	self:SetRenderBounds(renderBounds[1], renderBounds[2])
 end
+
+---@type ClientEntity[]
+local staticProps = {}
+local function updateStaticProps()
+	for i = 1, #staticProps do
+		local clientProp = staticProps[i] --[[@as ClientEntity]]
+		MGR.ExposeBones(clientProp)
+		clientBoneManipulator(clientProp, 1, true)
+	end
+end
+hook.Remove("PreDrawOpaqueRenderables", "RagdollPoser_Entity_StaticProps")
+hook.Add("PreDrawOpaqueRenderables", "RagdollPoser_Entity_StaticProps", updateStaticProps)
 
 function MGR.CreateEntities()
 	for _, client in ipairs(ClientEntities) do
@@ -113,6 +131,7 @@ function MGR.CreateEntities()
 		ClientShouldUpdate[client] = nil
 	end
 	refreshClientData()
+	staticProps = {}
 
 	local dirty = false
 	for i, entity in ipairs(Entities) do
@@ -139,7 +158,13 @@ function MGR.CreateEntities()
 		ClientShouldUpdate[client] = true
 		EntityToClient[entity] = client
 		ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
-		clientBoneManipulator(client, client:GetBoneCount())
+		local modelInfo = util.GetModelInfo(entity:GetModel())
+		local isStaticProp = modelInfo.StaticProp
+		if isStaticProp then
+			-- Static props bone manipulators build bone positions, so we get hook to do that for us.
+			table.insert(staticProps, client)
+		end
+		clientBoneManipulator(client, client:GetBoneCount(), isStaticProp)
 
 		entity.rgp_index = i
 
@@ -188,8 +213,8 @@ end
 ---
 ---@param entity Entity
 function MGR.UpdateRenderBounds(entity)
-	print(entity)
-	PrintTable(EntityRenderBounds)
+	-- print(entity)
+	-- PrintTable(EntityRenderBounds)
 	local renderBounds = EntityRenderBounds[entity]
 	if renderBounds then
 		renderBounds[1], renderBounds[2] = entity:GetRenderBounds()

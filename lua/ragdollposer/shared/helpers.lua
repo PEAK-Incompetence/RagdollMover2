@@ -96,6 +96,19 @@ function MGR.BoneToPhysBone(ent, bone)
 	end
 end
 
+local staticProps = {}
+function MGR.IsStaticProp(entity)
+	local model = entity:GetModel()
+	local result = staticProps[model]
+	if result ~= nil then
+		return result
+	end
+	result = util.GetModelInfo(model).StaticProp
+	staticProps[model] = result
+
+	return result
+end
+
 if CLIENT then
 	---[CLIENT]
 	---

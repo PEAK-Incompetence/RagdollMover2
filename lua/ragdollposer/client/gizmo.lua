@@ -34,6 +34,8 @@ local OUTLINE_WIDTH = 1
 local BLACK = Color(0, 0, 0, 255)
 local FLOAT_1DIVIDE540 = 0.00185185185
 
+local isStaticProp = RagdollPoser.Helpers.IsStaticProp
+
 ---[CLIENT]
 ---
 ---Gizmo transform
@@ -577,9 +579,8 @@ hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
 local boneMatrix = Matrix()
-
 ---Send update bone transforms of the selected bone hierarchy
----@param selection any
+---@param selection Selection
 local function sendSubPose(selection)
 	-- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
 	-- anywhere else
@@ -611,8 +612,8 @@ local function sendSubPose(selection)
 	end
 
 	for i = 1, #selection - 1, 2 do
-		local bone = selection[i]
-		local client = selection[i + 1]
+		local bone = selection[i] --[[@as integer]]
+		local client = selection[i + 1] --[[@as ClientEntity]]
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 		RagdollPoser.Entity.ExposeBones(client)
 		RagdollPoser.Entity.ExposeBones(entity)
@@ -645,7 +646,8 @@ local function sendSubPose(selection)
 			local matrix = matrices[b + 1]
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			if physbone >= 0 then
+			print("is static prop", isStaticProp(entity))
+			if physbone >= 0 or isStaticProp(entity) then
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
@@ -671,17 +673,17 @@ function MGR:PostTransform()
 
 	local selection = RagdollPoser.Selection:GetSelection()
 	local mirrorSelection = self._mirroredSelection or {}
-	PrintTable(selection)
-	PrintTable(mirrorSelection)
+	-- PrintTable(selection)
+	-- PrintTable(mirrorSelection)
 	local complete = table.Copy(selection)
-	PrintTable(complete)
+	-- PrintTable(complete)
 	if selection[1] then
 		if mirrorSelection[1] then
 			for i = 1, #mirrorSelection do
 				complete[#complete + 1] = mirrorSelection[i]
 			end
 		end
-		PrintTable(complete)
+		-- PrintTable(complete)
 		sendSubPose(complete)
 		print("post transform!")
 	end

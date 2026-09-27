@@ -715,12 +715,18 @@ local CYAN = Color(0, 128, 255, 255)
 local RED = Color(255, 0, 0, 255)
 local YELLOW = Color(255, 255, 0, 255)
 
+-- TODO: Use theming
+local boneTypeToColor = {
+	[RagdollPoser.Bones.BoneType.Physics] = GREEN,
+	[RagdollPoser.Bones.BoneType.Manipulate] = CYAN,
+	[RagdollPoser.Bones.BoneType.Procedural] = RED,
+}
+
 -- Make sure you are in the 2D rendering context
 function MGR:DrawBones()
 	local mouseHovered = {}
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
-
 	if RagdollPoser.Selection:GetEnabled() then
 		local ents = RagdollPoser.Entity.GetClientEntities()
 		for _, ent in ipairs(ents) do
@@ -745,23 +751,41 @@ function MGR:DrawBones()
 				end
 				local tx, ty = data.x, data.y
 				local x, y = input.GetCursorPos()
-				local color
 				local boneType = bones:GetBoneType(ent, b)
-				if boneType == boneTypes.Physics then
-					color = GREEN
-				elseif boneType == boneTypes.Manipulate then
-					color = CYAN
-				elseif boneType == boneTypes.Procedural then
-					color = RED
-				end
+				local color = boneTypeToColor[boneType]
 
-				if RagdollPoser.Selection:RaycastBone(x, y, tx, ty) then
+				local pointSelected = RagdollPoser.Selection:RaycastBone(x, y, tx, ty)
+				if pointSelected then
 					color = YELLOW
 					table.insert(mouseHovered, b)
 				end
 
-				-- TODO: Categorize based on bone type
 				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
+
+				local childSelected = false
+				for _, childBone in ipairs(ent:GetChildBones(b)) do
+					ent:CopyBoneMatrix(childBone, mat)
+					local p = mat:GetTranslation()
+					local data = p:ToScreen()
+					if not data.visible then
+						continue
+					end
+
+					local cx, cy = data.x, data.y
+
+					if
+						not pointSelected
+						and not childSelected
+						and RagdollPoser.Selection:RaycastBoneLine(x, y, tx, ty, cx, cy)
+					then
+						color = YELLOW
+						table.insert(mouseHovered, b)
+						childSelected = true
+					end
+
+					surface.SetDrawColor(color.r, color.g, color.b, color.a)
+					surface.DrawLine(tx, ty, cx, cy)
+				end
 			end
 		end
 	end
@@ -997,6 +1021,7 @@ end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", initializeGizmo)
 
+-- FIXME: Icky boilerplate below. How to improve this?
 local function updateWidth(_, old, new)
 	local result = tonumber(new)
 	if result then
@@ -1018,6 +1043,12 @@ local function updateMirror(_, old, new)
 end
 cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
 cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
+
+local function updatePartial(_, old, new)
+	MGR._gizmoProps.partial = tobool(new)
+end
+cvars.RemoveChangeCallback("ragdollposer_partial", "ragdollposer_partial_callback")
+cvars.AddChangeCallback("ragdollposer_partial", updatePartial, "ragdollposer_partial_callback")
 
 local function updateOrientation(_, old, new)
 	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World

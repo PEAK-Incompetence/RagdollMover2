@@ -161,6 +161,35 @@ function MGR:RaycastBone(x, y, tx, ty)
 	return dist < MAX_BONE_COLLISION
 end
 
+local min, max = math.min, math.max
+---Find the distance from a point to a line **segment**
+---@param x0 integer
+---@param y0 integer
+---@param x1 integer
+---@param y1 integer
+---@param x2 integer
+---@param y2 integer
+function MGR:RaycastBoneLine(x0, y0, x1, y1, x2, y2)
+	local dx = x2 - x1
+	local dy = y2 - y1
+	local Lsq = dx ^ 2 + dy ^ 2
+	if Lsq == 0 then
+		-- Rather than choosing between two points, don't choose at all
+		return false
+	end
+	local t = ((x0 - x1) * dx + (y0 - y1) * dy) / Lsq
+	-- TODO: Test other selection radii and find line of best fit
+	-- x = 24 => y = 0.25 at 1080p
+	-- Prevents double selecting the bone itself and the line segment that the bone encompasses
+	local offset = 0.3
+	local tClamped = max(offset, min(1 - offset, t))
+	local xc = x1 + tClamped * dx
+	local yc = y1 + tClamped * dy
+	local distSq = (x0 - xc) ^ 2 + (y0 - yc) ^ 2
+
+	return distSq < MAX_BONE_COLLISION
+end
+
 local matrix = Matrix()
 ---@type Selection
 local selectionBuffer = {}
@@ -169,15 +198,38 @@ local selectionBuffer = {}
 local function getBones(x, y)
 	selectionBuffer = {}
 	local entities = RagdollPoser.Entity.GetClientEntities()
+	local bones = RagdollPoser.Bones
+	local boneTypes = bones.BoneType
 	for _, entity in ipairs(entities) do
 		RagdollPoser.Entity.ExposeBones(entity)
 		for b = 0, entity:GetBoneCount() - 1 do
 			if entity:GetBoneName(b) == "__INVALIDBONE__" then
 				continue
 			end
+			local boneType = bones:GetBoneType(entity, b)
+
 			entity:CopyBoneMatrix(b, matrix)
 			local screenData = matrix and matrix:GetTranslation():ToScreen()
-			if screenData and screenData.visible and MGR:RaycastBone(x, y, screenData.x, screenData.y) then
+			local onBone = MGR:RaycastBone(x, y, screenData.x, screenData.y)
+
+			local childSelected = false
+			for _, childBone in ipairs(entity:GetChildBones(b)) do
+				entity:CopyBoneMatrix(childBone, matrix)
+				local parentScreenData = matrix and matrix:GetTranslation():ToScreen()
+				if
+					not onBone
+					and not childSelected
+					and parentScreenData
+					and parentScreenData.visible
+					and MGR:RaycastBoneLine(x, y, screenData.x, screenData.y, parentScreenData.x, parentScreenData.y)
+				then
+					MGR:SetWasOnBone(true)
+					table.insert(selectionBuffer, b)
+					table.insert(selectionBuffer, entity)
+					childSelected = true
+				end
+			end
+			if screenData and screenData.visible and onBone then
 				MGR:SetWasOnBone(true)
 				table.insert(selectionBuffer, b)
 				table.insert(selectionBuffer, entity)
@@ -248,9 +300,12 @@ local function onLeftClickUp(x, y, tr)
 	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
 	-- If our mouse was on a bone, and we're still on the same bone, select it
 	-- Otherwise, finish selection
+	print("left click up")
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
+		print("Try selection")
 		if #selectionBuffer > 2 then
+			PrintTable(selectionBuffer)
 			if not input.IsShiftDown() then
 				MGR:SetBusy(true)
 				handleMultipleBones(selectionBuffer)

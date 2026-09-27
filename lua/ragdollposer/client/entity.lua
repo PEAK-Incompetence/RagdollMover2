@@ -59,18 +59,19 @@ cvars.AddChangeCallback("ragdollposer_static", function(convar, oldValue, newVal
 	RagdollPoser.Entity.RefreshEntities(Entities)
 end, "RagdollPoser_StaticCVarChanged")
 
----@param self Entity
+---@param self ClientEntity
 local function renderOverride(self, flags)
+	local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_DRAWTRANSLUCENTSUBMODELS)
 	if RagdollPoser.Helpers.Equipped() then
 		-- Draw the entity underneath the ghost
 		local entity = ClientToEntity[self]
 		entity:DrawModel(flags)
 		cam.IgnoreZ(true)
 		render.OverrideColorWriteEnable(true, false)
-		self:DrawModel(flags)
+		self:DrawModel(transparentFlags)
 		render.OverrideColorWriteEnable(false, false)
 		render.SetBlend(0.75)
-		self:DrawModel(flags)
+		self:DrawModel(transparentFlags)
 		render.SetBlend(1)
 		cam.IgnoreZ(false)
 	end

@@ -1,0 +1,20 @@
+screenspace_general
+{
+    $vertexshader "rgp_vs50"
+	$pixshader "rgp_arrow_ps50"
+
+	$basetexture "ragdollposer/arrow2"
+	$alphatest 1
+
+	$depthtest	1
+	$vertexalpha  	1
+	$vertexcolor  	1
+	$ignorez  		1
+    $cull 0
+	$vertextransform 		1
+
+	$c0_x 1
+	$c0_y 1
+	$c0_z 1
+	$c0_w 1
+}

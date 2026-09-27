@@ -1,9 +1,10 @@
 .vscode
 
-shaders/build_single_shader.bat
-shaders/common_fxc.h
-shaders/common_hlsl_cpp_consts.h
-shaders/common_pragmas.h
-shaders/common_ps_fxc.h
-shaders/common_vs_fxc.h
-shaders/ShaderCompile.exe
+shadersrc/worker.bat
+shadersrc/build_shaders.bat
+shadersrc/common_fxc.h
+shadersrc/common_hlsl_cpp_consts.h
+shadersrc/common_pragmas.h
+shadersrc/common_ps_fxc.h
+shadersrc/common_vs_fxc.h
+shadersrc/ShaderCompile.exe

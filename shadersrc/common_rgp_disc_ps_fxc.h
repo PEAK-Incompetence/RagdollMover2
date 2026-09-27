@@ -1,12 +1,13 @@
-// Defines cEyePos
-#include "common_ps_fxc.h"
 
-sampler DEPTHTEXTURE : register(s0);
-
-float4 WIDTHCOLOR : register(c0);
+float4 WidthColor : register(c0); // (width, r, g, b)
 
 struct PS_INPUT
 {
+    #if defined(DX11)
+    float4 P            : SV_Position;
+    #else
+    float2 P            : VPOS;
+    #endif
     float2 uv : TEXCOORD0;             // Position on triangle
     float depth : TEXCOORD1;
 };
@@ -16,14 +17,18 @@ float bias(float t, float b) {
     return t / ((((1.0/b) - 2.0) * (1.0 - t)) + 1.0);
 }
 
-float4 main(PS_INPUT frag) : COLOR
+#if defined(DX11)
+float4 main( PS_INPUT frag ) : SV_Target
+#else
+float4 main( PS_INPUT frag ) : COLOR
+#endif
 {
-    float4 color = float4(WIDTHCOLOR.yzw, 1);
+    float4 color = float4(WidthColor.yzw, 1);
 
     float midPoint = 0.5; 
     float gradient = smoothstep(0.0, 1.0, bias(frag.depth, midPoint));
 
-    float width = WIDTHCOLOR.x;
+    float width = WidthColor.x;
     float centerRadius = 0.667;
     float edgeSoftness = 0.001;
 

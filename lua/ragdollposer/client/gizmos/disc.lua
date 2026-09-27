@@ -8,9 +8,12 @@ local disc = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
+local dxLevel = render.GetDXLevel()
+local dx11 = dxLevel >= 110 and dxLevel <= 114
+
 -- DiscMaterial shaders come from legacy Ragdoll Mover. These should go inside `disc.lua`
-local DiscMaterial = Material("ragdollposer/disc")
-local DiscMaterialPartial = Material("ragdollposer/disc_partial")
+local discMaterial = Material(dx11 and "ragdollposer/disc_dx11" or "ragdollposer/disc")
+local discMaterialPartial = Material(dx11 and "ragdollposer/disc_partial_dx11" or "ragdollposer/disc_partial")
 
 -- Avoid clones of this
 -- TODO: move this to the gizmo object and do dependency injection
@@ -81,7 +84,7 @@ local YELLOW = Color(255, 255, 0)
 function disc:Draw(props, selected)
 	local color = selected and YELLOW or self._color
 
-	local mat = props.partial and DiscMaterialPartial or DiscMaterial
+	local mat = not self._facesUs and props.partial and discMaterialPartial or discMaterial
 	local discScale = 1
 	if self._facesUs then
 		local forward = -MainEyeAngles():Forward()

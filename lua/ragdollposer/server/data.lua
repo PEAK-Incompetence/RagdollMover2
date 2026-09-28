@@ -12,11 +12,11 @@ local MGR = {}
 ---@type {[Player]: PlayerData}
 MGR.Players = RagdollPoser.Data and RagdollPoser.Data.Players or {}
 
----@class PlayerData {
----@field [1] Entity 
----@field [2] integer 
----@field [3] Entity[] 
----@field [4] {[Entity]: Entity}}
+---@class PlayerData
+---@field [1] Entity
+---@field [2] integer
+---@field [3] Entity[]
+---@field [4] table<Entity, Entity>
 
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
 RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")
@@ -104,7 +104,7 @@ end
 
 ---@param entity Entity
 ---@return Entity[] constrainedList Network-friendly constrained list
----@return {[Entity]: Entity} constrainedTable Duplicator-friendly constrained list
+---@return table<Entity, Entity> constrainedTable Duplicator-friendly constrained list
 function MGR.GetConstrainedEntities(entity)
 	local constrainedTab = constraint.GetAllConstrainedEntities(entity)
 	local constrainedList = {}
@@ -123,13 +123,18 @@ local function constraintRemoved(ent)
 		if not ent1 and not ent2 then
 			return
 		end
-		for player, data in pairs(RagdollPoser.Data.Players) do
+		for player, data in pairs(MGR.Players) do
 			local targetEnt = data[1]
 			if targetEnt and (ent1 == targetEnt or ent2 == targetEnt) then
 				timer.Simple(0, function()
-					local constrainedList, constrainedTab = RagdollPoser.Data.GetConstrainedEntities(targetEnt)
-					RagdollPoser.Data.RefreshEntities(player, targetEnt, data[2], constrainedList)
-					RagdollPoser.Data:Update(player, targetEnt, data[2], constrainedList, constrainedTab)
+					if IsValid(targetEnt) then
+						local constrainedList, constrainedTab = MGR.GetConstrainedEntities(targetEnt)
+						MGR.RefreshEntities(player, targetEnt, data[2], constrainedList)
+						MGR:Update(player, targetEnt, data[2], constrainedList, constrainedTab)
+					else
+						MGR.RefreshEntities(player, NULL, 0, {})
+						MGR:Update(player, nil, nil, nil, nil)
+					end
 				end)
 			end
 		end
@@ -139,7 +144,7 @@ hook.Add("EntityRemoved", "RagdollPoser_ConstraintRemoved", constraintRemoved)
 
 function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 	-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
-	RagdollPoser.Data.Players[pl] = { entity, bone, entities, constrainedEntities }
+	MGR.Players[pl] = { entity, bone, entities, constrainedEntities }
 end
 
 RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSender("EntityPhysBoneCount")

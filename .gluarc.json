@@ -1,1 +1,50 @@
-{}
+{
+    "diagnostics": {
+        "diagnosticInterval": 500,
+        "disable": [],
+        "enable": true,
+        "enables": [],
+        "globals": [
+            "RagdollPoser"
+        ],
+        "globalsRegex": [],
+        "severity": {}
+    },
+    "workspace": {
+        "enableIsolation": false,
+        "enableReindex": false,
+        "encoding": "utf-8",
+        "ignoreDir": [],
+        "ignoreDirDefaults": [
+            {
+                "glob": "**/gmod_wire_expression2/**",
+                "id": "wire-expression2"
+            },
+            {
+                "glob": "**/wire_expression*.lua",
+                "id": "wire-expression-files"
+            },
+            {
+                "glob": "**/tests/**",
+                "id": "tests"
+            },
+            {
+                "glob": "**/test/**",
+                "id": "test"
+            }
+        ],
+        "ignoreGlobs": [],
+        "library": [
+            "../GLuaTest/lua/gluatest/types.lua",
+            "../GLuaTest/lua/gluatest/expectations/expect.lua",
+            "../GLuaTest/lua/gluatest/expectations/positive.lua",
+            "../GLuaTest/lua/gluatest/expectations/negative.lua",
+            "../GLuaTest/lua/gluatest/runner/helpers.lua"
+        ],
+        "moduleMap": [],
+        "packageDirs": [],
+        "reindexDuration": 5000,
+        "useDefaultIgnores": false,
+        "workspaceRoots": []
+    }
+}

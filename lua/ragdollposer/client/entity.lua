@@ -337,6 +337,10 @@ local function sendAssemblyInfo()
 			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent])
 		end
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+	else
+		MGR.RefreshEntities(entities)
+		RagdollPoser.Selection:Unselect()
+		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 	end
 end
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)
@@ -351,7 +355,7 @@ end
 local function getPhysBoneCount(len, ply)
 	local entity = net.ReadEntity()
 	local count = net.ReadUInt(5)
-	print("entityphysbonecount receive", entity, count)
+	-- print("entityphysbonecount receive", entity, count)
 	if IsValid(entity) then
 		local model = entity:GetModel()
 

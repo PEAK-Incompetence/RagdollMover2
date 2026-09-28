@@ -1,4 +1,4 @@
----@alias SelectionEvenIndex Entity
+---@alias SelectionEvenIndex ClientEntity
 ---@alias SelectionOddIndex integer
 
 ---@alias Selection (SelectionEvenIndex|SelectionOddIndex)[]

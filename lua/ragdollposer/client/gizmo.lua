@@ -646,7 +646,6 @@ local function sendSubPose(selection)
 			local matrix = matrices[b + 1]
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			print("is static prop", isStaticProp(entity))
 			if physbone >= 0 or isStaticProp(entity) then
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)

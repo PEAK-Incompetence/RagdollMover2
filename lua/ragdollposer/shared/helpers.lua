@@ -122,6 +122,55 @@ if CLIENT then
 		---@cast tool TOOL
 		return IsValid(weap) and weap:GetClass() == "gmod_tool" and tool and tool:GetMode() == RagdollPoser.Mode
 	end
+
+	---Get a nicely formatted model name
+	---@param entity Entity
+	---@return string
+	function MGR.GetModelNameNice(entity)
+		local mdl = string.Split(entity:GetModel() or "", "/")
+		mdl = mdl[#mdl]
+		return string.NiceName(string.sub(mdl, 1, #mdl - 4))
+	end
+
+	---Get the model name without the path
+	---@param entity Entity
+	---@return string
+	function MGR.GetModelName(entity)
+		local mdl = string.Split(entity:GetModel(), "/")
+		mdl = mdl[#mdl]
+		return mdl
+	end
+
+	local modelSkins = {}
+
+	---Grab the entity's model icon
+	---@source https://github.com/NO-LOAFING/AdvBonemerge/blob/371b790d00d9bcbb62845ce8785fc6b98fbe8ef4/lua/weapons/gmod_tool/stools/advbonemerge.lua#L1079
+	---@param ent Entity
+	---@param model string?
+	---@param skin number?
+	---@return string iconPath
+	function MGR.GetModelNodeIconPath(ent, model, skin)
+		skin = skin or ent:GetSkin() or 0
+		model = model or ent:GetModel()
+
+		if modelSkins[model .. skin] then
+			return modelSkins[model .. skin]
+		end
+
+		local modelicon = "spawnicons/" .. string.StripExtension(model) .. ".png"
+		local fallback = file.Exists("materials/" .. modelicon, "GAME") and modelicon or "icon16/bricks.png"
+		if skin > 0 then
+			modelicon = "spawnicons/" .. string.StripExtension(model) .. "_skin" .. skin .. ".png"
+		end
+
+		if not file.Exists("materials/" .. modelicon, "GAME") then
+			modelicon = fallback
+		else
+			modelSkins[model .. skin] = modelicon
+		end
+
+		return modelicon
+	end
 end
 
 RagdollPoser.Helpers = MGR

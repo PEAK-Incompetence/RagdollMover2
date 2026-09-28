@@ -360,7 +360,7 @@ local function sendAssemblyInfo()
 	if IsValid(ent) and bone then
 		MGR.RefreshEntities(entities)
 		if not RagdollPoser.Selection:GetSelection()[1] then
-			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent])
+			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent], false)
 		end
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 	else

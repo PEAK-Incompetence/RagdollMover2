@@ -2,6 +2,7 @@
 ---@alias SelectionOddIndex integer
 
 ---@alias Selection (SelectionEvenIndex|SelectionOddIndex)[]
+---@alias SelectedEntities table<Entity, true>
 
 ---Entity bone pair. The iteration is as follows
 ---
@@ -13,6 +14,9 @@
 ---```
 ---@type Selection
 local entityBonePairs = {}
+
+---@type SelectedEntities
+local selectedEntities = {}
 
 ---Entity bone pair set, so that we don't transform a bone more than once
 local entitySelectedBones = {}
@@ -46,33 +50,37 @@ end
 
 ---@param bone integer
 ---@param entity Entity
-function MGR:SelectOne(bone, entity)
+---@param accumulate boolean
+function MGR:SelectOne(bone, entity, accumulate)
 	RagdollPoser.Log("selected", bone, entity)
 	-- Accumulate selections if we want to manipulate them all at once
 
 	entitySelectedBones[entity] = entitySelectedBones[entity] or {}
-	if input.IsShiftDown() then
+	if accumulate then
 		if not entitySelectedBones[entity][bone] then
 			local count = #entityBonePairs + 1
 			entityBonePairs[count] = bone
 			entityBonePairs[count + 1] = entity
 			entitySelectedBones[entity][bone] = true
+			selectedEntities[entity] = true
 		end
 	else
+		selectedEntities = {}
 		entitySelectedBones[entity] = {}
 		entityBonePairs = { bone, entity }
 		entitySelectedBones[entity][bone] = true
+		selectedEntities[entity] = true
 	end
 
-	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
 ---@param selection Selection
-function MGR:SelectGroup(selection)
-	local accumulate = input.IsShiftDown()
+function MGR:SelectGroup(selection, accumulate)
 	if not accumulate then
 		entityBonePairs = {}
 		entitySelectedBones = {}
+		selectedEntities = {}
 	end
 	local count = accumulate and #entityBonePairs or 0
 	local j = 0
@@ -80,6 +88,7 @@ function MGR:SelectGroup(selection)
 		local bone, entity = selection[i], selection[i + 1]
 
 		entitySelectedBones[entity] = entitySelectedBones[entity] or {}
+		selectedEntities[entity] = true
 		if not entitySelectedBones[entity][bone] then
 			j = j + 1
 			entityBonePairs[count + j] = bone
@@ -89,7 +98,7 @@ function MGR:SelectGroup(selection)
 		end
 	end
 
-	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
 function MGR:GetSelection()
@@ -98,7 +107,7 @@ end
 
 function MGR:Unselect()
 	entityBonePairs = {}
-	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
 ---Temporary list for refreshing entities when re-deploying the tool
@@ -122,7 +131,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 		entityBonePairs[entityIndices[i + 1]] = client
 	end
 	entityIndices = {}
-	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs)
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end)
 
 function MGR:GetEnabled()
@@ -190,6 +199,10 @@ function MGR:RaycastBoneLine(x0, y0, x1, y1, x2, y2)
 	return distSq < MAX_BONE_COLLISION
 end
 
+function MGR:GetSelectedEntities()
+	return selectedEntities
+end
+
 local matrix = Matrix()
 ---@type Selection
 local selectionBuffer = {}
@@ -254,7 +267,7 @@ local function handleMultipleBones(selection)
 		local submenu = menu:AddSubMenu(entity:GetModel())
 		for _, bone in ipairs(bones) do
 			local option = submenu:AddOption(entity:GetBoneName(bone), function()
-				MGR:SelectOne(bone, entity)
+				MGR:SelectOne(bone, entity, input.IsShiftDown())
 			end)
 
 			function option:TestHover()
@@ -300,24 +313,22 @@ local function onLeftClickUp(x, y, tr)
 	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
 	-- If our mouse was on a bone, and we're still on the same bone, select it
 	-- Otherwise, finish selection
-	print("left click up")
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
-		print("Try selection")
 		if #selectionBuffer > 2 then
 			PrintTable(selectionBuffer)
 			if not input.IsShiftDown() then
 				MGR:SetBusy(true)
 				handleMultipleBones(selectionBuffer)
 			else
-				MGR:SelectGroup(selectionBuffer)
+				MGR:SelectGroup(selectionBuffer, input.IsShiftDown())
 			end
 		else
 			local bone = selectionBuffer[1]
 			local entity = selectionBuffer[2]
 			---@cast bone SelectionOddIndex
 			---@cast entity SelectionEvenIndex
-			MGR:SelectOne(bone, entity)
+			MGR:SelectOne(bone, entity, input.IsShiftDown())
 		end
 		MGR:SetWasOnBone(false)
 	else

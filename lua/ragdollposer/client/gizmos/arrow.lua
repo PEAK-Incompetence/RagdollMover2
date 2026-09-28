@@ -9,7 +9,10 @@
 ---@field _color Color
 local arrow = include("base.lua")
 
-local arrowMaterial = Material("ragdollposer/arrow")
+local dxLevel = render.GetDXLevel()
+local dx11 = dxLevel >= 110 and dxLevel <= 114
+
+local arrowMaterial = Material(dx11 and "ragdollposer/arrow_dx11" or "ragdollposer/arrow")
 local texture = arrowMaterial:GetTexture("$basetexture")
 local width, height = texture:Width(), texture:Height()
 

@@ -41,9 +41,11 @@ local function sendSubPose(len, ply)
 
 		for _, b in ipairs(bones) do
 			local matrix = matrices[b]
-			-- print(matrix)
 			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 			local po = entity:GetPhysicsObjectNum(physBone)
+			if RagdollPoser.Helpers.IsStaticProp(entity) then
+				po = entity:GetPhysicsObject()
+			end
 			if matrix then
 				if po then
 					po:SetPos(matrix:GetTranslation())

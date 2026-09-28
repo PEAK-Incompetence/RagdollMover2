@@ -34,6 +34,8 @@ local OUTLINE_WIDTH = 1
 local BLACK = Color(0, 0, 0, 255)
 local FLOAT_1DIVIDE540 = 0.00185185185
 
+local isStaticProp = RagdollPoser.Helpers.IsStaticProp
+
 ---[CLIENT]
 ---
 ---Gizmo transform
@@ -577,9 +579,8 @@ hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
 local boneMatrix = Matrix()
-
 ---Send update bone transforms of the selected bone hierarchy
----@param selection any
+---@param selection Selection
 local function sendSubPose(selection)
 	-- TODO: Do a server acknowledge step so that the server only accepts poses that we send from here, not from
 	-- anywhere else
@@ -611,8 +612,8 @@ local function sendSubPose(selection)
 	end
 
 	for i = 1, #selection - 1, 2 do
-		local bone = selection[i]
-		local client = selection[i + 1]
+		local bone = selection[i] --[[@as integer]]
+		local client = selection[i + 1] --[[@as ClientEntity]]
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 		RagdollPoser.Entity.ExposeBones(client)
 		RagdollPoser.Entity.ExposeBones(entity)
@@ -645,7 +646,8 @@ local function sendSubPose(selection)
 			local matrix = matrices[b + 1]
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			if physbone >= 0 then
+			print("is static prop", isStaticProp(entity))
+			if physbone >= 0 or isStaticProp(entity) then
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
@@ -671,17 +673,17 @@ function MGR:PostTransform()
 
 	local selection = RagdollPoser.Selection:GetSelection()
 	local mirrorSelection = self._mirroredSelection or {}
-	PrintTable(selection)
-	PrintTable(mirrorSelection)
+	-- PrintTable(selection)
+	-- PrintTable(mirrorSelection)
 	local complete = table.Copy(selection)
-	PrintTable(complete)
+	-- PrintTable(complete)
 	if selection[1] then
 		if mirrorSelection[1] then
 			for i = 1, #mirrorSelection do
 				complete[#complete + 1] = mirrorSelection[i]
 			end
 		end
-		PrintTable(complete)
+		-- PrintTable(complete)
 		sendSubPose(complete)
 		print("post transform!")
 	end
@@ -715,12 +717,18 @@ local CYAN = Color(0, 128, 255, 255)
 local RED = Color(255, 0, 0, 255)
 local YELLOW = Color(255, 255, 0, 255)
 
+-- TODO: Use theming
+local boneTypeToColor = {
+	[RagdollPoser.Bones.BoneType.Physics] = GREEN,
+	[RagdollPoser.Bones.BoneType.Manipulate] = CYAN,
+	[RagdollPoser.Bones.BoneType.Procedural] = RED,
+}
+
 -- Make sure you are in the 2D rendering context
 function MGR:DrawBones()
 	local mouseHovered = {}
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
-
 	if RagdollPoser.Selection:GetEnabled() then
 		local ents = RagdollPoser.Entity.GetClientEntities()
 		for _, ent in ipairs(ents) do
@@ -745,23 +753,41 @@ function MGR:DrawBones()
 				end
 				local tx, ty = data.x, data.y
 				local x, y = input.GetCursorPos()
-				local color
 				local boneType = bones:GetBoneType(ent, b)
-				if boneType == boneTypes.Physics then
-					color = GREEN
-				elseif boneType == boneTypes.Manipulate then
-					color = CYAN
-				elseif boneType == boneTypes.Procedural then
-					color = RED
-				end
+				local color = boneTypeToColor[boneType]
 
-				if RagdollPoser.Selection:RaycastBone(x, y, tx, ty) then
+				local pointSelected = RagdollPoser.Selection:RaycastBone(x, y, tx, ty)
+				if pointSelected then
 					color = YELLOW
 					table.insert(mouseHovered, b)
 				end
 
-				-- TODO: Categorize based on bone type
 				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
+
+				local childSelected = false
+				for _, childBone in ipairs(ent:GetChildBones(b)) do
+					ent:CopyBoneMatrix(childBone, mat)
+					local p = mat:GetTranslation()
+					local data = p:ToScreen()
+					if not data.visible then
+						continue
+					end
+
+					local cx, cy = data.x, data.y
+
+					if
+						not pointSelected
+						and not childSelected
+						and RagdollPoser.Selection:RaycastBoneLine(x, y, tx, ty, cx, cy)
+					then
+						color = YELLOW
+						table.insert(mouseHovered, b)
+						childSelected = true
+					end
+
+					surface.SetDrawColor(color.r, color.g, color.b, color.a)
+					surface.DrawLine(tx, ty, cx, cy)
+				end
 			end
 		end
 	end
@@ -997,6 +1023,7 @@ end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", initializeGizmo)
 
+-- FIXME: Icky boilerplate below. How to improve this?
 local function updateWidth(_, old, new)
 	local result = tonumber(new)
 	if result then
@@ -1018,6 +1045,12 @@ local function updateMirror(_, old, new)
 end
 cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
 cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
+
+local function updatePartial(_, old, new)
+	MGR._gizmoProps.partial = tobool(new)
+end
+cvars.RemoveChangeCallback("ragdollposer_partial", "ragdollposer_partial_callback")
+cvars.AddChangeCallback("ragdollposer_partial", updatePartial, "ragdollposer_partial_callback")
 
 local function updateOrientation(_, old, new)
 	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World

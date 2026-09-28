@@ -9,7 +9,10 @@
 ---@field _color Color
 local scale = include("base.lua")
 
-local scaleMaterial = Material("ragdollposer/scale")
+local dxLevel = render.GetDXLevel()
+local dx11 = dxLevel >= 110 and dxLevel <= 114
+
+local scaleMaterial = Material(dx11 and "ragdollposer/scale_dx11" or "ragdollposer/scale")
 local texture = scaleMaterial:GetTexture("$basetexture")
 local width, height = texture:Width(), texture:Height()
 

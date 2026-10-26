@@ -19,6 +19,8 @@ local width, height = texture:Width(), texture:Height()
 local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
 local centerPadding = 0.05
 
+local developer = GetConVar("developer")
+
 ---@param eyepos Vector
 ---@param direction Vector
 ---@param props GizmoProps
@@ -28,12 +30,14 @@ function arrow:Intersect(eyepos, direction, props)
 	local scale = props.scale
 
 	local angle = props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero
-	render.DrawBox(
-		props.pos,
-		angle,
-		tempMin + self._direction * scale * centerPadding,
-		tempMax + self._direction * scale
-	)
+	if developer:GetBool() then
+		render.DrawBox(
+			props.pos,
+			angle,
+			tempMin + self._direction * scale * centerPadding,
+			tempMax + self._direction * scale
+		)
+	end
 	local result = util.IntersectRayWithOBB(
 		eyepos,
 		direction * 16384,
@@ -84,21 +88,22 @@ local sharedDeltaProps = {
 local mirrorMatrix = Matrix()
 mirrorMatrix:Identity()
 
-function arrow:ProcessDelta(start, endPos, props, mirrorAxis)
-	local forward = MainEyeAngles():Forward()
+function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local forward = eyeAng:Forward()
 	local back = -forward
-	local eyePos = MainEyePos()
 
-	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, back) or start)
-	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, back) or endPos)
+	local startHit = (util.IntersectRayWithPlane(eyePos + eyeDelta, start * 16384, props.pos + eyeDelta, back) or start)
+	local endHit = (util.IntersectRayWithPlane(eyePos + eyeDelta, endPos * 16384, props.pos + eyeDelta, back) or endPos)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)
+	sharedDeltaProps[1]:Add(eyeDelta)
 
 	if mirrorAxis >= 0 then
 		local length = sharedDeltaProps[1]:Length()
 		local vector = sharedDeltaProps[1]:Angle()
-		vector:RotateAroundAxis(MainEyeAngles():Up(), 180)
+		vector:RotateAroundAxis(eyeAng:Up(), 180)
 		sharedDeltaProps[1]:Set(vector:Forward())
 		sharedDeltaProps[1]:Mul(length)
 	end

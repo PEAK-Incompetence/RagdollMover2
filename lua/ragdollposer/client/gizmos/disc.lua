@@ -83,11 +83,12 @@ local YELLOW = Color(255, 255, 0)
 ---@param selected boolean
 function disc:Draw(props, selected)
 	local color = selected and YELLOW or self._color
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 
 	local mat = not self._facesUs and props.partial and discMaterialPartial or discMaterial
 	local discScale = 1
 	if self._facesUs then
-		local forward = -MainEyeAngles():Forward()
+		local forward = -eyeAng:Forward()
 		self._axis = forward
 		self._direction = forward
 		discScale = 1.25
@@ -124,17 +125,18 @@ local sharedDeltaProps = {
 local mirrorMatrix = Matrix()
 mirrorMatrix:Identity()
 
-function disc:ProcessDelta(start, endPos, props, mirrorAxis)
-	local startHit = (util.IntersectRayWithPlane(MainEyePos(), start * 16384, props.pos, self._axis) or start)
+function disc:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, self._axis) or start) - props.pos
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, self._axis) or endPos)
 		- props.pos
-	local endHit = (util.IntersectRayWithPlane(MainEyePos(), endPos * 16384, props.pos, self._axis) or endPos)
-		- props.pos
+		+ eyeDelta
 
 	local mirrorNormal = vector_origin
 	if mirrorAxis == 0 then
-		mirrorNormal = MainEyeAngles():Right()
+		mirrorNormal = eyeAng:Right()
 	elseif mirrorAxis == 1 then
-		mirrorNormal = MainEyeAngles():Up()
+		mirrorNormal = eyeAng:Up()
 	end
 	if mirrorAxis >= 0 then
 		startHit = startHit - 2 * mirrorNormal:Dot(startHit) * mirrorNormal
@@ -207,7 +209,8 @@ end
 
 function disc:GetDirection()
 	if self._facesUs then
-		return -MainEyeAngles():Forward()
+		local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+		return -eyeAng:Forward()
 	end
 	return self._axis
 end
@@ -226,8 +229,9 @@ local function initialize(v)
 		-- RagdollPoser.Log("Set rotation axis to ", v)
 	else
 		base._facesUs = true
-		base._direction = -MainEyeAngles():Forward()
-		base._axis = -MainEyeAngles():Forward()
+		local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+		base._direction = -eyeAng:Forward()
+		base._axis = -eyeAng:Forward()
 		base._color = Color(192, 192, 192, 255)
 	end
 

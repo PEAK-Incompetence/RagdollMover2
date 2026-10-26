@@ -10,10 +10,6 @@ local quaternion = include("ragdollposer/shared/quaternion.lua")
 
 local BALL_SCALE = 0.45
 
-function ball:ProcessDelta(start, endPos)
-	return endPos - start, start, endPos
-end
-
 function ball:Intersect(eyepos, direction, props)
 	local hit1, hit2 = util.IntersectRayWithSphere(eyepos, direction * 16384, props.pos, props.scale * BALL_SCALE)
 
@@ -44,10 +40,15 @@ function ball:PreTransform(direction, initials)
 	return Vector()
 end
 
-function ball:ProcessDelta(start, endPos, props, mirrorAxis)
+function ball:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local x, y = input.GetCursorPos()
-	self.xDelta = self.xDelta + RagdollPoser.Input.xMove
-	self.yDelta = self.yDelta + RagdollPoser.Input.yMove
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local eyedist = eyePos:Distance(props.pos) / 60
+	local forward = eyeAng:Forward()
+	local right = eyeAng:Right()
+
+	self.xDelta = self.xDelta + RagdollPoser.Input.xMove + right:Dot(eyeDelta) * props.scale / eyedist
+	self.yDelta = self.yDelta + RagdollPoser.Input.yMove + forward:Dot(eyeDelta) * props.scale / eyedist
 
 	local xSign, ySign = 1, 1
 	if mirrorAxis == 0 then
@@ -59,7 +60,7 @@ function ball:ProcessDelta(start, endPos, props, mirrorAxis)
 	self.dx = xSign * ((x - self.xi) * 18 + self.xDelta * 4)
 	self.dy = ySign * ((y - self.yi) * 18 + self.yDelta * 4)
 
-	return { endPos - start, start, endPos }
+	return { eyeDelta, start, endPos }
 end
 
 -- Define it here and modify the angle axis, so we don't have to create a quaternion every frame
@@ -71,14 +72,14 @@ local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 ---@param deltaProps DeltaProps
 ---@param transforms VMatrix[]
 function ball:Transform(directions, deltaProps, transforms, accumulations, initials, props)
-	local eyeang = MainEyeAngles()
-	local left = -eyeang:Right()
-	local up = eyeang:Up()
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local left = -eyeAng:Right()
+	local up = eyeAng:Up()
 
 	local dx, dy = self.dx, self.dy
 
 	-- The closer we are to the gizmo, the more precise the movement should be
-	local eyedist = MainEyePos():Distance(props.pos) / 60
+	local eyedist = eyePos:Distance(props.pos) / 60
 	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
 	local scale = props.scale
 	-- The smaller the ball, the more rotation we give

@@ -491,13 +491,17 @@ function MGR:PreTransform()
 	end
 
 	local x, y = input.GetCursorPos()
+	local newPos = RagdollPoser.View:GetView()
 	self.start = gui.ScreenToVector(x, y)
+	self.startPos = newPos
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
 function MGR:Transform()
 	local x, y = input.GetCursorPos()
+	local newPos = RagdollPoser.View:GetView()
 	local newPoint = gui.ScreenToVector(x, y)
+	local eyeDelta = newPos - self.startPos
 	self.delta = newPoint - self.start
 
 	local gizmo = self._directions[self._gizmoIndex]
@@ -518,8 +522,13 @@ function MGR:Transform()
 				-- 4. Mirroring
 				-- 5. Constraints
 
-				local deltaProps =
-					gizmo:ProcessDelta(self.start, newPoint, self._gizmoProps, doMirror and self._mirrorAxis or -1)
+				local deltaProps = gizmo:ProcessDelta(
+					self.start,
+					newPoint,
+					self._gizmoProps,
+					doMirror and self._mirrorAxis or -1,
+					eyeDelta
+				)
 
 				gizmo:Transform(
 					pivots[client],
@@ -561,6 +570,7 @@ function MGR:Transform()
 	-- Do transform to initial copy, and apply new transform to
 	-- entity matrices so that we see the effect on the ghost client entity
 	self.start = newPoint
+	self.startPos = newPos
 end
 
 local function doTransform()

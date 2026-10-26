@@ -32,6 +32,10 @@ function Base:UpdateOrientation(orientation, props) end
 ---@param selected boolean
 function Base:Draw(props, selected) end
 
+--- Info about delta
+--- - [1] delta
+--- - [2] start
+--- - [3] endPos
 ---@class DeltaProps
 ---@field [1] Vector delta
 ---@field [2] Vector start
@@ -41,8 +45,9 @@ function Base:Draw(props, selected) end
 ---@param endPos Vector
 ---@param props GizmoProps
 ---@param mirrorAxis integer
+---@param eyeDelta Vector
 ---@return DeltaProps deltaProps
-function Base:ProcessDelta(start, endPos, props, mirrorAxis)
+function Base:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return {}
 end
 

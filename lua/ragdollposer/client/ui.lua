@@ -21,7 +21,7 @@ local function keyBinder(cpanel, label, cvar, action)
 end
 
 ---Helper for DForm
----@param cPanel ControlPanel|DForm
+---@param cPanel ControlPanel|DForm|DCategoryList
 ---@param name string
 ---@param type "ControlPanel"|"DForm"
 ---@return ControlPanel|DForm
@@ -34,6 +34,67 @@ local function makeCategory(cPanel, name, type)
 	return category
 end
 
+---@param parent ConstraintForm
+---@param constraint Constraint
+---@return ConstraintEntry
+local function makeConstraintEntry(parent, constraint)
+	local props = constraint.Properties
+
+	---@class ConstraintEntry: DForm
+	---@field Header DCategoryHeader
+	local entry = makeCategory(parent, "", "DForm")
+	entry:SetList(parent)
+
+	-- Each constraint carries an id, so anytime we make updates to the ui, we use the id to make
+	-- changes to the actual constraint object
+
+	-- Header UI
+	entry.icon = vgui.Create("DImage", entry)
+	entry.name = vgui.Create("DTextEntry", entry)
+	entry.enabled = vgui.Create("DCheckBox", entry)
+	-- Move constraint up and down for ordering
+	-- Moving this up and down triggers reconstruction, although if I could just manually swap the order here, that would be more performant
+	entry.up = vgui.Create("DImageButton", entry)
+	entry.down = vgui.Create("DImageButton", entry)
+
+	entry.icon:SetKeepAspect(true)
+	entry.up:SetKeepAspect(true)
+	entry.down:SetKeepAspect(true)
+
+	entry.icon:SetImage(props.icon ~= "" and props.icon or "icon16/link.png")
+	entry.up:SetImage("icon16/bullet_arrow_up.png")
+	entry.down:SetImage("icon16/bullet_arrow_down.png")
+
+	local height = entry.Header:GetTall()
+	entry.up:SetSize(height, height)
+	entry.down:SetSize(height, height)
+	entry.icon:SetSize(height, height)
+
+	entry.name:SetText(language.GetPhrase(props.name) or "Constraint")
+	entry.icon:SetMouseInputEnabled(false)
+	-- Right click entry to access settings like renaming, copying, or duplicating
+
+	entry.name:SetTooltip(language.GetPhrase(props.help))
+
+	local oldLayout = entry.PerformLayout
+	function entry:PerformLayout(w, h)
+		oldLayout(self, w, h)
+		entry.icon:SetPos(5, 0)
+
+		entry.name:SetSize(w * 0.6, height * 0.8)
+		entry.name:SetPos(entry.icon:GetWide() + 10, (height - entry.name:GetTall()) * 0.5)
+
+		entry.enabled:SetPos(w * 0.9, 0)
+		entry.up:SetPos(entry.enabled:GetX() - height, 0)
+		entry.down:SetPos(entry.up:GetX() - height, 0)
+	end
+
+	-- Inside the entry, construct the ui based on the instructions from the constraint file
+	entry.ui = constraint:ConstructUI(entry)
+
+	return entry
+end
+
 local mirrorMapping = {
 	[0] = "x",
 	[1] = "y",
@@ -44,7 +105,7 @@ local mirrorMappingInverse = table.Flip(mirrorMapping)
 ---@class EntityTree: DTree
 ---@field [Entity] DTree_Node
 
----@param entityTree EntityTree
+---@param entityTree EntityTree | rgp_tree
 ---@param entities Entity[]
 ---@param selectedEntities SelectedEntities
 local function populateEntities(entityTree, entities, selectedEntities)
@@ -310,6 +371,66 @@ function MGR:BuildCPanel(cpanel)
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
 		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
 		updateBoneTree(boneTree, selection)
+	end)
+
+	local constraintCategory = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.constraint"), "ControlPanel")
+	local addConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.add"))
+
+	local constraintListForm =
+		makeCategory(constraintCategory, language.GetPhrase("tool.ragdollposer.constraint.list"), "DForm")
+	local constraintListContainer = vgui.Create("DPanel", constraintListForm)
+	constraintListForm:AddItem(constraintListContainer)
+	constraintListContainer:SizeTo(-1, 200, 0)
+	---@class ConstraintForm: DCategoryList
+	---@field Items ConstraintEntry[]
+	local constraintList = vgui.Create("DCategoryList", constraintListContainer)
+	constraintList:Dock(FILL)
+
+	function addConstraint:DoClick()
+		-- TODO: Construct menu from available constraints and their categories
+		-- Each constraint has their own info, so once we click on that, that populates the constraint props
+		local menu = DermaMenu()
+
+		-- get list of constraints categories, then insert each constraint in a category
+		-- click on a constraint name. we add the constraint to the entity. also send it to the server
+		-- so that when we reselect entities, we also get constraint info
+		-- get the constraint info, and make constraint entry based off actual constraints that exist there
+
+		local constraints = RagdollPoser.Constraints:GetConstraints()
+		local categories = {}
+		for _, constraint in ipairs(constraints) do
+			local cat = language.GetPhrase(constraint.Properties.category)
+			if cat and cat ~= "" and not categories[cat] then
+				categories[cat] = {}
+			end
+
+			if categories[cat] then
+				table.insert(categories[cat], constraint)
+			end
+		end
+
+		for category, constraints in SortedPairs(categories) do
+			local submenu = menu:AddSubMenu(category)
+			for _, constraint in ipairs(constraints) do
+				local name = language.GetPhrase(constraint.Properties.name)
+				local option = submenu:AddOption(language.GetPhrase(name), function()
+					-- TODO: Call the constraint construction function with the type we want to use for making the constraint
+					-- Then listen for the constraint function call
+					-- The constraints module will use a single hook, which we will listen to make our state changes
+					RagdollPoser.Constraints:Push(constraint.Properties.type)
+				end)
+				option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
+			end
+		end
+
+		menu:Open()
+	end
+
+	hook.Remove("RagdollPoser_Constraints_ConstraintCreated", "UI")
+	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI", function(constraints)
+		for _, constraint in ipairs(constraints) do
+			makeConstraintEntry(constraintList, constraint)
+		end
 	end)
 end
 

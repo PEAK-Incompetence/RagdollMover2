@@ -81,14 +81,6 @@ end
 
 local cvars = TOOL:BuildConVarList()
 
-local firstBuilt = false
-function TOOL:Think()
-	if not firstBuilt then
-		firstBuilt = true
-		self:RebuildControlPanel()
-	end
-end
-
 ---@param cPanel ControlPanel
 function TOOL.BuildCPanel(cPanel)
 	RagdollPoser.UI:Initialize(cPanel)

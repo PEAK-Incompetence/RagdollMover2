@@ -97,7 +97,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 		end
 
 		local name = self:GetBoneName(b)
-		if m and name ~= "__INVALIDBONE__" then
+		if m then
 			if staticProp then
 				self:SetPos(m:GetTranslation())
 				self:SetAngles(m:GetAngles())
@@ -108,6 +108,11 @@ local function clientBoneManipulator(self, numbones, staticProp)
 	end
 	ClientShouldUpdate[self] = false
 
+	local m = matrixSet[1]
+	if m then
+		-- If we don't set this, then the render bounds won't update to our current position
+		self:SetPos(m:GetTranslation())
+	end
 	self:SetRenderBounds(renderBounds[1], renderBounds[2])
 end
 

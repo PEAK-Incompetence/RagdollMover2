@@ -125,6 +125,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 		local client = entityToClient[entityIndices[i]]
 		-- If the entity we're selecting is about to be removed, then stop refresh
 		if client:IsMarkedForDeletion() then
+			print("we're selecting it and removing it??")
 			entityBonePairs = {}
 			break
 		end
@@ -251,12 +252,16 @@ local function getBones(x, y)
 	end
 end
 
-local function handleMultipleBones(selection)
+---@param selection Selection
+---@param callback fun(bone: integer, entity: Entity, multiselect: boolean)
+local function handleMultipleBones(selection, callback)
 	-- TODO: make a nicer menu
 	gui.EnableScreenClicker(true)
 	local entities = {}
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
+		---@cast bone integer
+		---@cast entity Entity
 		if not entities[entity] then
 			entities[entity] = {}
 		end
@@ -267,7 +272,7 @@ local function handleMultipleBones(selection)
 		local submenu = menu:AddSubMenu(entity:GetModel())
 		for _, bone in ipairs(bones) do
 			local option = submenu:AddOption(entity:GetBoneName(bone), function()
-				MGR:SelectOne(bone, entity, input.IsShiftDown())
+				callback(bone, entity, input.IsShiftDown())
 			end)
 
 			function option:TestHover()
@@ -319,7 +324,9 @@ local function onLeftClickUp(x, y, tr)
 			PrintTable(selectionBuffer)
 			if not input.IsShiftDown() then
 				MGR:SetBusy(true)
-				handleMultipleBones(selectionBuffer)
+				handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
+					MGR:SelectOne(bone, entity, multiselect)
+				end)
 			else
 				MGR:SelectGroup(selectionBuffer, input.IsShiftDown())
 			end
@@ -340,5 +347,45 @@ end
 
 hook.Add("RagdollPoser_Input_LeftClickDown", "Select", onLeftClickDown)
 hook.Add("RagdollPoser_Input_LeftClickUp", "Select", onLeftClickUp)
+
+local function onRightClickDown(x, y, tr)
+	if not MGR:GetEnabled() then
+		return
+	end
+	if MGR:IsBusy() then
+		return
+	end
+
+	getBones(x, y)
+end
+local function onRightClickUp(x, y, tr)
+	if not MGR:GetEnabled() then
+		return
+	end
+
+	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
+	-- If our mouse was on a bone, and we're still on the same bone, select it
+	-- Otherwise, finish selection
+	if MGR:WasOnBone() and not MGR:IsBusy() then
+		getBones(x, y)
+		if #selectionBuffer > 2 then
+			PrintTable(selectionBuffer)
+			MGR:SetBusy(true)
+			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
+				RagdollPoser.UI:ConstraintMenu(entity, true)
+			end)
+		else
+			local bone = selectionBuffer[1]
+			local entity = selectionBuffer[2]
+			---@cast bone SelectionOddIndex
+			---@cast entity SelectionEvenIndex
+			RagdollPoser.UI:ConstraintMenu(entity, true)
+		end
+		MGR:SetWasOnBone(false)
+	end
+end
+
+hook.Add("RagdollPoser_Input_RightClickDown", "Selection_Menu", onRightClickDown)
+hook.Add("RagdollPoser_Input_RightClickUp", "Selection_Menu", onRightClickUp)
 
 RagdollPoser.Selection = MGR

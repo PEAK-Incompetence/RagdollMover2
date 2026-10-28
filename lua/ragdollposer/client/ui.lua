@@ -39,6 +39,7 @@ end
 ---@return ConstraintEntry
 local function makeConstraintEntry(parent, constraint)
 	local props = constraint.Properties
+	local state = constraint.State
 
 	---@class ConstraintEntry: DForm
 	---@field Header DCategoryHeader
@@ -52,6 +53,8 @@ local function makeConstraintEntry(parent, constraint)
 	entry.icon = vgui.Create("DImage", entry)
 	entry.name = vgui.Create("DTextEntry", entry)
 	entry.enabled = vgui.Create("DCheckBox", entry)
+
+	entry.enabled:SetChecked(constraint.State.enabled)
 	-- Move constraint up and down for ordering
 	-- Moving this up and down triggers reconstruction, although if I could just manually swap the order here, that would be more performant
 	entry.up = vgui.Create("DImageButton", entry)
@@ -90,7 +93,7 @@ local function makeConstraintEntry(parent, constraint)
 	end
 
 	-- Inside the entry, construct the ui based on the instructions from the constraint file
-	entry.ui = constraint:ConstructUI(entry)
+	entry.ui = constraint:ConstructUI(entry, props, state)
 
 	return entry
 end
@@ -102,14 +105,12 @@ local mirrorMapping = {
 }
 local mirrorMappingInverse = table.Flip(mirrorMapping)
 
----@class EntityTree: DTree
----@field [Entity] DTree_Node
-
----@param entityTree EntityTree | rgp_tree
----@param entities Entity[]
+---@param entityTree EntityTree
+---@param entities ClientEntity[]
 ---@param selectedEntities SelectedEntities
 local function populateEntities(entityTree, entities, selectedEntities)
 	entityTree:Clear()
+
 	for _, entity in ipairs(entities) do
 		local model = entity:GetModel()
 
@@ -118,6 +119,8 @@ local function populateEntities(entityTree, entities, selectedEntities)
 
 		function node:DoClick()
 			RagdollPoser.Selection:SelectOne(0, entity, input.IsControlDown())
+			entityTree.selected = entity
+			entityTree:EntitySelected(entity)
 		end
 		entityTree[entity] = node
 	end
@@ -155,7 +158,7 @@ local function getRootNode(node)
 end
 
 ---@param parentNode DTree|BoneTreeNode
----@param entity Entity
+---@param entity ClientEntity
 ---@param bone integer
 ---@param boneName string
 ---@param boneType BoneType
@@ -228,7 +231,7 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 	return child
 end
 
----@param entity Entity
+---@param entity ClientEntity
 ---@param boneIndex integer
 ---@return integer
 local function getBoneType(entity, boneIndex)
@@ -236,7 +239,7 @@ local function getBoneType(entity, boneIndex)
 end
 
 ---Add the bone nodes for the boneTree from the puppet
----@param entity Entity
+---@param entity ClientEntity
 ---@param boneTree DTree
 local function setupBoneNodesOf(entity, boneTree)
 	boneTree.nodes = {}
@@ -320,6 +323,47 @@ local function updateBoneTree(boneTree, selection)
 	end
 end
 
+--- @param client ClientEntity
+--- @param keepOpen boolean
+function MGR:ConstraintMenu(client, keepOpen)
+	local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+
+	-- get list of constraints categories, then insert each constraint in a category
+	-- click on a constraint name. we add the constraint to the entity. also send it to the server
+	-- so that when we reselect entities, we also get constraint info
+	-- get the constraint info, and make constraint entry based off actual constraints that exist there
+	local menu = DermaMenu(keepOpen)
+
+	local constraints = RagdollPoser.Constraints:GetConstraints()
+	local categories = {}
+	for _, constraint in ipairs(constraints) do
+		local cat = language.GetPhrase(constraint.Properties.category)
+		if cat and cat ~= "" and not categories[cat] then
+			categories[cat] = {}
+		end
+
+		if categories[cat] then
+			table.insert(categories[cat], constraint)
+		end
+	end
+
+	for category, constraints in SortedPairs(categories) do
+		local submenu = menu:AddSubMenu(category)
+		for _, constraint in ipairs(constraints) do
+			local name = language.GetPhrase(constraint.Properties.name)
+			local option = submenu:AddOption(language.GetPhrase(name), function()
+				-- TODO: Call the constraint construction function with the type we want to use for making the constraint
+				-- Then listen for the constraint function call
+				-- The constraints module will use a single hook, which we will listen to make our state changes
+				RagdollPoser.Constraints:Push(entity, constraint.Properties.type)
+			end)
+			option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
+		end
+	end
+
+	menu:Open()
+end
+
 ---@param cpanel ControlPanel
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
@@ -355,7 +399,12 @@ function MGR:BuildCPanel(cpanel)
 	divider:SetLeft(entitySelectorContainer)
 	divider:SetRight(boneTreeContainer)
 
+	---@class EntityTree: rgp_tree
+	---@field [ClientEntity] DTree_Node
+	---@field selected ClientEntity
 	local entitySelector = entitySelectorContainer:Add("rgp_tree")
+
+	---@class BoneTree: rgp_tree
 	local boneTree = boneTreeContainer:Add("rgp_tree")
 
 	entitySelector:Dock(FILL)
@@ -367,11 +416,6 @@ function MGR:BuildCPanel(cpanel)
 		RagdollPoser.Selection:GetSelectedEntities()
 	)
 	populateBoneTree(boneTree, RagdollPoser.Selection:GetSelection())
-
-	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
-		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
-		updateBoneTree(boneTree, selection)
-	end)
 
 	local constraintCategory = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.constraint"), "ControlPanel")
 	local addConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.add"))
@@ -387,55 +431,53 @@ function MGR:BuildCPanel(cpanel)
 	constraintList:Dock(FILL)
 
 	function addConstraint:DoClick()
-		-- TODO: Construct menu from available constraints and their categories
-		-- Each constraint has their own info, so once we click on that, that populates the constraint props
-		local menu = DermaMenu()
-
-		-- get list of constraints categories, then insert each constraint in a category
-		-- click on a constraint name. we add the constraint to the entity. also send it to the server
-		-- so that when we reselect entities, we also get constraint info
-		-- get the constraint info, and make constraint entry based off actual constraints that exist there
-
-		local constraints = RagdollPoser.Constraints:GetConstraints()
-		local categories = {}
-		for _, constraint in ipairs(constraints) do
-			local cat = language.GetPhrase(constraint.Properties.category)
-			if cat and cat ~= "" and not categories[cat] then
-				categories[cat] = {}
-			end
-
-			if categories[cat] then
-				table.insert(categories[cat], constraint)
-			end
-		end
-
-		for category, constraints in SortedPairs(categories) do
-			local submenu = menu:AddSubMenu(category)
-			for _, constraint in ipairs(constraints) do
-				local name = language.GetPhrase(constraint.Properties.name)
-				local option = submenu:AddOption(language.GetPhrase(name), function()
-					-- TODO: Call the constraint construction function with the type we want to use for making the constraint
-					-- Then listen for the constraint function call
-					-- The constraints module will use a single hook, which we will listen to make our state changes
-					RagdollPoser.Constraints:Push(constraint.Properties.type)
-				end)
-				option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
-			end
-		end
-
-		menu:Open()
+		MGR:ConstraintMenu(entitySelector.selected, false)
 	end
 
-	hook.Remove("RagdollPoser_Constraints_ConstraintCreated", "UI")
-	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI", function(constraints)
-		for _, constraint in ipairs(constraints) do
-			makeConstraintEntry(constraintList, constraint)
+	--- @param client ClientEntity
+	local function updateConstraintUI(client)
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		print("clear selected")
+		constraintList:Clear()
+		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
+		if constraints then
+			for _, constraint in ipairs(constraints) do
+				makeConstraintEntry(constraintList, constraint)
+			end
+		end
+	end
+
+	---@param client ClientEntity
+	function entitySelector:EntitySelected(client)
+		updateConstraintUI(client)
+	end
+
+	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
+		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
+		updateBoneTree(boneTree, selection)
+		print("selected check ui")
+		PrintTable(selection)
+		local selectedEntity = selection[#selection]
+		entitySelector.selected = selectedEntity
+		updateConstraintUI(selectedEntity)
+	end)
+
+	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities", function(entity, constraints)
+		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		print("update constraints")
+		print(entity, client, entitySelector.selected, constraints)
+		print("selected equals us?", entitySelector.selected == client)
+		if client == entitySelector.selected then
+			for _, constraint in ipairs(constraints) do
+				makeConstraintEntry(constraintList, constraint)
+			end
 		end
 	end)
 end
 
 ---@param cpanel ControlPanel
 function MGR:Initialize(cpanel)
+	hook.Remove("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities")
 	hook.Remove("RagdollPoser_Selection_Selected", "UI_UpdateEntities")
 
 	local success, msg = pcall(self.BuildCPanel, self, cpanel)

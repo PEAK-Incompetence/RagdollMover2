@@ -10,8 +10,8 @@ lock.Properties = {
 	icon = "",
 }
 
-function lock:ConstructUI(entry)
-	local ui, header, footer = self:ConstructUITemplate(entry, self.Properties)
+function lock:ConstructUI(entry, props, state)
+	local ui, header, footer = self:ConstructUITemplate(entry, props or self.Properties, state or self.State)
 	header()
 
 	footer()

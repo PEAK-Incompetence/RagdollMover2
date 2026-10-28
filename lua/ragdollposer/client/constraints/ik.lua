@@ -26,10 +26,10 @@ ik.State = table.Merge(table.Copy(ik.State), {
 	weightRotationValue = 1,
 })
 
-function ik:ConstructUI(entry)
+function ik:ConstructUI(entry, props, state)
 	entry.Header:SetTooltip("#tool.ragdollposer.constraint.ik.help")
 
-	local ui, header, footer = self:ConstructUITemplate(entry, self.Properties)
+	local ui, header, footer = self:ConstructUITemplate(entry, props or self.Properties, state or self.State)
 end
 
 local function createConstraint(state)

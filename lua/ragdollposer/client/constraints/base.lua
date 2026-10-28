@@ -16,14 +16,24 @@ Base.Properties = {
 
 ---@class ConstraintState
 Base.State = {
+	enabled = true,
 	target = NULL,
 	bone = -1,
 	influence = 1,
 }
 
+-- Consider using an enum for types to reduce net cost
+
+---@class SerializedConstraint
+---@field Type string
+---@field Properties ConstraintProps
+---@field State ConstraintState
+---@field _id integer
+
 ---@param entry ConstraintEntry
 ---@param props ConstraintProps
-function Base:ConstructUITemplate(entry, props)
+---@param state ConstraintState
+function Base:ConstructUITemplate(entry, props, state)
 	local ui = {}
 
 	local function header()
@@ -34,9 +44,11 @@ function Base:ConstructUITemplate(entry, props)
 
 		-- Instead of typing directly into the forms, open up a menu for available bones with a floating search entry
 		ui.target:SetEditable(false)
-		ui.bone:SetEditable(false)
+		ui.target:SetMouseInputEnabled(true)
 
 		function ui.target.OnMousePressed(base, mousecode)
+			print("clicked")
+			print(mousecode)
 			if mousecode == MOUSE_LEFT then
 				local menu = DermaMenu()
 
@@ -71,7 +83,7 @@ function Base:ConstructUITemplate(entry, props)
 
 	local function footer()
 		ui.influence = entry:NumSlider("#tool.ragdollposer.constraint.influence", "", 0, 1, 3)
-
+		ui.influence:SetValue(state.influence or 1)
 		function ui.influence.OnValueChanged(base, newValue)
 			self.State.influence = newValue
 		end
@@ -82,14 +94,28 @@ function Base:ConstructUITemplate(entry, props)
 end
 
 ---@param entry ConstraintEntry
+---@param props ConstraintProps
+---@param state ConstraintState
 ---@return table<any, Panel>
-function Base:ConstructUI(entry) end
+function Base:ConstructUI(entry, props, state) end
 
-function Base:Init(state)
+---@return SerializedConstraint
+function Base:Serialize()
+	return {
+		Type = self.Properties.type,
+		Properties = self.Properties,
+		State = self.State,
+	}
+end
+
+---@param props ConstraintProps?
+---@param state ConstraintState?
+function Base:Init(props, state)
 	local id = self._id + 1
 
 	local base = setmetatable({
 		_id = id,
+		Properties = props or table.Copy(self.Properties),
 		State = state or table.Copy(self.State),
 	}, Base)
 	self._id = id

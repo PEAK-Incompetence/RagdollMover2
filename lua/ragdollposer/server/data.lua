@@ -6,17 +6,21 @@
 ---
 ---This also receives other locks and IK data for duplicator support
 ---
+---Server constraints should be identical to client constraints
+---
 ---@class RagdollPoser.Data
-local MGR = {}
+---@field Players table<Player, PlayerData>
+local MGR = RagdollPoser.Data or {}
 
----@type {[Player]: PlayerData}
-MGR.Players = RagdollPoser.Data and RagdollPoser.Data.Players or {}
+---@type table<Player, PlayerData>
+MGR.Players = MGR.Players or {}
 
 ---@class PlayerData
----@field [1] Entity
----@field [2] integer
----@field [3] Entity[]
----@field [4] table<Entity, Entity>
+---@field SelectedEntity Entity
+---@field SelectedBone integer
+---@field SelectedEntities Entity[]
+---@field SelectedEntitySet table<Entity, Entity>
+---@field Constraints table<Entity, SerializedConstraint[]>
 
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
 RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")
@@ -66,9 +70,36 @@ local function sendSubPose(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPose", sendSubPose)
 
+local function updateConstraints(len, ply)
+	local data = MGR.Players[ply]
+	local playerConstraints = data.Constraints or {}
+
+	---@type table<Entity, SerializedConstraint[]>
+	local entityConstraints = {}
+	local count = net.ReadUInt(13)
+	for _ = 1, count do
+		local entity = net.ReadEntity()
+		print(entity)
+		entityConstraints[entity] = net.ReadTable(true)
+	end
+	print("got some constraints")
+	PrintTable(entityConstraints)
+	for entity, constraints in pairs(entityConstraints) do
+		playerConstraints[entity] = constraints
+	end
+	data.Constraints = playerConstraints
+end
+RagdollPoser.Networking.DefineReceiver("UpdateConstraints", updateConstraints)
+
 hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
 	if not MGR.Players[pl] then
-		MGR.Players[pl] = {}
+		MGR.Players[pl] = {
+			SelectedEntity = NULL,
+			SelectedBone = -1,
+			SelectedEntities = {},
+			SelectedEntitySet = {},
+			Constraints = {},
+		}
 	end
 end)
 
@@ -86,14 +117,21 @@ end
 ---@param entity Entity
 ---@param bone integer
 ---@param entities Entity[]
-function MGR.RefreshEntities(pl, entity, bone, entities)
+---@param constraints table<Entity, SerializedConstraint[]>
+function MGR.RefreshEntities(pl, entity, bone, entities, constraints)
 	RagdollPoser.Log("refreshing", pl, entity, bone, entities)
+	constraints = constraints or {}
 	RagdollPoser.Networking.SendAssemblyInfo()
 	net.WriteEntity(entity)
 	net.WriteUInt(bone, 8)
 	net.WriteUInt(#entities, 10)
 	for i = 1, #entities do
 		net.WriteEntity(entities[i])
+	end
+	net.WriteUInt(table.Count(constraints), 13)
+	for entity, constraints in pairs(constraints) do
+		net.WriteEntity(entity)
+		net.WriteTable(constraints, true)
 	end
 	net.Send(pl)
 end
@@ -126,15 +164,17 @@ local function constraintRemoved(ent)
 			return
 		end
 		for player, data in pairs(MGR.Players) do
-			local targetEnt = data[1]
+			local targetEnt = data.SelectedEntity
 			if targetEnt and (ent1 == targetEnt or ent2 == targetEnt) then
 				timer.Simple(0, function()
 					if IsValid(targetEnt) then
 						local constrainedList, constrainedTab = MGR.GetConstrainedEntities(targetEnt)
-						MGR.RefreshEntities(player, targetEnt, data[2], constrainedList)
-						MGR:Update(player, targetEnt, data[2], constrainedList, constrainedTab)
+						local bone = data.SelectedBone
+						local constraints = data.Constraints or {}
+						MGR.RefreshEntities(player, targetEnt, bone, constrainedList, constraints)
+						MGR:Update(player, targetEnt, bone, constrainedList, constrainedTab)
 					else
-						MGR.RefreshEntities(player, NULL, 0, {})
+						MGR.RefreshEntities(player, NULL, 0, {}, {})
 						MGR:Update(player, nil, nil, nil, nil)
 					end
 				end)
@@ -146,7 +186,12 @@ hook.Add("EntityRemoved", "RagdollPoser_ConstraintRemoved", constraintRemoved)
 
 function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 	-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
-	MGR.Players[pl] = { entity, bone, entities, constrainedEntities }
+	local data = MGR.Players[pl] or {}
+	data.SelectedEntity = entity
+	data.SelectedBone = bone
+	data.SelectedEntities = entities
+	data.SelectedEntitySet = constrainedEntities
+	MGR.Players[pl] = data
 end
 
 RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSender("EntityPhysBoneCount")

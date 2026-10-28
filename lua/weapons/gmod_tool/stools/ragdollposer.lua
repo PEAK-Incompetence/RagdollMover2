@@ -27,16 +27,18 @@ function TOOL:LeftClick(tr)
 	end
 
 	local data = RagdollPoser.Data.Players[pl]
+	local entitySet = data.SelectedEntitySet
 	local entity = tr.Entity
 	local phys = tr.PhysicsBone
 	if
 		entity
 		and IsValid(entity)
-		and not (data[4] and data[4][entity])
+		and not (entitySet and entitySet[entity])
 		and phys
 		and entity:GetPhysicsObjectNum(phys)
 	then
 		local constrainedList, constrainedTab = RagdollPoser.Data.GetConstrainedEntities(entity)
+		local constraints = data.Constraints or {}
 
 		-- PrintTable(constrainedList)
 		if not entity.rgpbonecached then -- also taken from locrotscale. some hacky way to cache the bones?
@@ -49,7 +51,7 @@ function TOOL:LeftClick(tr)
 
 		-- Send entity info to the client
 		local bone = math.max(entity:TranslatePhysBoneToBone(phys), 0)
-		RagdollPoser.Data.RefreshEntities(pl, entity, bone, constrainedList)
+		RagdollPoser.Data.RefreshEntities(pl, entity, bone, constrainedList, constraints)
 		RagdollPoser.Data.UpdatePhysBoneCount(entity)
 		RagdollPoser.Data:Update(pl, entity, bone, constrainedList, constrainedTab)
 	end
@@ -63,12 +65,14 @@ function TOOL:RightClick(tr) end
 function TOOL:Deploy()
 	if SERVER then
 		local pl = self:GetOwner()
-		if RagdollPoser.Data.Players[pl] then
-			local entity = RagdollPoser.Data.Players[pl][1]
-			local bone = RagdollPoser.Data.Players[pl][2]
+		local data = RagdollPoser.Data.Players[pl]
+		if data then
+			local entity = data.SelectedEntity
+			local bone = data.SelectedBone
+			local constraints = data.Constraints or {}
 			if IsValid(entity) then
 				local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
-				RagdollPoser.Data.RefreshEntities(pl, entity, bone, entities)
+				RagdollPoser.Data.RefreshEntities(pl, entity, bone, entities, constraints)
 				RagdollPoser.Data:Update(pl, entity, bone, entities, constrainedEntities)
 			end
 		end

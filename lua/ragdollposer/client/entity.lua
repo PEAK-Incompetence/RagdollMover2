@@ -362,16 +362,29 @@ local function sendAssemblyInfo()
 	for i = 1, count do
 		entities[i] = net.ReadEntity()
 	end
+
 	if IsValid(ent) and bone then
 		MGR.RefreshEntities(entities)
-		if not RagdollPoser.Selection:GetSelection()[1] then
+		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+		local selection = RagdollPoser.Selection:GetSelection()
+		if selection[#selection] ~= ent then
 			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent], false)
 		end
-		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 	else
 		MGR.RefreshEntities(entities)
-		RagdollPoser.Selection:Unselect()
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+		RagdollPoser.Selection:Unselect()
+	end
+
+	local entityCount = net.ReadUInt(13)
+	if entityCount > 0 then
+		---@type table<Entity, SerializedConstraint[]>
+		local entityConstraints = {}
+		for _ = 1, entityCount do
+			local entity = net.ReadEntity()
+			entityConstraints[entity] = net.ReadTable(true)
+		end
+		RagdollPoser.Constraints:SetConstraints(entityConstraints)
 	end
 end
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)

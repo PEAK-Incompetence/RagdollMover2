@@ -359,8 +359,17 @@ local function sendAssemblyInfo()
 	---@type Entity[]
 	local entities = {}
 	print(ent, bone, count)
+	local constraintCount = 0
+	---@type table<Entity, SerializedConstraint[]>
+	local entityConstraints = {}
 	for i = 1, count do
-		entities[i] = net.ReadEntity()
+		local e = net.ReadEntity()
+		entities[i] = e
+		local hasConstraint = net.ReadBool()
+		if hasConstraint then
+			constraintCount = constraintCount + 1
+			entityConstraints[e] = net.ReadTable(true)
+		end
 	end
 
 	if IsValid(ent) and bone then
@@ -376,14 +385,7 @@ local function sendAssemblyInfo()
 		RagdollPoser.Selection:Unselect()
 	end
 
-	local entityCount = net.ReadUInt(13)
-	if entityCount > 0 then
-		---@type table<Entity, SerializedConstraint[]>
-		local entityConstraints = {}
-		for _ = 1, entityCount do
-			local entity = net.ReadEntity()
-			entityConstraints[entity] = net.ReadTable(true)
-		end
+	if constraintCount > 0 then
 		RagdollPoser.Constraints:SetConstraints(entityConstraints)
 	end
 end

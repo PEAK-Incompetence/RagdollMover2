@@ -126,12 +126,13 @@ function MGR.RefreshEntities(pl, entity, bone, entities, constraints)
 	net.WriteUInt(bone, 8)
 	net.WriteUInt(#entities, 10)
 	for i = 1, #entities do
-		net.WriteEntity(entities[i])
-	end
-	net.WriteUInt(table.Count(constraints), 13)
-	for entity, constraints in pairs(constraints) do
-		net.WriteEntity(entity)
-		net.WriteTable(constraints, true)
+		local e = entities[i]
+		net.WriteEntity(e)
+		local cs = constraints[e]
+		net.WriteBool(cs ~= nil)
+		if cs then
+			net.WriteTable(constraints, true)
+		end
 	end
 	net.Send(pl)
 end

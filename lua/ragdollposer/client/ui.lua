@@ -124,12 +124,12 @@ local mirrorMapping = {
 local mirrorMappingInverse = table.Flip(mirrorMapping)
 
 ---@param entityTree EntityTree
----@param entities ClientEntity[]
+---@param clients ClientEntity[]
 ---@param selectedEntities SelectedEntities
-local function populateEntities(entityTree, entities, selectedEntities)
+local function populateEntities(entityTree, clients, selectedEntities)
 	entityTree:Clear()
 
-	for _, entity in ipairs(entities) do
+	for _, entity in ipairs(clients) do
 		local model = entity:GetModel()
 
 		local node = entityTree:AddNode(getNiceModelName(entity), getModelIcon(entity)) --[[@as DTree_Node]]
@@ -144,12 +144,17 @@ local function populateEntities(entityTree, entities, selectedEntities)
 	end
 
 	-- Do check for parent entities
-	for _, entity in ipairs(entities) do
-		local childNode = entityTree[entity]
-		local parentEntity = entity:GetParent()
-		local parentNode = IsValid(parentEntity) and entityTree[parentEntity]
+	for _, client in ipairs(clients) do
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local childNode = entityTree[client]
+		local parentClient = RagdollPoser.Entity.GetClientFromEntity(entity:GetParent())
+		local parentNode = IsValid(parentClient) and entityTree[parentClient]
 		if parentNode then
-			childNode:MoveChildTo(parentNode)
+			parentNode:CreateChildNodes()
+			childNode:SetParentNode(parentNode)
+			parentNode.ChildNodes:Add(childNode)
+			parentNode:InvalidateLayout()
+			parentNode:SetExpanded(true, true)
 		end
 	end
 end

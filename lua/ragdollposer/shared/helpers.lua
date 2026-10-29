@@ -120,7 +120,11 @@ if CLIENT then
 		local weap = pl:GetActiveWeapon()
 		local tool = pl:GetTool()
 		---@cast tool TOOL
-		return IsValid(weap) and weap:GetClass() == "gmod_tool" and tool and tool:GetMode() == RagdollPoser.Mode
+		return not gui.IsGameUIVisible()
+			and IsValid(weap)
+			and weap:GetClass() == "gmod_tool"
+			and tool
+			and tool:GetMode() == RagdollPoser.Mode
 	end
 
 	---Get a nicely formatted model name

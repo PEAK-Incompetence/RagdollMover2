@@ -82,6 +82,9 @@ local MGR = {
 	_localMatrices = {},
 	---@type {[Entity]: Vector[]}
 	_pivots = {},
+
+	_lastHovering = false,
+	_hovering = false,
 }
 
 ---@param selection table
@@ -282,6 +285,11 @@ function MGR:TestIntersect()
 		end
 	end
 
+	self._hovering = RagdollPoser.Selection:GetSelection()[1] and targetIndex > 0
+	if self._hovering ~= self._lastHovering then
+		hook.Run("RagdollPoser_Gizmo_Hovering", self._hovering)
+	end
+	self._lastHovering = self._hovering
 	if targetIndex > 0 then
 		self._gizmoIndex = targetIndex
 		return true
@@ -602,6 +610,7 @@ local function sendSubPose(selection)
 	-- Entity B
 	-- ...
 
+	entityBuffer = {}
 	---@type Entity[]
 	local entities = entityBuffer
 	---@type {[Entity]: integer[]}
@@ -1013,6 +1022,14 @@ local function onKeyPress(action)
 	end
 end
 hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", onKeyPress)
+
+local function updateHover(state)
+	RagdollPoser.Networking.UpdateHovering()
+	net.WriteBool(state)
+	net.SendToServer()
+end
+hook.Add("RagdollPoser_Gizmo_Hovering", "UpdateServer", updateHover)
+RagdollPoser.Networking.UpdateHovering = RagdollPoser.Networking.DefineSender("UpdateHovering")
 
 local function initializeGizmo()
 	-- Refresh gizmos

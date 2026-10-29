@@ -27,6 +27,10 @@ function TOOL:LeftClick(tr)
 	end
 
 	local data = RagdollPoser.Data.Players[pl]
+	if data.Hovering then
+		return false
+	end
+
 	local entitySet = data.SelectedEntitySet
 	local entity = tr.Entity
 	local phys = tr.PhysicsBone

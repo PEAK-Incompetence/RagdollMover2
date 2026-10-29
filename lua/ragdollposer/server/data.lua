@@ -21,6 +21,7 @@ MGR.Players = MGR.Players or {}
 ---@field SelectedEntities Entity[]
 ---@field SelectedEntitySet table<Entity, Entity>
 ---@field Constraints table<Entity, SerializedConstraint[]>
+---@field Hovering boolean Prevent entity selection when hovering over the gizmo
 
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
 RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")
@@ -79,7 +80,6 @@ local function updateConstraints(len, ply)
 	local count = net.ReadUInt(13)
 	for _ = 1, count do
 		local entity = net.ReadEntity()
-		print(entity)
 		entityConstraints[entity] = net.ReadTable(true)
 	end
 	for entity, constraints in pairs(entityConstraints) do
@@ -109,6 +109,7 @@ local function initializePlayer(pl)
 			SelectedEntities = {},
 			SelectedEntitySet = {},
 			Constraints = {},
+			Hovering = false,
 		}
 	end
 end
@@ -230,6 +231,15 @@ function MGR.UpdatePhysBoneCount(entity)
 	net.WriteUInt(entity:GetPhysicsObjectCount(), 5)
 	net.Broadcast()
 end
+
+local function updateHover(len, pl)
+	local hovering = net.ReadBool()
+	local data = MGR.Players[pl]
+	if data then
+		data.Hovering = hovering
+	end
+end
+RagdollPoser.Networking.DefineReceiver("UpdateHovering", updateHover)
 
 local function sendPhysBoneCount(entity)
 	timer.Simple(0, function()

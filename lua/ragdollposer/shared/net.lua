@@ -52,21 +52,7 @@ local Senders = MGR.Senders
 
 local function empty() end
 
----Use this for net.Send operations
----@package
----@return integer senderCountBits
-function MGR.GetSenderCountBits()
-	local count = math.ceil(math.log(#Senders + 1, 2))
-	return count
-end
-
----Use this for net.Receive operations
----@package
----@return integer receiverCountBits
-function MGR.GetReceiverCountBits()
-	local count = math.ceil(math.log((SERVER and MGR.ClientSenderCount or MGR.ServerSenderCount) + 1, 2))
-	return count
-end
+local SENDER_ID_BITS = 12
 
 ---@param name string
 ---@param count integer
@@ -124,7 +110,7 @@ function MGR.DefineSender(name)
 	local function netStarter()
 		-- print(count, name)
 		net.Start("RagdollPoser", true)
-		net.WriteUInt(count, MGR.GetSenderCountBits())
+		net.WriteUInt(count, SENDER_ID_BITS)
 	end
 
 	return netStarter
@@ -188,7 +174,7 @@ net.Receive("RagdollPoser_AddReceiver", addReceiver)
 local function netReceiver(len, ply)
 	-- print("receive message")
 	-- If receiving from client, get ClientSenderCount; otherwise, get ServerSenderCount
-	local index = net.ReadUInt(MGR.GetReceiverCountBits())
+	local index = net.ReadUInt(SENDER_ID_BITS)
 	-- print("index", index)
 	-- print("receiver id to name", ReceiverIDToName[index])
 	-- PrintTable(ReceiverNameToID)

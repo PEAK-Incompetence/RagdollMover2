@@ -101,7 +101,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 			if staticProp then
 				self:SetPos(m:GetTranslation())
 				self:SetAngles(m:GetAngles())
-			else
+			elseif name ~= "__INVALIDBONE__" then
 				self:SetBoneMatrix(b, m)
 			end
 		end
@@ -138,11 +138,11 @@ function MGR.CreateEntities()
 	refreshClientData()
 	staticProps = {}
 
-	local dirty = false
+	local dirties = {}
 	for i, entity in ipairs(Entities) do
 		---@cast entity RGPEntity
-		if entity:IsMarkedForDeletion() then
-			dirty = true
+		if not IsValid(entity) or entity:IsMarkedForDeletion() then
+			dirties[i] = entity
 			continue
 		end
 		EntityMatrices[entity] = {}
@@ -177,13 +177,21 @@ function MGR.CreateEntities()
 
 		table.insert(ClientEntities, client)
 	end
+
+	if dirties[1] then
+		for dirty, _ in SortedPairs(dirties, true) do
+			table.remove(Entities, dirty)
+		end
+	end
 end
 
 ---Helper function which calls SetupBones and InvalidateBoneCache to show invisible bones
 ---@param entity Entity
 function MGR.ExposeBones(entity)
-	entity:SetupBones()
-	entity:InvalidateBoneCache()
+	if IsValid(entity) then
+		entity:SetupBones()
+		entity:InvalidateBoneCache()
+	end
 end
 
 hook.Remove("EntityRemoved", "RagdollPoser_Entity_EntityRemoved")
@@ -218,8 +226,6 @@ end
 ---
 ---@param entity Entity
 function MGR.UpdateRenderBounds(entity)
-	-- print(entity)
-	-- PrintTable(EntityRenderBounds)
 	local renderBounds = EntityRenderBounds[entity]
 	if renderBounds then
 		renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
@@ -401,7 +407,6 @@ end
 local function getPhysBoneCount(len, ply)
 	local entity = net.ReadEntity()
 	local count = net.ReadUInt(5)
-	-- print("entityphysbonecount receive", entity, count)
 	if IsValid(entity) then
 		local model = entity:GetModel()
 

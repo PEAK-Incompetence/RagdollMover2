@@ -26,7 +26,7 @@ Base.State = {
 
 ---@class SerializedConstraint
 ---@field Type string
----@field Properties ConstraintProps
+---@field Name string
 ---@field State ConstraintState
 ---@field _id integer
 
@@ -103,21 +103,22 @@ function Base:ConstructUI(entry, props, state) end
 function Base:Serialize()
 	return {
 		Type = self.Properties.type,
-		Properties = self.Properties,
+		Name = self.Properties.name,
 		State = self.State,
 	}
 end
 
----@param props ConstraintProps?
 ---@param state ConstraintState?
-function Base:Init(props, state)
+---@param name string?
+function Base:Init(state, name)
 	local id = self._id + 1
 
 	local base = setmetatable({
 		_id = id,
-		Properties = props or table.Copy(self.Properties),
+		Properties = table.Copy(self.Properties),
 		State = state or table.Copy(self.State),
 	}, Base)
+	base.Properties.name = name or base.Properties.name
 	self._id = id
 	return base
 end

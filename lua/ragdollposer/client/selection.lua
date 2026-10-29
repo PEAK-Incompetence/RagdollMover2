@@ -124,7 +124,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 	for i = 1, #entityIndices - 1, 2 do
 		local client = entityToClient[entityIndices[i]]
 		-- If the entity we're selecting is about to be removed, then stop refresh
-		if client:IsMarkedForDeletion() then
+		if client and client:IsMarkedForDeletion() then
 			print("we're selecting it and removing it??")
 			entityBonePairs = {}
 			break
@@ -387,5 +387,17 @@ end
 
 hook.Add("RagdollPoser_Input_RightClickDown", "Selection_Menu", onRightClickDown)
 hook.Add("RagdollPoser_Input_RightClickUp", "Selection_Menu", onRightClickUp)
+
+RagdollPoser.Networking.UpdateSelectedBone = RagdollPoser.Networking.DefineSender("UpdateSelectedBone")
+hook.Add("RagdollPoser_Selection_Selected", "UpdateSelectedBone", function(selection, selectedEntities)
+	local count = #selection
+	if count > 0 then
+		RagdollPoser.Networking.UpdateSelectedBone()
+		local selectedBone, selectedEntity = selection[count - 1], selection[count]
+		net.WriteUInt(selectedBone, 8)
+		net.WriteEntity(selectedEntity)
+		net.SendToServer()
+	end
+end)
 
 RagdollPoser.Selection = MGR

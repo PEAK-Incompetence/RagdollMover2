@@ -19,8 +19,8 @@ end
 
 function lock:Evaluate() end
 
-local function createConstraint(state)
-	local base = lock:Init(state)
+local function createConstraint(state, name)
+	local base = lock:Init(state, name)
 	---@cast base ScaleLockConstraint
 	return base
 end

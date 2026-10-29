@@ -35,9 +35,10 @@ local function makeCategory(cPanel, name, type)
 end
 
 ---@param parent ConstraintForm
+---@param entity Entity
 ---@param constraint Constraint
 ---@return ConstraintEntry
-local function makeConstraintEntry(parent, constraint)
+local function makeConstraintEntry(parent, entity, constraint)
 	local props = constraint.Properties
 	local state = constraint.State
 
@@ -46,6 +47,17 @@ local function makeConstraintEntry(parent, constraint)
 	local entry = makeCategory(parent, "", "DForm")
 	entry:SetList(parent)
 
+	function entry.Header:DoRightClick()
+		local menu = DermaMenu()
+
+		menu:AddOption("#tool.ragdollposer.constraint.delete", function()
+			RagdollPoser.Constraints:Remove(entity, constraint._id)
+			entry:Remove()
+		end)
+
+		menu:Open()
+	end
+
 	-- Each constraint carries an id, so anytime we make updates to the ui, we use the id to make
 	-- changes to the actual constraint object
 
@@ -53,6 +65,11 @@ local function makeConstraintEntry(parent, constraint)
 	entry.icon = vgui.Create("DImage", entry)
 	entry.name = vgui.Create("DTextEntry", entry)
 	entry.enabled = vgui.Create("DCheckBox", entry)
+
+	function entry.name:OnValueChange(newText)
+		constraint.Properties.name = newText
+		RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
+	end
 
 	entry.enabled:SetChecked(constraint.State.enabled)
 	-- Move constraint up and down for ordering
@@ -73,6 +90,7 @@ local function makeConstraintEntry(parent, constraint)
 	entry.down:SetSize(height, height)
 	entry.icon:SetSize(height, height)
 
+	print(props.name)
 	entry.name:SetText(language.GetPhrase(props.name) or "Constraint")
 	entry.icon:SetMouseInputEnabled(false)
 	-- Right click entry to access settings like renaming, copying, or duplicating
@@ -442,7 +460,7 @@ function MGR:BuildCPanel(cpanel)
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
 			for _, constraint in ipairs(constraints) do
-				makeConstraintEntry(constraintList, constraint)
+				makeConstraintEntry(constraintList, entity, constraint)
 			end
 		end
 	end
@@ -469,7 +487,7 @@ function MGR:BuildCPanel(cpanel)
 		print("selected equals us?", entitySelector.selected == client)
 		if client == entitySelector.selected then
 			for _, constraint in ipairs(constraints) do
-				makeConstraintEntry(constraintList, constraint)
+				makeConstraintEntry(constraintList, entity, constraint)
 			end
 		end
 	end)

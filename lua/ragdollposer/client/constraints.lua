@@ -13,25 +13,39 @@ MGR.Space = {
 
 ---@type Constraint[]
 MGR.Constraints = {}
----@type table<string, fun(props: ConstraintProps?, state: ConstraintState?): Constraint>
+---@type table<string, fun(state: ConstraintState?, name: string?): Constraint>
 MGR.ConstraintConstructors = {}
+
+---@class Constraints
+---@field array Constraint[]
+---@field set table<integer, integer>
 
 -- Store constraints per entity
 -- And cascade updates, so if we moved an IK target that both entities share, both entities should update
 -- So that means iterate over entityconstraintstacks?
----@type table<Entity, Constraint[]>
+---@type table<Entity, Constraints>
 local EntityConstraintStacks = MGR.EntityConstraintStacks or {}
 MGR.EntityConstraintStacks = EntityConstraintStacks
 
 -- DAG for evaluating constraints
 
 ---@param type string
----@param props ConstraintProps?
 ---@param state ConstraintState?
-local function constructConstraint(type, props, state)
+---@param name string?
+local function constructConstraint(type, state, name)
 	local constructor = MGR.ConstraintConstructors[type]
 	if constructor then
-		return constructor(props, state)
+		return constructor(state, name)
+	end
+end
+
+local function refreshStack(entity, removedIndex)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		for i = removedIndex, #stack.array do
+			local constraint = stack.array[i]
+			stack.set[constraint._id] = i
+		end
 	end
 end
 
@@ -40,7 +54,8 @@ function MGR:GetConstraints()
 end
 
 function MGR:GetConstraintStack(entity)
-	return EntityConstraintStacks[entity]
+	local stack = EntityConstraintStacks[entity]
+	return stack and stack.array or {}
 end
 
 function MGR:Init()
@@ -66,14 +81,14 @@ function MGR:EvaluateStack(transforms, indices, locals, parents) end
 
 ---@param entity Entity
 ---@param type string
----@param props ConstraintProps?
 ---@param state ConstraintState?
+---@param name string?
 ---@return Constraint?
-function MGR:Push(entity, type, props, state)
-	local stack = EntityConstraintStacks[entity] or {}
-	local constraint = constructConstraint(type, props, state)
+function MGR:Push(entity, type, state, name)
+	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
+	local constraint = constructConstraint(type, state, name)
 	if constraint then
-		table.insert(stack, constraint)
+		stack.set[constraint._id] = table.insert(stack.array, constraint)
 
 		hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, { constraint })
 	end
@@ -83,25 +98,35 @@ end
 
 ---@param constraints table<Entity, SerializedConstraint[]>
 function MGR:SetConstraints(constraints)
+	print("setting constraints")
+	PrintTable(constraints)
 	for entity, serialized in pairs(constraints) do
-		local deserialized = {}
+		local array = {}
+		local set = {}
 		for _, s in ipairs(serialized) do
-			local constraint = constructConstraint(s.Type, s.Properties, s.State)
+			local constraint = constructConstraint(s.Type, s.State, s.Name)
 			if constraint then
-				table.insert(deserialized, constraint)
+				set[constraint._id] = table.insert(array, constraint)
 			end
 		end
-		EntityConstraintStacks[entity] = deserialized
+		EntityConstraintStacks[entity] = { set = set, array = array }
 	end
 end
 
 function MGR:UpdateConstraints()
+	for entity, stack in pairs(EntityConstraintStacks) do
+		if not IsValid(entity) then
+			EntityConstraintStacks[entity] = nil
+		end
+	end
+
 	RagdollPoser.Networking.UpdateConstraints()
-	net.WriteUInt(table.Count(EntityConstraintStacks), 13)
-	for entity, constraints in pairs(EntityConstraintStacks) do
+	local count = table.Count(EntityConstraintStacks)
+	net.WriteUInt(count, 13)
+	for entity, stack in pairs(EntityConstraintStacks) do
 		net.WriteEntity(entity)
 		local serializedConstraints = {}
-		for _, constraint in ipairs(constraints) do
+		for _, constraint in ipairs(stack.array) do
 			table.insert(serializedConstraints, constraint:Serialize())
 		end
 		net.WriteTable(serializedConstraints, true)
@@ -109,16 +134,63 @@ function MGR:UpdateConstraints()
 	net.SendToServer()
 end
 
-function MGR:Remove(entity)
-	self:UpdateConstraints()
+function MGR:UpdateConstraint(entity, constraint)
+	for entity, stack in pairs(EntityConstraintStacks) do
+		if not IsValid(entity) then
+			EntityConstraintStacks[entity] = nil
+		end
+	end
+
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		RagdollPoser.Networking.UpdateConstraint()
+		net.WriteEntity(entity)
+		net.WriteUInt(stack.set[constraint._id], 13)
+		net.WriteTable(constraint:Serialize())
+		net.SendToServer()
+	end
 end
 
-function MGR:Swap(entity, c, d)
-	self:UpdateConstraints()
+---@param entity Entity
+---@param id integer
+function MGR:Remove(entity, id)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		local removedIndex = stack.set[id]
+		table.remove(stack.array, removedIndex)
+		refreshStack(entity, removedIndex)
+		self:UpdateConstraints()
+	end
 end
+
+---@param entity Entity
+---@param c Constraint
+---@param d Constraint
+function MGR:Swap(entity, c, d)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		local i = stack.set[c._id]
+		local j = stack.set[d._id]
+		stack.set[c._id] = j
+		stack.set[d._id] = i
+		stack.array[i] = d
+		stack.array[j] = c
+		self:UpdateConstraints()
+	end
+end
+
+hook.Remove("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved")
+hook.Add("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved", function(ent, fullUpdate)
+	if fullUpdate then
+		return
+	end
+
+	EntityConstraintStacks[ent] = nil
+end)
 
 --- TODO: where should i put constraint UI? in a separate window? in a tab on the control panel? or in a separate tool?
 
+RagdollPoser.Networking.UpdateConstraint = RagdollPoser.Networking.DefineSender("UpdateConstraint")
 RagdollPoser.Networking.UpdateConstraints = RagdollPoser.Networking.DefineSender("UpdateConstraints")
 
 RagdollPoser.Constraints = MGR

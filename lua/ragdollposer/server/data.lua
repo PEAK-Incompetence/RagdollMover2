@@ -82,8 +82,6 @@ local function updateConstraints(len, ply)
 		print(entity)
 		entityConstraints[entity] = net.ReadTable(true)
 	end
-	print("got some constraints")
-	PrintTable(entityConstraints)
 	for entity, constraints in pairs(entityConstraints) do
 		playerConstraints[entity] = constraints
 	end
@@ -91,7 +89,19 @@ local function updateConstraints(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateConstraints", updateConstraints)
 
-hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
+local function updateConstraint(len, ply)
+	local data = MGR.Players[ply]
+	local playerConstraints = data.Constraints or {}
+
+	local entity = net.ReadEntity()
+	local index = net.ReadUInt(13)
+	local constraint = net.ReadTable() ---@as SerializedConstraint
+	playerConstraints[entity][index] = constraint
+	data.Constraints = playerConstraints
+end
+RagdollPoser.Networking.DefineReceiver("UpdateConstraint", updateConstraint)
+
+local function initializePlayer(pl)
 	if not MGR.Players[pl] then
 		MGR.Players[pl] = {
 			SelectedEntity = NULL,
@@ -101,6 +111,10 @@ hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
 			Constraints = {},
 		}
 	end
+end
+
+hook.Add("SetupMove", "RagdollPoser_ReportPlayerData", function(pl)
+	initializePlayer(pl)
 end)
 
 hook.Add("PlayerDisconnected", "RagdollPoser_RemovePlayerData", function(pl)
@@ -108,9 +122,7 @@ hook.Add("PlayerDisconnected", "RagdollPoser_RemovePlayerData", function(pl)
 end)
 
 for _, pl in ipairs(player.GetAll()) do
-	if not MGR.Players[pl] then
-		MGR.Players[pl] = {}
-	end
+	initializePlayer(pl)
 end
 
 ---@param pl Player
@@ -131,7 +143,7 @@ function MGR.RefreshEntities(pl, entity, bone, entities, constraints)
 		local cs = constraints[e]
 		net.WriteBool(cs ~= nil)
 		if cs then
-			net.WriteTable(constraints, true)
+			net.WriteTable(cs, true)
 		end
 	end
 	net.Send(pl)
@@ -185,6 +197,19 @@ local function constraintRemoved(ent)
 end
 hook.Add("EntityRemoved", "RagdollPoser_ConstraintRemoved", constraintRemoved)
 
+local function entityRemoved(ent)
+	local doUpdate = false
+	local players = {}
+	for player, info in pairs(MGR.Players) do
+		if info.Constraints[ent] then
+			doUpdate = true
+			info.Constraints[ent] = nil
+			table.insert(players, player)
+		end
+	end
+end
+hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", entityRemoved)
+
 function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 	-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
 	local data = MGR.Players[pl] or {}
@@ -214,5 +239,17 @@ local function sendPhysBoneCount(entity)
 	end)
 end
 hook.Add("OnEntityCreated", "RagdollPoser_SendPhysBone", sendPhysBoneCount)
+
+local function updateSelectedBone(len, ply)
+	local data = MGR.Players[ply]
+	local bone = net.ReadUInt(8)
+	local entity = net.ReadEntity()
+
+	if IsValid(entity) then
+		data.SelectedEntity = entity
+	end
+	data.SelectedBone = bone
+end
+RagdollPoser.Networking.DefineReceiver("UpdateSelectedBone", updateSelectedBone)
 
 RagdollPoser.Data = MGR

@@ -23,8 +23,8 @@ function lock:Evaluate()
 	-- not only that, that bones children bone should also stay locked (just like old ragdoll mover)
 end
 
-local function createConstraint(state)
-	local base = lock:Init(state)
+local function createConstraint(state, name)
+	local base = lock:Init(state, name)
 	---@cast base PositionLockConstraint
 	return base
 end

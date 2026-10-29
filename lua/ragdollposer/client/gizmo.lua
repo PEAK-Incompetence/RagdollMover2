@@ -860,6 +860,9 @@ function MGR:DrawSelected()
 		---@cast bone integer
 		---@cast entity Entity
 
+		if not IsValid(entity) then
+			continue
+		end
 		RagdollPoser.Entity.ExposeBones(entity)
 		local matrix = entity:GetBoneMatrix(bone)
 		local data = matrix:GetTranslation():ToScreen()

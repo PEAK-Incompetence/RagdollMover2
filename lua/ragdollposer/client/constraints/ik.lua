@@ -32,8 +32,8 @@ function ik:ConstructUI(entry, props, state)
 	local ui, header, footer = self:ConstructUITemplate(entry, props or self.Properties, state or self.State)
 end
 
-local function createConstraint(state)
-	local base = ik:Init(state)
+local function createConstraint(state, name)
+	local base = ik:Init(state, name)
 	---@cast base IKConstraint
 	return base
 end

@@ -47,7 +47,7 @@ end
 local traceOutput = {
 	HitPos = vector_origin,
 	Normal = vector_origin,
-	StartPos = vector_origin
+	StartPos = vector_origin,
 }
 local lastCheck = RealTime()
 
@@ -79,7 +79,7 @@ local function mouseInput(cmd)
 			lastCheck = now
 		end
 		if (input.WasMousePressed(MOUSE_RIGHT) or input.WasMouseDoublePressed(MOUSE_RIGHT)) and allowInput then
-			hook.Run("RagdollPoser_Input_RightClickUp", x, y, tr)
+			hook.Run("RagdollPoser_Input_RightClickDown", x, y, tr)
 			lastCheck = now
 		end
 		if input.WasMouseReleased(MOUSE_RIGHT) and allowInput then

@@ -17,10 +17,29 @@ function lock:ConstructUI(entry, props, state)
 	footer()
 end
 
-function lock:Evaluate()
+function lock:PreEvaluate(transforms, indices, locals, parents)
+	self._snapshot = {
+		transforms = table.Copy(transforms),
+		indices = table.Copy(indices),
+		locals = table.Copy(locals),
+		parents = table.Copy(parents),
+	}
+end
+
+function lock:Evaluate(transforms, indices, locals, parents)
 	-- if the bone that we're moving is precisely the bone we want to move, we should move it
 	-- if this bone exists down the chain that we're moving, keep it locked
 	-- not only that, that bones children bone should also stay locked (just like old ragdoll mover)
+
+	local target = self.State.target
+	local lockedBone = self.State.bone
+
+	for i, matrix in ipairs(transforms) do
+	end
+end
+
+function lock:PostEvaluate()
+	self.snapshot = nil
 end
 
 local function createConstraint(state, name)

@@ -90,7 +90,6 @@ local function makeConstraintEntry(parent, entity, constraint)
 	entry.down:SetSize(height, height)
 	entry.icon:SetSize(height, height)
 
-	print(props.name)
 	entry.name:SetText(language.GetPhrase(props.name) or "Constraint")
 	entry.icon:SetMouseInputEnabled(false)
 	-- Right click entry to access settings like renaming, copying, or duplicating
@@ -347,8 +346,9 @@ local function updateBoneTree(boneTree, selection)
 end
 
 --- @param client ClientEntity
---- @param keepOpen boolean
-function MGR:ConstraintMenu(client, keepOpen)
+--- @param bone integer?
+--- @param keepOpen boolean?
+function MGR:ConstraintMenu(client, bone, keepOpen)
 	local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 
 	-- get list of constraints categories, then insert each constraint in a category
@@ -375,10 +375,18 @@ function MGR:ConstraintMenu(client, keepOpen)
 		for _, constraint in ipairs(constraints) do
 			local name = language.GetPhrase(constraint.Properties.name)
 			local option = submenu:AddOption(language.GetPhrase(name), function()
-				-- TODO: Call the constraint construction function with the type we want to use for making the constraint
-				-- Then listen for the constraint function call
-				-- The constraints module will use a single hook, which we will listen to make our state changes
-				RagdollPoser.Constraints:Push(entity, constraint.Properties.type)
+				---@type ConstraintState
+				local state
+				if bone then
+					state = {
+						target = entity,
+						bone = bone or -1,
+						enabled = true,
+						influence = 1,
+					}
+				end
+
+				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state)
 			end)
 			option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
 		end

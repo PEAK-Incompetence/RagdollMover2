@@ -362,7 +362,7 @@ local function onRightClickUp(x, y, tr)
 	if not MGR:GetEnabled() then
 		return
 	end
-
+	print("rightclick")
 	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
 	-- If our mouse was on a bone, and we're still on the same bone, select it
 	-- Otherwise, finish selection
@@ -372,14 +372,14 @@ local function onRightClickUp(x, y, tr)
 			PrintTable(selectionBuffer)
 			MGR:SetBusy(true)
 			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
-				RagdollPoser.UI:ConstraintMenu(entity, true)
+				RagdollPoser.UI:ConstraintMenu(entity, bone, true)
 			end)
 		else
 			local bone = selectionBuffer[1]
 			local entity = selectionBuffer[2]
 			---@cast bone SelectionOddIndex
 			---@cast entity SelectionEvenIndex
-			RagdollPoser.UI:ConstraintMenu(entity, true)
+			RagdollPoser.UI:ConstraintMenu(entity, bone, true)
 		end
 		MGR:SetWasOnBone(false)
 	end

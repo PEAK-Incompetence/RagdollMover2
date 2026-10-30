@@ -224,11 +224,11 @@ end
 RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSender("EntityPhysBoneCount")
 
 ---@param entity Entity
-function MGR.UpdatePhysBoneCount(entity)
+function MGR.UpdatePhysBoneCount(entity, count)
 	RagdollPoser.Networking.EntityPhysBoneCount()
 	-- print("entityphysbonecount send", entity, entity:GetPhysicsObjectCount())
 	net.WriteEntity(entity)
-	net.WriteUInt(entity:GetPhysicsObjectCount(), 5)
+	net.WriteUInt(count, 5)
 	net.Broadcast()
 end
 
@@ -241,10 +241,12 @@ local function updateHover(len, pl)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateHovering", updateHover)
 
+-- TODO: Account for edge cases where someone might advanced bonemerge a ragdoll onto another ragdoll or prop
 local function sendPhysBoneCount(entity)
 	timer.Simple(0, function()
-		if IsValid(entity) and entity.GetModel and entity:GetModel() and entity:GetPhysicsObjectCount() > 0 then
-			MGR.UpdatePhysBoneCount(entity)
+		if IsValid(entity) and entity.GetModel and entity:GetModel() then
+			local count = entity:GetPhysicsObjectCount()
+			MGR.UpdatePhysBoneCount(entity, count > 0 and count or 1)
 		end
 	end)
 end

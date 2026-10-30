@@ -502,6 +502,13 @@ function MGR:PreTransform()
 	local newPos = RagdollPoser.View:GetView()
 	self.start = gui.ScreenToVector(x, y)
 	self.startPos = newPos
+
+	for i = 1, #selection - 1, 2 do
+		local bone, client = selection[i], selection[i + 1]
+		---@cast client ClientEntity
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		RagdollPoser.Constraints:PreEvaluate(entity)
+	end
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
@@ -520,6 +527,8 @@ function MGR:Transform()
 		local function transformSelected(selection, pivots, doMirror)
 			for i = 1, #selection - 1, 2 do
 				local bone, client = selection[i], selection[i + 1]
+				---@cast client ClientEntity
+				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 				-- print(i, client:GetBoneName(bone))
 				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
@@ -546,12 +555,15 @@ function MGR:Transform()
 					self._initials[client][bone],
 					self._gizmoProps
 				)
+
 				gizmo:PostTransform(
 					self._matrices[client][bone],
 					self._localMatrices[client][bone],
 					self._matrixIndex[client][bone],
 					self._parents[client]
 				)
+
+				RagdollPoser.Constraints:Evaluate(entity, bone, self._matrices[client][bone], )
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 
@@ -652,6 +664,7 @@ local function sendSubPose(selection)
 		end
 	end
 
+	-- TODO: Add support for parented entities
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
@@ -704,6 +717,13 @@ function MGR:PostTransform()
 		-- PrintTable(complete)
 		sendSubPose(complete)
 		print("post transform!")
+	end
+
+	for i = 1, #selection - 1, 2 do
+		local bone, client = selection[i], selection[i + 1]
+		---@cast client ClientEntity
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		RagdollPoser.Constraints:PostEvaluate(entity)
 	end
 end
 

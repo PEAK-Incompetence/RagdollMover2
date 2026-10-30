@@ -175,6 +175,11 @@ if CLIENT then
 
 		return modelicon
 	end
+
+	local fzy = include("ragdollposer/shared/fzy.lua")
+	function MGR.Filter(needle, haystacks, caseSensitive)
+		return fzy.filter(needle, haystacks, caseSensitive)
+	end
 end
 
 RagdollPoser.Helpers = MGR

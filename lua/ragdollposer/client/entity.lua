@@ -394,6 +394,10 @@ local function sendAssemblyInfo()
 		end
 	end
 
+	if constraintCount > 0 then
+		RagdollPoser.Constraints:SetConstraints(entityConstraints)
+	end
+
 	if IsValid(ent) and bone then
 		MGR.RefreshEntities(entities)
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
@@ -405,10 +409,6 @@ local function sendAssemblyInfo()
 		MGR.RefreshEntities(entities)
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 		RagdollPoser.Selection:Unselect()
-	end
-
-	if constraintCount > 0 then
-		RagdollPoser.Constraints:SetConstraints(entityConstraints)
 	end
 end
 RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)

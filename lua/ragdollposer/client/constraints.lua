@@ -13,7 +13,7 @@ MGR.Space = {
 
 ---@type Constraint[]
 MGR.Constraints = {}
----@type table<string, fun(state: ConstraintState?, name: string?): Constraint>
+---@type table<string, fun(entity: Entity, state: ConstraintState?, name: string?): Constraint>
 MGR.ConstraintConstructors = {}
 
 ---@class Constraints
@@ -29,13 +29,14 @@ MGR.EntityConstraintStacks = EntityConstraintStacks
 
 -- DAG for evaluating constraints
 
+---@param entity Entity
 ---@param type string
 ---@param state ConstraintState?
 ---@param name string?
-local function constructConstraint(type, state, name)
+local function constructConstraint(entity, type, state, name)
 	local constructor = MGR.ConstraintConstructors[type]
 	if constructor then
-		return constructor(state, name)
+		return constructor(entity, state, name)
 	end
 end
 
@@ -77,7 +78,30 @@ end
 -- Check for cycles on the stack.
 function MGR:ValidateStack() end
 
-function MGR:EvaluateStack(transforms, indices, locals, parents) end
+function MGR:PreEvaluate(entity, transforms, indices, locals, parents)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		for _, constraint in ipairs(stack.array) do
+			constraint:PreEvaluate(transforms, indices, locals, parents)
+		end
+	end
+end
+function MGR:Evaluate(entity, transforms, indices, locals, parents)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		for _, constraint in ipairs(stack.array) do
+			constraint:Evaluate(transforms, indices, locals, parents)
+		end
+	end
+end
+function MGR:PostEvaluate(entity)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		for _, constraint in ipairs(stack.array) do
+			constraint:PostEvaluate()
+		end
+	end
+end
 
 ---@param entity Entity
 ---@param type string
@@ -86,7 +110,7 @@ function MGR:EvaluateStack(transforms, indices, locals, parents) end
 ---@return Constraint?
 function MGR:Push(entity, type, state, name)
 	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
-	local constraint = constructConstraint(type, state, name)
+	local constraint = constructConstraint(entity, type, state, name)
 	if constraint then
 		stack.set[constraint._id] = table.insert(stack.array, constraint)
 
@@ -99,17 +123,18 @@ end
 ---@param constraints table<Entity, SerializedConstraint[]>
 function MGR:SetConstraints(constraints)
 	print("setting constraints")
-	PrintTable(constraints)
 	for entity, serialized in pairs(constraints) do
 		local array = {}
 		local set = {}
 		for _, s in ipairs(serialized) do
-			local constraint = constructConstraint(s.Type, s.State, s.Name)
+			local constraint = constructConstraint(entity, s.Type, s.State, s.Name)
 			if constraint then
 				set[constraint._id] = table.insert(array, constraint)
 			end
 		end
-		EntityConstraintStacks[entity] = { set = set, array = array }
+		local stack = { set = set, array = array }
+		PrintTable(stack)
+		EntityConstraintStacks[entity] = stack
 	end
 end
 
@@ -143,6 +168,9 @@ function MGR:UpdateConstraint(entity, constraint)
 
 	local stack = EntityConstraintStacks[entity]
 	if stack then
+		print("update single constraint")
+		PrintTable(stack)
+		print(constraint._id)
 		RagdollPoser.Networking.UpdateConstraint()
 		net.WriteEntity(entity)
 		net.WriteUInt(stack.set[constraint._id], 13)

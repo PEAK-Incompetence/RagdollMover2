@@ -38,29 +38,62 @@ function Base:ConstructUITemplate(entry, props, state)
 
 	local function header()
 		-- entity to target
+		---@class ConstraintTargetSearch: DTextEntry
 		ui.target = entry:TextEntry(string.NiceName(language.GetPhrase(props.name)), "")
 		-- bone of entity to target
+		---@class ConstraintBoneSearch: DTextEntry
+		---@field Menu DMenu
 		ui.bone = entry:TextEntry("#tool.ragdollposer.constraint.bone", "")
 
 		-- Instead of typing directly into the forms, open up a menu for available bones with a floating search entry
 		ui.target:SetEditable(false)
 		ui.target:SetMouseInputEnabled(true)
 
+		local choices = {}
+		local function updateTarget(target)
+			choices = {}
+			if IsValid(target) then
+				RagdollPoser.Entity.ExposeBones(target)
+				for i = 0, target:GetBoneCount() - 1 do
+					table.insert(choices, target:GetBoneName(i))
+				end
+
+				ui.bone:SetPlaceholderText("#tool.ragdollposer.constraint.bone.help")
+			end
+		end
+
+		print("bruh")
+		local function getEntityName(entity)
+			local model = RagdollPoser.Helpers.GetModelNameNice(entity)
+			return Format("%s: %s", model, tostring(entity))
+		end
+
+		local function updateBone(entity, index)
+			local name = entity:GetBoneName(index)
+			ui.bone:SetText(name)
+			ui.bone:SetTooltip(Format("%s: %d", language.GetPhrase("#tool.ragdollposer.constraint.bone.index"), index))
+		end
+
+		if IsValid(state.target) then
+			updateTarget(state.target)
+			ui.target:SetText(getEntityName(state.target))
+			if state.bone > -1 then
+				updateBone(state.target, state.bone)
+			end
+		end
+
 		function ui.target.OnMousePressed(base, mousecode)
-			print("clicked")
-			print(mousecode)
 			if mousecode == MOUSE_LEFT then
 				local menu = DermaMenu()
 
-				local selection = RagdollPoser.Selection:GetSelection()
-				for i = 1, #selection - 1, 2 do
-					local bone = selection[i] ---@as integer
-					local entity = selection[i + 1] ---@as Entity
-					local model = RagdollPoser.Helpers.GetModelNameNice(entity)
-					local name = Format("%s: %s", model, tostring(entity))
+				local entities = RagdollPoser.Entity.GetEntities()
+				for _, entity in ipairs(entities) do
+					local name = getEntityName(entity)
 					menu:AddOption(name, function()
 						self.State.target = entity
 						base:SetText(name)
+						updateTarget(entity)
+						RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
 					end)
 				end
 
@@ -71,10 +104,74 @@ function Base:ConstructUITemplate(entry, props, state)
 				menu:AddOption("#tool.ragdollposer.constraint.target.unset", function()
 					self.State.target = NULL
 					base:SetText("")
+					updateTarget(NULL)
+					RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
 				end)
 				menu:AddOption("#tool.ragdollposer.constraint.target.set.picker", function() end)
 
 				menu:Open()
+			end
+		end
+
+		function ui.bone.GetAutoComplete(_, text)
+			local suggestions = {}
+
+			local target = self.State.target
+			if IsValid(target) then
+				for _, result in ipairs(RagdollPoser.Helpers.Filter(text, choices, false)) do
+					table.insert(suggestions, choices[result[1]])
+				end
+			end
+
+			return suggestions
+		end
+
+		---Overrides the original function by not calling OnTextChanged, allowing the user
+		---to still look through the search options without closing it
+		function ui.bone:UpdateFromMenu()
+			---INFO: Menu is a field of DTextEntry, for autocomplete menu
+			---@diagnostic disable-next-line: undefined-field
+			local menu = self.Menu
+
+			local pos = self.HistoryPos
+			local num = menu:ChildCount()
+
+			menu:ClearHighlights()
+
+			if pos < 0 then
+				pos = num
+			end
+			if pos > num then
+				pos = 0
+			end
+
+			local item = menu:GetChild(pos)
+			if not item then
+				self.HistoryPos = pos
+				return
+			end
+
+			menu:HighlightItem(item)
+
+			local txt = item:GetText()
+
+			self:SetText(txt)
+			self:SetCaretPos(utf8.len(txt) or 0)
+
+			self.HistoryPos = pos
+		end
+
+		---@param pnl DTextEntry
+		---@param newBoneName string
+		function ui.bone.OnValueChange(pnl, newBoneName)
+			local target = self.State.target
+			if IsValid(target) then
+				local bone = target:LookupBone(newBoneName)
+				if bone then
+					self.State.bone = bone
+					updateBone(target, bone)
+					RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
+				end
 			end
 		end
 	end
@@ -110,23 +207,28 @@ end
 
 ---@param state ConstraintState?
 ---@param name string?
-function Base:Init(state, name)
+function Base:Init(entity, state, name)
 	local id = self._id + 1
 
 	local base = setmetatable({
 		_id = id,
+		Owner = entity,
 		Properties = table.Copy(self.Properties),
-		State = state or table.Copy(self.State),
+		State = table.Copy(self.State),
 	}, Base)
+	for key, value in pairs(state or {}) do
+		base.State[key] = value
+	end
+
 	base.Properties.name = name or base.Properties.name
 	self._id = id
 	return base
 end
 
 -- Save some bone info here
-function Base:PreEvaluate() end
+function Base:PreEvaluate(transforms, indices, locals, parents) end
 
-function Base:Evaluate() end
+function Base:Evaluate(transforms, indices, locals, parents) end
 
 function Base:PostEvaluate() end
 

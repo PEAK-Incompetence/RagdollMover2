@@ -257,7 +257,7 @@ local function getDefaultPoseTree(ent)
 	local entAngles = ent:GetAngles()
 	for b = 0, ent:GetBoneCount() - 1 do
 		local parent = ent:GetBoneParent(b)
-		local isPhysBone = b == ent:TranslatePhysBoneToBone(ent:TranslateBoneToPhysBone(b))
+		local isPhysBone = RagdollPoser.Helpers.BoneToPhysBone(ent, b) >= 0
 		local bMatrix = ent:GetBoneMatrix(b)
 		if bMatrix then
 			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), entPos, entAngles)
@@ -426,7 +426,7 @@ local function getPhysBoneCount(len, ply)
 	if IsValid(entity) then
 		local model = entity:GetModel()
 
-		if model then
+		if model and not EntityPhysBoneCount[model] then
 			EntityPhysBoneCount[model] = count
 			RagdollPoser.Bones:ReportModel(entity, model)
 		end

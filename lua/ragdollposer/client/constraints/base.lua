@@ -20,6 +20,7 @@ Base.Properties = {
 ---@class ConstraintState
 Base.State = {
 	enabled = true,
+	key = BUTTON_CODE_INVALID,
 	target = NULL,
 	bone = -1,
 	influence = 1,
@@ -229,10 +230,24 @@ function Base:Init(entity, state, name)
 end
 
 -- Save some bone info here
-function Base:PreEvaluate(entity) end
+---@param entity Entity
+---@param transforms VMatrix[]
+---@param indices integer[]
+---@param locals VMatrix[]
+---@param parents integer[]
+function Base:PreEvaluate(entity, transforms, indices, locals, parents) end
 
+---@param entity Entity
+---@param controlledBone integer
+---@param transforms VMatrix[]
+---@param indices integer[]
+---@param locals VMatrix[]
+---@param parents integer[]
 function Base:Evaluate(entity, controlledBone, transforms, indices, locals, parents) end
 
+---@param entity Entity
+---@param controlledBones integer[]
+---@param transforms VMatrix[]
 function Base:EvaluatePose(entity, controlledBones, transforms) end
 
 function Base:Draw() end

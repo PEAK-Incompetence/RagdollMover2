@@ -7,15 +7,30 @@ local MGR = {}
 
 local getModelIcon, getNiceModelName = RagdollPoser.Helpers.GetModelNodeIconPath, RagdollPoser.Helpers.GetModelNameNice
 
----@param cpanel ControlPanel
+---@param cpanel ControlPanel|DForm
 ---@param label string
 ---@param cvar string
----@return DBinder
-local function keyBinder(cpanel, label, cvar, action)
+---@param action InputAction
+---@param keyChangedCallback fun(newKey: BUTTON_CODE)?
+---@return CtrlNumPad
+local function keyBinder(cpanel, label, cvar, action, keyChangedCallback)
+	---@class CtrlNumPad
+	---@field NumPad1 DBinder
 	local binder = cpanel:KeyBinder(label, cvar)
-	function binder:OnChange(newKey)
-		print("new key", newKey)
+
+	local oldClick = binder.NumPad1.DoClick
+	function binder.NumPad1:DoClick()
+		local oldKey = self:GetValue()
+		print(oldKey)
+		oldClick(self)
+		RagdollPoser.Input:UnregisterKey(action, oldKey)
+	end
+
+	function binder.NumPad1:OnChange(newKey)
 		RagdollPoser.Input:RegisterKey(action, newKey)
+		if keyChangedCallback then
+			keyChangedCallback(newKey)
+		end
 	end
 	return binder
 end
@@ -44,9 +59,9 @@ local function makeConstraintEntry(parent, entity, constraint)
 
 	local index = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
 
-	---@class ConstraintEntry: DForm
+	---@class ConstraintEntry: ControlPanel
 	---@field Header DCategoryHeader
-	local entry = makeCategory(parent, "", "DForm")
+	local entry = makeCategory(parent, "", "ControlPanel")
 	entry:SetList(parent)
 	parent.Items[index] = entry
 
@@ -79,6 +94,13 @@ local function makeConstraintEntry(parent, entity, constraint)
 		constraint.State.enabled = enabled
 		RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
 	end
+
+	local oldThink = entry.enabled.Think
+	function entry.enabled.Think(pnl)
+		oldThink(pnl)
+		entry.enabled:SetChecked(constraint.State.enabled)
+	end
+
 	-- Move constraint up and down for ordering
 	-- Moving this up and down triggers reconstruction, although if I could just manually swap the order here, that would be more performant
 	entry.up = vgui.Create("DImageButton", entry)
@@ -160,6 +182,22 @@ local function makeConstraintEntry(parent, entity, constraint)
 
 	-- Inside the entry, construct the ui based on the instructions from the constraint file
 	entry.ui = constraint:ConstructUI(entry, props, state)
+
+	entry.keybinder = keyBinder(
+		entry,
+		"#tool.ragdollposer.constraint.bind",
+		"",
+		RagdollPoser.Actions.ToggleConstraint,
+		function(newKey)
+			print("run this!")
+			constraint.State.key = newKey
+			RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
+		end
+	)
+
+	if constraint.State.key > -1 then
+		entry.keybinder.NumPad1:SetValue(constraint.State.key)
+	end
 
 	return entry
 end
@@ -430,6 +468,7 @@ function MGR:ConstraintMenu(client, bone, keepOpen)
 					state = {
 						target = entity,
 						bone = bone or -1,
+						key = BUTTON_CODE_INVALID,
 						enabled = true,
 						influence = 1,
 					}

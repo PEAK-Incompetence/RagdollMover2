@@ -1126,10 +1126,11 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	end)
 end)
 
-local function onKeyPress(action)
-	if action == RagdollPoser.Actions.CycleGizmo then
+local function onKeyPress(actions)
+	if actions[RagdollPoser.Actions.CycleGizmo] then
 		MGR:OnModeChanged(MGR:CycleMode())
-	elseif action == RagdollPoser.Actions.SelectBone then
+	end
+	if actions[RagdollPoser.Actions.SelectBone] then
 		MGR:SetEnabled(not MGR:IsEnabled())
 		RagdollPoser.Selection:SetEnabled(not MGR:IsEnabled())
 	end

@@ -285,6 +285,33 @@ hook.Add("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved", function(ent
 	EntityConstraintStacks[ent] = nil
 end)
 
+local function onKeyPress(actions, key)
+	if actions[RagdollPoser.Actions.ToggleConstraint] then
+		local checked = false
+		local selected = RagdollPoser.Selection:GetSelectedEntities()
+		for client in pairs(selected) do
+			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			local stack = EntityConstraintStacks[entity]
+			if not stack then
+				continue
+			end
+
+			for _, constraint in ipairs(stack.array) do
+				if constraint.State.key == key then
+					print("pressed")
+					checked = true
+					constraint.State.enabled = not constraint.State.enabled
+				end
+			end
+		end
+
+		if checked then
+			MGR:UpdateConstraints()
+		end
+	end
+end
+hook.Add("RagdollPoser_Input_KeyPress", "RagdollPoser_Constraints_Toggle", onKeyPress)
+
 --- TODO: where should i put constraint UI? in a separate window? in a tab on the control panel? or in a separate tool?
 
 RagdollPoser.Networking.UpdateConstraint = RagdollPoser.Networking.DefineSender("UpdateConstraint")

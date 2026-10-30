@@ -85,7 +85,7 @@ function MGR.BoneToPhysBone(ent, bone)
 			ent:InvalidateBoneCache()
 		end
 		for i = 0, count - 1 do
-			local b = ent:TranslatePhysBoneToBone(i)
+			local b = count == 1 and ent:TranslatePhysBoneToBone(1) or ent:TranslatePhysBoneToBone(i)
 			if bone == b then
 				boneToPhysMap[model][b] = i
 				return i

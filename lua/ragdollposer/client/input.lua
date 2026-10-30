@@ -7,36 +7,57 @@
 ---
 ---@class RagdollPoser.Input
 ---@
-local MGR = {
+local MGR = RagdollPoser.Input or {
 	xMove = 0,
 	yMove = 0,
 }
 
----@type {[BUTTON_CODE]: InputAction}
-MGR.KeyBinds = MGR.KeyBinds or {}
----@type {[InputAction]: BUTTON_CODE}
-MGR.BoundActions = MGR.BoundActions or table.Flip(MGR.KeyBinds)
+---@type table<InputAction, table<BUTTON_CODE, true>>
+MGR.BoundActions = MGR.BoundActions or {}
+---@type table<BUTTON_CODE, table<InputAction, true>>
+MGR.KeyBinds = {}
 
----@type table<integer, BUTTON_CODE>
-local activeKeybinds = {}
+---@type BUTTON_CODE[]
+MGR.ActiveKeybinds = MGR.ActiveKeybinds or {}
 
 local function refreshKeyBinds()
-	activeKeybinds = {}
-	for key, _ in pairs(MGR.KeyBinds) do
-		activeKeybinds[#activeKeybinds + 1] = key
+	local keySeen = {}
+	MGR.ActiveKeybinds = {}
+	MGR.KeyBinds = {}
+
+	for action, keys in pairs(MGR.BoundActions) do
+		for key in pairs(keys) do
+			MGR.KeyBinds[key] = MGR.KeyBinds[key] or {}
+			MGR.KeyBinds[key][action] = true
+			if not keySeen[key] then
+				MGR.ActiveKeybinds[#MGR.ActiveKeybinds + 1] = key
+				keySeen[key] = true
+			end
+		end
 	end
+end
+refreshKeyBinds()
+
+---@param action InputAction
+---@param keycode BUTTON_CODE
+function MGR:UnregisterKey(action, keycode)
+	-- If we are reassigning an action to another key, we need to remove it from the keybinds
+	-- TODO: Allow multiple actions to run for a single key
+	local keybinds = MGR.BoundActions[action] or {}
+	keybinds[keycode] = nil
+	MGR.BoundActions[action] = keybinds
+	refreshKeyBinds()
+	RagdollPoser.Log("Unregistered keybind ", input.GetKeyName(keycode), " for ", RagdollPoser.ActionName[action])
 end
 
 ---@param action InputAction
 ---@param keycode BUTTON_CODE
 function MGR:RegisterKey(action, keycode)
-	MGR.KeyBinds[keycode] = action
 	-- If we are reassigning an action to another key, we need to remove it from the keybinds
 	-- TODO: Allow multiple actions to run for a single key
-	if MGR.BoundActions[action] and MGR.BoundActions[action] ~= keycode then
-		MGR.KeyBinds[MGR.BoundActions[action]] = nil
-	end
-	MGR.BoundActions[action] = keycode
+	local keybinds = MGR.BoundActions[action] or {}
+	keybinds[keycode] = true
+	MGR.BoundActions[action] = keybinds
 	refreshKeyBinds()
 	RagdollPoser.Log("Registered keybind ", input.GetKeyName(keycode), " for ", RagdollPoser.ActionName[action])
 end
@@ -96,10 +117,13 @@ local keysDown = {}
 local function keyboardInput()
 	local equipped = RagdollPoser.Helpers.Equipped()
 	if equipped then
-		for _, key in ipairs(activeKeybinds) do
+		for _, key in ipairs(MGR.ActiveKeybinds) do
 			if input.IsKeyDown(key) and not keysDown[key] then
 				keysDown[key] = true
-				hook.Run("RagdollPoser_Input_KeyPress", MGR.KeyBinds[key])
+				local actions = MGR.KeyBinds[key]
+				if actions then
+					hook.Run("RagdollPoser_Input_KeyPress", MGR.KeyBinds[key], key)
+				end
 			elseif not input.IsKeyDown(key) and keysDown[key] then
 				keysDown[key] = false
 			end

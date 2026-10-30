@@ -6,6 +6,9 @@ Base.__index = Base
 
 Base._id = 0
 
+local IDENTITY_MATRIX = Matrix()
+IDENTITY_MATRIX:Identity()
+
 ---@class ConstraintProps
 Base.Properties = {
 	type = "base",
@@ -226,10 +229,130 @@ function Base:Init(entity, state, name)
 end
 
 -- Save some bone info here
-function Base:PreEvaluate(transforms, indices, locals, parents) end
+function Base:PreEvaluate(entity) end
 
-function Base:Evaluate(transforms, indices, locals, parents) end
+function Base:Evaluate(entity, controlledBone, transforms, indices, locals, parents) end
+
+function Base:EvaluatePose(entity, controlledBones, transforms) end
+
+function Base:Draw() end
 
 function Base:PostEvaluate() end
+
+function Base:CaptureLockPose()
+	self._snapshot = {}
+
+	local target = self.State.target
+	local lockedBone = self.State.bone
+	if
+		self.State.enabled == false
+		or not IsValid(target)
+		or not isnumber(lockedBone)
+		or lockedBone < 0
+		or lockedBone >= target:GetBoneCount()
+	then
+		return
+	end
+
+	local client = RagdollPoser.Entity.GetClientFromEntity(target)
+	RagdollPoser.Entity.ExposeBones(client)
+	local matrices = RagdollPoser.Entity.GetMatrices(client)
+	local visited = {}
+
+	local function capture(bone)
+		if visited[bone] then
+			return
+		end
+		visited[bone] = true
+
+		local matrix = matrices and matrices[bone + 1] or client:GetBoneMatrix(bone)
+		if matrix then
+			self._snapshot[bone] = matrix * IDENTITY_MATRIX
+		end
+
+		for _, child in ipairs(client:GetChildBones(bone)) do
+			capture(child)
+		end
+	end
+
+	capture(lockedBone)
+end
+
+function Base:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, component)
+	if self.State.enabled == false then
+		return
+	end
+
+	local target = self.State.target
+	local lockedBone = self.State.bone
+	if not IsValid(target) or target ~= entity or not self._snapshot or not indices then
+		return
+	end
+	local client = RagdollPoser.Entity.GetClientFromEntity(target)
+
+	local walk = controlledBone
+	while walk and walk >= 0 do
+		if walk == lockedBone then
+			return
+		end
+		walk = client:GetBoneParent(walk)
+	end
+
+	local influence = math.Clamp(self.State.influence or 1, 0, 1)
+	if influence == 0 then
+		return
+	end
+
+	if component == "rotation" then
+		local boneIndices = {}
+		for index, bone in ipairs(indices) do
+			boneIndices[bone] = index
+		end
+
+		local lockedIndex = boneIndices[lockedBone]
+		local initial = self._snapshot[lockedBone]
+		local matrix = lockedIndex and transforms[lockedIndex]
+		if not initial or not matrix then
+			return
+		end
+
+		matrix:SetAngles(LerpAngle(influence, matrix:GetAngles(), initial:GetAngles()))
+
+		for index, bone in ipairs(indices) do
+			local isLockedDescendant = false
+			local parentBone = parents and parents[bone]
+			while parentBone and parentBone >= 0 do
+				if parentBone == lockedBone then
+					isLockedDescendant = true
+					break
+				end
+				parentBone = parents and parents[parentBone]
+			end
+
+			if isLockedDescendant then
+				local directParent = parents and parents[bone]
+				local parentIndex = directParent and boneIndices[directParent]
+				local localMatrix = locals and locals[bone]
+				local parent = parentIndex and transforms[parentIndex]
+				if parent and localMatrix then
+					transforms[index] = parent * localMatrix
+				end
+			end
+		end
+		return
+	end
+
+	for index, bone in ipairs(indices) do
+		local initial = self._snapshot[bone]
+		local matrix = transforms[index]
+		if initial and matrix then
+			if component == "position" then
+				matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))
+			elseif component == "scale" then
+				matrix:SetScale(LerpVector(influence, matrix:GetScale(), initial:GetScale()))
+			end
+		end
+	end
+end
 
 return Base

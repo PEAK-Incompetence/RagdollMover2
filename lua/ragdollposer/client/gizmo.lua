@@ -77,6 +77,10 @@ local MGR = {
 	---the root bone, then transform the descendant bones
 	---@type VMatrix[]
 	_matrices = {},
+	---@type table<ClientEntity, table<integer, VMatrix[]>>
+	_constraintMatrices = {},
+	---@type table<ClientEntity, VMatrix[]>
+	_transformBaseline = {},
 	---Matrices local to parent matrices. Useful for transforms
 	---@type {[integer]: VMatrix}
 	_localMatrices = {},
@@ -336,6 +340,8 @@ function MGR:PreTransform()
 	-- TODO: Maybe simplify the tables used below for doing transforms?
 	-- There could be a simpler, possibly more performant way to doing things
 	self._matrices = {}
+	self._constraintMatrices = {}
+	self._transformBaseline = {}
 	self._matrixIndex = {}
 	self._localMatrices = {}
 	self._initials = {}
@@ -394,13 +400,23 @@ function MGR:PreTransform()
 		for client, bones in pairs(entityBones) do
 			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 			if matrices then
+				self._transformBaseline[client] = {}
+				for bone = 0, client:GetBoneCount() - 1 do
+					local matrix = matrices[bone + 1]
+					if matrix then
+						self._transformBaseline[client][bone + 1] = matrix * IDENTITY_MATRIX
+					end
+				end
+
 				self._matrices[client] = self._matrices[client] or {}
+				self._constraintMatrices[client] = self._constraintMatrices[client] or {}
 				self._matrixIndex[client] = self._matrixIndex[client] or {}
 				self._localMatrices[client] = self._localMatrices[client] or {}
 				self._parents[client] = self._parents[client] or {}
 				self._initials[client] = self._initials[client] or {}
 				for _, bone in ipairs(bones) do
 					self._matrices[client][bone] = self._matrices[client][bone] or {}
+					self._constraintMatrices[client][bone] = {}
 					self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
 					self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
 					self._initials[client][bone] = self._initials[client][bone] or {}
@@ -414,6 +430,9 @@ function MGR:PreTransform()
 						self._parents[client]
 					)
 					self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
+					for index, matrix in ipairs(self._matrices[client][bone]) do
+						self._constraintMatrices[client][bone][index] = matrix * IDENTITY_MATRIX
+					end
 				end
 			end
 		end
@@ -503,12 +522,20 @@ function MGR:PreTransform()
 	self.start = gui.ScreenToVector(x, y)
 	self.startPos = newPos
 
-	for i = 1, #selection - 1, 2 do
-		local bone, client = selection[i], selection[i + 1]
-		---@cast client ClientEntity
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		RagdollPoser.Constraints:PreEvaluate(entity)
+	local evaluatedEntities = {}
+	local function preEvaluateConstraints(selectionToEvaluate)
+		for i = 1, #selectionToEvaluate - 1, 2 do
+			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
+			---@cast client ClientEntity
+			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			if not evaluatedEntities[entity] then
+				RagdollPoser.Constraints:PreEvaluate(entity)
+				evaluatedEntities[entity] = true
+			end
+		end
 	end
+	preEvaluateConstraints(selection)
+	preEvaluateConstraints(self._mirroredSelection)
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
@@ -524,6 +551,17 @@ function MGR:Transform()
 		-- TODO: Replace selection with the entities we want to manipulate, which includes selected entities/bones and any entities constrained
 		-- to our selected
 		local selection = RagdollPoser.Selection:GetSelection()
+		for client, baseline in pairs(self._transformBaseline) do
+			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+			if matrices then
+				for index, matrix in pairs(baseline) do
+					if matrices[index] then
+						matrices[index]:Set(matrix)
+					end
+				end
+			end
+		end
+
 		local function transformSelected(selection, pivots, doMirror)
 			for i = 1, #selection - 1, 2 do
 				local bone, client = selection[i], selection[i + 1]
@@ -563,7 +601,19 @@ function MGR:Transform()
 					self._parents[client]
 				)
 
-				RagdollPoser.Constraints:Evaluate(entity, bone, self._matrices[client][bone], )
+				local constrainedMatrices = self._constraintMatrices[client][bone]
+				for index, matrix in ipairs(self._matrices[client][bone]) do
+					constrainedMatrices[index]:Set(matrix)
+				end
+
+				RagdollPoser.Constraints:Evaluate(
+					entity,
+					bone,
+					constrainedMatrices,
+					self._matrixIndex[client][bone],
+					self._localMatrices[client][bone],
+					self._parents[client]
+				)
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 
@@ -572,7 +622,7 @@ function MGR:Transform()
 						for index, bb in ipairs(indices) do
 							local targetMatrix = matrices[bb + 1]
 							if targetMatrix then
-								targetMatrix:Set(self._matrices[client][b][index])
+								targetMatrix:Set(self._constraintMatrices[client][b][index])
 							end
 						end
 					end
@@ -583,6 +633,27 @@ function MGR:Transform()
 		transformSelected(selection, self._pivots, false)
 		if self._mirroredSelection[1] then
 			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
+		end
+
+		local controlledBones = {}
+		local function collectControlledBones(selectionToCollect)
+			for i = 1, #selectionToCollect - 1, 2 do
+				local bone, client = selectionToCollect[i], selectionToCollect[i + 1]
+				---@cast client ClientEntity
+				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+				controlledBones[entity] = controlledBones[entity] or {}
+				controlledBones[entity][#controlledBones[entity] + 1] = bone
+			end
+		end
+		collectControlledBones(selection)
+		collectControlledBones(self._mirroredSelection)
+
+		for entity, bones in pairs(controlledBones) do
+			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+			local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
+			if matrices then
+				RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
+			end
 		end
 	end
 
@@ -664,6 +735,19 @@ local function sendSubPose(selection)
 		end
 	end
 
+	for _, entity in ipairs(entities) do
+		local arr = bones[entity]
+		local set = boneSet[entity]
+		for _, constraint in ipairs(RagdollPoser.Constraints:GetConstraintStack(entity)) do
+			if constraint.GetOutputRoot then
+				local root = constraint:GetOutputRoot()
+				if root and not set[root] then
+					addChildBones(entity, root, arr, set)
+				end
+			end
+		end
+	end
+
 	-- TODO: Add support for parented entities
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
@@ -719,12 +803,20 @@ function MGR:PostTransform()
 		print("post transform!")
 	end
 
-	for i = 1, #selection - 1, 2 do
-		local bone, client = selection[i], selection[i + 1]
-		---@cast client ClientEntity
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		RagdollPoser.Constraints:PostEvaluate(entity)
+	local evaluatedEntities = {}
+	local function postEvaluateConstraints(selectionToEvaluate)
+		for i = 1, #selectionToEvaluate - 1, 2 do
+			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
+			---@cast client ClientEntity
+			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			if not evaluatedEntities[entity] then
+				RagdollPoser.Constraints:PostEvaluate(entity)
+				evaluatedEntities[entity] = true
+			end
+		end
 	end
+	postEvaluateConstraints(selection)
+	postEvaluateConstraints(mirrorSelection)
 end
 
 local function onLeftClickDown(x, y, tr)
@@ -835,6 +927,7 @@ end
 
 -- Make sure you are in the 3D rendering context
 function MGR:Draw()
+	RagdollPoser.Constraints:Draw()
 	if not self:IsEnabled() then
 		return
 	end

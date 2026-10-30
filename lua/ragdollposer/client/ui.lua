@@ -42,10 +42,13 @@ local function makeConstraintEntry(parent, entity, constraint)
 	local props = constraint.Properties
 	local state = constraint.State
 
+	local index = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
+
 	---@class ConstraintEntry: DForm
 	---@field Header DCategoryHeader
 	local entry = makeCategory(parent, "", "DForm")
 	entry:SetList(parent)
+	parent.Items[index] = entry
 
 	function entry.Header:DoRightClick()
 		local menu = DermaMenu()
@@ -72,6 +75,10 @@ local function makeConstraintEntry(parent, entity, constraint)
 	end
 
 	entry.enabled:SetChecked(constraint.State.enabled)
+	function entry.enabled:OnChange(enabled)
+		constraint.State.enabled = enabled
+		RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
+	end
 	-- Move constraint up and down for ordering
 	-- Moving this up and down triggers reconstruction, although if I could just manually swap the order here, that would be more performant
 	entry.up = vgui.Create("DImageButton", entry)
@@ -84,6 +91,48 @@ local function makeConstraintEntry(parent, entity, constraint)
 	entry.icon:SetImage(props.icon ~= "" and props.icon or "icon16/link.png")
 	entry.up:SetImage("icon16/bullet_arrow_up.png")
 	entry.down:SetImage("icon16/bullet_arrow_down.png")
+	entry.up:SetTooltip("#tool.ragdollposer.constraint.move.up")
+	entry.down:SetTooltip("#tool.ragdollposer.constraint.move.down")
+
+	function entry.up.DoClick()
+		local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
+		local index = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
+		if index and index > 1 then
+			local newIndex = index - 1
+			local previousEntry = parent.Items[newIndex]
+			entry:MoveToBefore(previousEntry)
+			parent.Items[newIndex] = entry
+			parent.Items[index] = previousEntry
+
+			RagdollPoser.Constraints:Swap(entity, constraint, stack[newIndex])
+			previousEntry.down:SetEnabled(index < #stack)
+			previousEntry.up:SetEnabled(index > 1)
+			entry.up:SetEnabled(newIndex > 1)
+			entry.down:SetEnabled(newIndex < #stack)
+		end
+	end
+
+	function entry.down.DoClick()
+		local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
+		local index = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
+		if index and index < #stack then
+			local newIndex = index + 1
+			local nextEntry = parent.Items[newIndex]
+			entry:MoveToAfter(nextEntry)
+			parent.Items[newIndex] = entry
+			parent.Items[index] = nextEntry
+
+			RagdollPoser.Constraints:Swap(entity, constraint, stack[newIndex])
+			nextEntry.up:SetEnabled(index > 1)
+			nextEntry.down:SetEnabled(index < #stack)
+			entry.up:SetEnabled(newIndex > 1)
+			entry.down:SetEnabled(newIndex < #stack)
+		end
+	end
+
+	local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
+	entry.up:SetEnabled(index > 1)
+	entry.down:SetEnabled(index < #stack)
 
 	local height = entry.Header:GetTall()
 	entry.up:SetSize(height, height)
@@ -460,9 +509,12 @@ function MGR:BuildCPanel(cpanel)
 	---@field Items ConstraintEntry[]
 	local constraintList = vgui.Create("DCategoryList", constraintListContainer)
 	constraintList:Dock(FILL)
+	constraintList.Items = {}
+	print("constraint list items!")
+	print(constraintList.Items)
 
 	function addConstraint:DoClick()
-		MGR:ConstraintMenu(entitySelector.selected, false)
+		MGR:ConstraintMenu(entitySelector.selected)
 	end
 
 	--- @param client ClientEntity
@@ -504,12 +556,21 @@ function MGR:BuildCPanel(cpanel)
 			end
 		end
 	end)
+
+	hook.Add("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities", function(entity)
+		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		print("no don't do it!")
+		-- if client == entitySelector.selected then
+		-- 	updateConstraintUI(client)
+		-- end
+	end)
 end
 
 ---@param cpanel ControlPanel
 function MGR:Initialize(cpanel)
 	hook.Remove("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities")
 	hook.Remove("RagdollPoser_Selection_Selected", "UI_UpdateEntities")
+	hook.Remove("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities")
 
 	local success, msg = pcall(self.BuildCPanel, self, cpanel)
 	if not success and msg then

@@ -36,17 +36,38 @@ MGR.EntityConstraintStacks = EntityConstraintStacks
 local function constructConstraint(entity, type, state, name)
 	local constructor = MGR.ConstraintConstructors[type]
 	if constructor then
-		return constructor(entity, state, name)
+		local constraint = constructor(entity, state, name)
+		if constraint then
+			MGR._nextConstraintID = (MGR._nextConstraintID or 0) + 1
+			constraint._id = MGR._nextConstraintID
+		end
+		return constraint
 	end
 end
 
-local function refreshStack(entity, removedIndex)
+local function refreshStack(entity)
 	local stack = EntityConstraintStacks[entity]
-	if stack then
-		for i = removedIndex, #stack.array do
-			local constraint = stack.array[i]
-			stack.set[constraint._id] = i
+	if not stack then
+		return
+	end
+
+	local maxID = MGR._nextConstraintID or 0
+	for _, constraint in ipairs(stack.array) do
+		if isnumber(constraint._id) then
+			maxID = math.max(maxID, constraint._id)
 		end
+	end
+
+	MGR._nextConstraintID = maxID
+	stack.set = {}
+	local seen = {}
+	for index, constraint in ipairs(stack.array) do
+		if not isnumber(constraint._id) or seen[constraint._id] then
+			MGR._nextConstraintID = MGR._nextConstraintID + 1
+			constraint._id = MGR._nextConstraintID
+		end
+		seen[constraint._id] = true
+		stack.set[constraint._id] = index
 	end
 end
 
@@ -57,6 +78,15 @@ end
 function MGR:GetConstraintStack(entity)
 	local stack = EntityConstraintStacks[entity]
 	return stack and stack.array or {}
+end
+
+---@param entity Entity
+---@param id integer
+---@return integer?
+function MGR:GetConstraintIndex(entity, id)
+	refreshStack(entity)
+	local stack = EntityConstraintStacks[entity]
+	return stack and stack.set[id]
 end
 
 function MGR:Init()
@@ -82,18 +112,36 @@ function MGR:PreEvaluate(entity, transforms, indices, locals, parents)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:PreEvaluate(transforms, indices, locals, parents)
+			constraint:PreEvaluate(entity, transforms, indices, locals, parents)
 		end
 	end
 end
-function MGR:Evaluate(entity, transforms, indices, locals, parents)
+function MGR:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:Evaluate(transforms, indices, locals, parents)
+			constraint:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
 		end
 	end
 end
+
+function MGR:EvaluatePose(entity, controlledBones, transforms)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		for _, constraint in ipairs(stack.array) do
+			constraint:EvaluatePose(entity, controlledBones, transforms)
+		end
+	end
+end
+
+function MGR:Draw()
+	for _, stack in pairs(EntityConstraintStacks) do
+		for _, constraint in ipairs(stack.array) do
+			constraint:Draw()
+		end
+	end
+end
+
 function MGR:PostEvaluate(entity)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
@@ -110,10 +158,14 @@ end
 ---@return Constraint?
 function MGR:Push(entity, type, state, name)
 	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
+	EntityConstraintStacks[entity] = stack
+	refreshStack(entity)
 	local constraint = constructConstraint(entity, type, state, name)
 	if constraint then
-		stack.set[constraint._id] = table.insert(stack.array, constraint)
-
+		local index = #stack.array + 1
+		stack.array[index] = constraint
+		stack.set[constraint._id] = index
+		EntityConstraintStacks[entity] = stack
 		hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, { constraint })
 	end
 	EntityConstraintStacks[entity] = stack
@@ -123,13 +175,16 @@ end
 ---@param constraints table<Entity, SerializedConstraint[]>
 function MGR:SetConstraints(constraints)
 	print("setting constraints")
+	PrintTable(constraints)
 	for entity, serialized in pairs(constraints) do
 		local array = {}
 		local set = {}
 		for _, s in ipairs(serialized) do
 			local constraint = constructConstraint(entity, s.Type, s.State, s.Name)
 			if constraint then
-				set[constraint._id] = table.insert(array, constraint)
+				local index = #array + 1
+				array[index] = constraint
+				set[constraint._id] = index
 			end
 		end
 		local stack = { set = set, array = array }
@@ -159,6 +214,8 @@ function MGR:UpdateConstraints()
 	net.SendToServer()
 end
 
+---@param entity Entity
+---@param constraint Constraint
 function MGR:UpdateConstraint(entity, constraint)
 	for entity, stack in pairs(EntityConstraintStacks) do
 		if not IsValid(entity) then
@@ -168,6 +225,7 @@ function MGR:UpdateConstraint(entity, constraint)
 
 	local stack = EntityConstraintStacks[entity]
 	if stack then
+		refreshStack(entity)
 		print("update single constraint")
 		PrintTable(stack)
 		print(constraint._id)
@@ -184,9 +242,13 @@ end
 function MGR:Remove(entity, id)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
+		refreshStack(entity)
 		local removedIndex = stack.set[id]
+		if not removedIndex then
+			return
+		end
 		table.remove(stack.array, removedIndex)
-		refreshStack(entity, removedIndex)
+		refreshStack(entity)
 		self:UpdateConstraints()
 	end
 end
@@ -196,15 +258,22 @@ end
 ---@param d Constraint
 function MGR:Swap(entity, c, d)
 	local stack = EntityConstraintStacks[entity]
-	if stack then
-		local i = stack.set[c._id]
-		local j = stack.set[d._id]
-		stack.set[c._id] = j
-		stack.set[d._id] = i
-		stack.array[i] = d
-		stack.array[j] = c
-		self:UpdateConstraints()
+	if not stack then
+		return false
 	end
+	refreshStack(entity)
+
+	local i = stack.set[c._id]
+	local j = stack.set[d._id]
+	if not i or not j or i == j or stack.array[i] ~= c or stack.array[j] ~= d then
+		return false
+	end
+
+	stack.array[i], stack.array[j] = d, c
+	refreshStack(entity)
+	self:UpdateConstraints()
+	hook.Run("RagdollPoser_Constraints_ConstraintOrderChanged", entity)
+	return true
 end
 
 hook.Remove("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved")

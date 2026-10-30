@@ -41,9 +41,6 @@ local function sendSubPose(len, ply)
 			matrices[b] = net.ReadMatrix()
 		end
 
-		-- PrintTable(matrices)
-		-- PrintTable(bones)
-
 		for _, b in ipairs(bones) do
 			local matrix = matrices[b]
 			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
@@ -71,6 +68,36 @@ local function sendSubPose(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPose", sendSubPose)
 
+local copiedEntities = {}
+local function trackEntityDuplicators(entity)
+	duplicator.ClearEntityModifier(entity, "RagdollPoser")
+	duplicator.StoreEntityModifier(entity, "RagdollPoser", {})
+
+	if not copiedEntities[entity] then
+		function entity:OnEntityCopyTableFinish(data)
+			if IsValid(self.rgp_player) then
+				print("bruhh")
+				local d = MGR.Players[self.rgp_player]
+				data.EntityMods["RagdollPoser"] = d.Constraints[entity]
+				data.rgp_player = nil
+			end
+		end
+
+		copiedEntities[entity] = true
+	end
+end
+
+hook.Remove("CanTool", "RagdollPoser_Data_TrackDuplicator")
+hook.Add("CanTool", "RagdollPoser_Data_TrackDuplicator", function(ply, tr, toolname)
+	if toolname == "duplicator" and ply:KeyDown(IN_ATTACK2) then
+		local ent = tr.Entity
+		if IsValid(ent) then
+			print("track him!")
+			ent.rgp_player = ply
+		end
+	end
+end)
+
 local function updateConstraints(len, ply)
 	local data = MGR.Players[ply]
 	local playerConstraints = data.Constraints or {}
@@ -81,6 +108,7 @@ local function updateConstraints(len, ply)
 	for _ = 1, count do
 		local entity = net.ReadEntity()
 		entityConstraints[entity] = net.ReadTable(true)
+		trackEntityDuplicators(entity)
 	end
 	for entity, constraints in pairs(entityConstraints) do
 		playerConstraints[entity] = constraints
@@ -98,12 +126,13 @@ local function updateConstraint(len, ply)
 	local constraint = net.ReadTable() ---@as SerializedConstraint
 	playerConstraints[entity][index] = constraint
 	data.Constraints = playerConstraints
+	trackEntityDuplicators(entity)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateConstraint", updateConstraint)
 
 local function initializePlayer(pl)
 	if not MGR.Players[pl] then
-		MGR.Players[pl] = {
+		local data = {
 			SelectedEntity = NULL,
 			SelectedBone = -1,
 			SelectedEntities = {},
@@ -111,6 +140,8 @@ local function initializePlayer(pl)
 			Constraints = {},
 			Hovering = false,
 		}
+		MGR.Players[pl] = data
+		return data
 	end
 end
 
@@ -121,6 +152,18 @@ end)
 hook.Add("PlayerDisconnected", "RagdollPoser_RemovePlayerData", function(pl)
 	MGR.Players[pl] = nil
 end)
+
+---@param ply Player
+---@param ent Entity
+---@param data SerializedConstraint[]
+local function entityModifier(ply, ent, data)
+	local d = MGR.Players[ply]
+	if not d then
+		d = initializePlayer(ply)
+	end
+	d.Constraints[ent] = data
+end
+duplicator.RegisterEntityModifier("RagdollPoser", entityModifier)
 
 for _, pl in ipairs(player.GetAll()) do
 	initializePlayer(pl)

@@ -74,12 +74,18 @@ local function trackEntityDuplicators(entity)
 	duplicator.StoreEntityModifier(entity, "RagdollPoser", {})
 
 	if not copiedEntities[entity] then
+		entity.OnEntityCopyTableFinish = nil
 		function entity:OnEntityCopyTableFinish(data)
-			if IsValid(self.rgp_player) then
-				print("bruhh")
+			if IsValid(data.rgp_player) then
+				RagdollPoser.Log("Do tool duplication for ", entity)
 				local d = MGR.Players[self.rgp_player]
 				data.EntityMods["RagdollPoser"] = d.Constraints[entity]
 				data.rgp_player = nil
+				self.rgp_player = nil
+			elseif game.SinglePlayer() then
+				RagdollPoser.Log("Do GMod save duplication for ", entity)
+				local d = MGR.Players[Entity(1)]
+				data.EntityMods["RagdollPoser"] = d.Constraints[entity]
 			end
 		end
 
@@ -92,7 +98,7 @@ hook.Add("CanTool", "RagdollPoser_Data_TrackDuplicator", function(ply, tr, tooln
 	if toolname == "duplicator" and ply:KeyDown(IN_ATTACK2) then
 		local ent = tr.Entity
 		if IsValid(ent) then
-			print("track him!")
+			RagdollPoser.Log(ply, " copied ", entity, " for duplication")
 			ent.rgp_player = ply
 		end
 	end
@@ -108,10 +114,14 @@ local function updateConstraints(len, ply)
 	for _ = 1, count do
 		local entity = net.ReadEntity()
 		entityConstraints[entity] = net.ReadTable(true)
-		trackEntityDuplicators(entity)
+		if IsValid(entity) then
+			trackEntityDuplicators(entity)
+		end
 	end
 	for entity, constraints in pairs(entityConstraints) do
-		playerConstraints[entity] = constraints
+		if IsValid(entity) then
+			playerConstraints[entity] = constraints
+		end
 	end
 	data.Constraints = playerConstraints
 end
@@ -124,9 +134,11 @@ local function updateConstraint(len, ply)
 	local entity = net.ReadEntity()
 	local index = net.ReadUInt(13)
 	local constraint = net.ReadTable() ---@as SerializedConstraint
-	playerConstraints[entity][index] = constraint
-	data.Constraints = playerConstraints
-	trackEntityDuplicators(entity)
+	if IsValid(entity) then
+		playerConstraints[entity][index] = constraint
+		data.Constraints = playerConstraints
+		trackEntityDuplicators(entity)
+	end
 end
 RagdollPoser.Networking.DefineReceiver("UpdateConstraint", updateConstraint)
 

@@ -226,9 +226,6 @@ function MGR:UpdateConstraint(entity, constraint)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		refreshStack(entity)
-		print("update single constraint")
-		PrintTable(stack)
-		print(constraint._id)
 		RagdollPoser.Networking.UpdateConstraint()
 		net.WriteEntity(entity)
 		net.WriteUInt(stack.set[constraint._id], 13)

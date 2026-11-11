@@ -66,7 +66,7 @@ function Base:ConstructUITemplate(entry, props, state)
 			end
 		end
 
-		print("bruh")
+		-- print("bruh")
 		local function getEntityName(entity)
 			local model = RagdollPoser.Helpers.GetModelNameNice(entity)
 			return Format("%s: %s", model, tostring(entity))

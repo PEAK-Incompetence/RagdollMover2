@@ -49,7 +49,7 @@ local function keyBinder(cpanel, leftProps, rightProps)
 	local oldClick1 = binder.NumPad1.DoClick
 	function binder.NumPad1:DoClick()
 		local oldKey = self:GetValue()
-		print(oldKey)
+		-- print(oldKey)
 		oldClick1(self)
 		RagdollPoser.Input:UnregisterKey(leftProps.action, oldKey)
 	end
@@ -65,7 +65,7 @@ local function keyBinder(cpanel, leftProps, rightProps)
 		local oldClick2 = binder.NumPad2.DoClick
 		function binder.NumPad2:DoClick()
 			local oldKey = self:GetValue()
-			print(oldKey)
+			-- print(oldKey)
 			oldClick2(self)
 			RagdollPoser.Input:UnregisterKey(rightProps.action, oldKey)
 		end
@@ -233,7 +233,7 @@ local function makeConstraintEntry(parent, entity, constraint)
 		cvar = "",
 		action = RagdollPoser.Actions.ToggleConstraint,
 		keyChangedCallback = function(newKey)
-			print("run this!")
+			-- print("run this!")
 			constraint.State.key = newKey
 			RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
 		end,
@@ -720,8 +720,8 @@ function MGR:BuildCPanel(cpanel)
 	local constraintList = vgui.Create("DCategoryList", constraintListContainer)
 	constraintList:Dock(FILL)
 	constraintList.Items = {}
-	print("constraint list items!")
-	print(constraintList.Items)
+	-- print("constraint list items!")
+	-- print(constraintList.Items)
 
 	function addConstraint:DoClick()
 		MGR:ConstraintMenu(entitySelector.selected)
@@ -730,7 +730,7 @@ function MGR:BuildCPanel(cpanel)
 	--- @param client ClientEntity
 	local function updateConstraintUI(client)
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		print("clear selected")
+		-- print("clear selected")
 		constraintList:Clear()
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
@@ -750,8 +750,8 @@ function MGR:BuildCPanel(cpanel)
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
 		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
 		updateBoneTree(boneTree, selection, boneTypeRestriction)
-		print("selected check ui")
-		PrintTable(selection)
+		-- print("selected check ui")
+		-- PrintTable(selection)
 		local selectedEntity = selection[#selection]
 		entitySelector.selected = selectedEntity
 		updateConstraintUI(selectedEntity)
@@ -759,9 +759,9 @@ function MGR:BuildCPanel(cpanel)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities", function(entity, constraints)
 		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		print("update constraints")
-		print(entity, client, entitySelector.selected, constraints)
-		print("selected equals us?", entitySelector.selected == client)
+		-- print("update constraints")
+		-- print(entity, client, entitySelector.selected, constraints)
+		-- print("selected equals us?", entitySelector.selected == client)
 		if client == entitySelector.selected then
 			for _, constraint in ipairs(constraints) do
 				makeConstraintEntry(constraintList, entity, constraint)
@@ -771,7 +771,7 @@ function MGR:BuildCPanel(cpanel)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities", function(entity)
 		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		print("no don't do it!")
+		-- print("no don't do it!")
 		-- if client == entitySelector.selected then
 		-- 	updateConstraintUI(client)
 		-- end

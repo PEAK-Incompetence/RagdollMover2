@@ -174,8 +174,8 @@ end
 
 ---@param constraints table<Entity, SerializedConstraint[]>
 function MGR:SetConstraints(constraints)
-	print("setting constraints")
-	PrintTable(constraints)
+	-- print("setting constraints")
+	-- PrintTable(constraints)
 	for entity, serialized in pairs(constraints) do
 		local array = {}
 		local set = {}
@@ -188,7 +188,7 @@ function MGR:SetConstraints(constraints)
 			end
 		end
 		local stack = { set = set, array = array }
-		PrintTable(stack)
+		-- PrintTable(stack)
 		EntityConstraintStacks[entity] = stack
 	end
 end
@@ -295,7 +295,7 @@ local function onKeyPress(actions, key)
 
 			for _, constraint in ipairs(stack.array) do
 				if constraint.State.key == key then
-					print("pressed")
+					-- print("pressed")
 					checked = true
 					constraint.State.enabled = not constraint.State.enabled
 				end

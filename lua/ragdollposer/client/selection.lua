@@ -156,7 +156,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 		local client = entityToClient[entityIndices[i]]
 		-- If the entity we're selecting is about to be removed, then stop refresh
 		if client and client:IsMarkedForDeletion() then
-			print("we're selecting it and removing it??")
+			-- print("we're selecting it and removing it??")
 			entityBonePairs = {}
 			break
 		end
@@ -355,7 +355,7 @@ local function onLeftClickUp(x, y, tr)
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
 		if #selectionBuffer > 2 then
-			PrintTable(selectionBuffer)
+			-- PrintTable(selectionBuffer)
 			if not input.IsShiftDown() then
 				MGR:SetBusy(true)
 				handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
@@ -396,14 +396,14 @@ local function onRightClickUp(x, y, tr)
 	if not MGR:GetEnabled() then
 		return
 	end
-	print("rightclick")
+	-- print("rightclick")
 	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
 	-- If our mouse was on a bone, and we're still on the same bone, select it
 	-- Otherwise, finish selection
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
 		if #selectionBuffer > 2 then
-			PrintTable(selectionBuffer)
+			-- PrintTable(selectionBuffer)
 			MGR:SetBusy(true)
 			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
 				RagdollPoser.UI:ConstraintMenu(entity, bone, true)

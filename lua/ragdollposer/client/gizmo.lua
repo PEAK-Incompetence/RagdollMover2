@@ -353,7 +353,7 @@ function MGR:PreTransform()
 	if not selection[1] then
 		return
 	end
-	print("pretransform")
+	-- print("pretransform")
 
 	---@param entity Entity
 	---@param matrices VMatrix[]
@@ -882,7 +882,7 @@ function MGR:PostTransform()
 		end
 		-- PrintTable(complete)
 		sendSubPose(complete)
-		print("post transform!")
+		-- print("post transform!")
 	end
 
 	local evaluatedEntities = {}
@@ -1228,8 +1228,8 @@ function MGR:SetTransformFromSelection(selection)
 end
 
 local function selected(selection)
-	print("section")
-	PrintTable(selection)
+	-- print("section")
+	-- PrintTable(selection)
 	MGR:SetTransformFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)

@@ -380,7 +380,7 @@ local function sendAssemblyInfo()
 	local count = net.ReadUInt(10)
 	---@type Entity[]
 	local entities = {}
-	print(ent, bone, count)
+	-- print(ent, bone, count)
 	local constraintCount = 0
 	---@type table<Entity, SerializedConstraint[]>
 	local entityConstraints = {}

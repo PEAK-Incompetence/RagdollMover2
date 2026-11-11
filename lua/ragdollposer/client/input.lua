@@ -82,7 +82,7 @@ local function mouseInput(cmd)
 			start = eyePos,
 			endpos = eyePos + pl:GetAimVector() * 16384,
 			filter = { pl, pl:GetViewEntity() },
-			ignoreworld = false, -- TODO: implement ignore world privileges
+			ignoreworld = RagdollPoser.Helpers.CanXRaySelect(pl, tobool(GetConVar("ragdollposer_xray"):GetBool())),
 			output = traceOutput,
 		})
 		local tr = traceOutput

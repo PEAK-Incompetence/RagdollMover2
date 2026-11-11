@@ -629,6 +629,11 @@ function MGR:BuildCPanel(cpanel)
 	end
 	hook.Add("RagdollPoser_Gizmo_OffsetChanged", "UI", offsetChanged)
 
+	local misc = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.misc"), "ControlPanel")
+	local xray = misc:CheckBox("#tool.ragdollposer.xray", "ragdollposer_xray")
+	xray:SetTooltip("#tool.ragdollposer.xray.tooltip")
+	xray:SetEnabled(RagdollPoser.Privileges:Check(LocalPlayer(), "ragdollposer_xray"))
+
 	local boneManip = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.bone.manip"), "ControlPanel")
 	boneManip:CheckBox("#tool.ragdollposer.mirror", "ragdollposer_mirror")
 	local mirrorCombo = boneManip:ComboBox("#tool.ragdollposer.mirror.axis", "ragdollposer_mirror_axis")

@@ -109,6 +109,21 @@ function MGR.IsStaticProp(entity)
 	return result
 end
 
+---@param ply Player
+---@param state boolean
+function MGR.CanXRaySelect(ply, state)
+	if not state then
+		return false
+	end
+	local hasAccess = true
+
+	if not game.SinglePlayer() then
+		hasAccess = RagdollPoser.Privileges:Check(ply, "ragdollposer_xray")
+	end
+
+	return hasAccess
+end
+
 if CLIENT then
 	---[CLIENT]
 	---

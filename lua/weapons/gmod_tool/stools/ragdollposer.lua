@@ -13,15 +13,17 @@ TOOL.ClientConVar["partial"] = 1
 TOOL.ClientConVar["local"] = 0
 TOOL.ClientConVar["localoffset"] = 0
 TOOL.ClientConVar["relativerotate"] = 0
+TOOL.ClientConVar["xray"] = 0
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
 	local pl = self:GetOwner()
+
 	tr = util.TraceLine({
 		start = tr.StartPos,
 		endpos = tr.StartPos + pl:GetAimVector() * 16384,
 		filter = { pl, pl:GetViewEntity() },
-		ignoreworld = false, -- TODO: implement ignore world privileges
+		ignoreworld = RagdollPoser.Helpers.CanXRaySelect(pl, tobool(self:GetClientBool("xray"))),
 	})
 
 	if pl:KeyDown(IN_USE) and tr.HitPos then

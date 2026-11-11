@@ -267,7 +267,6 @@ end
 hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", entityRemoved)
 
 function MGR:Update(pl, entity, bone, entities, constrainedEntities)
-	-- TODO: Expand this maybe, also make it use table fields if we don't plan to use this often
 	local data = MGR.Players[pl] or {}
 	data.SelectedEntity = entity
 	data.SelectedBone = bone

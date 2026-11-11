@@ -10,10 +10,13 @@ local quaternion = include("ragdollposer/shared/quaternion.lua")
 
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
+local dx12 = dxLevel >= 120
 
 -- DiscMaterial shaders come from legacy Ragdoll Mover. These should go inside `disc.lua`
 local discMaterial = Material(dx11 and "ragdollposer/disc_dx11" or "ragdollposer/disc")
 local discMaterialPartial = Material(dx11 and "ragdollposer/disc_partial_dx11" or "ragdollposer/disc_partial")
+
+local scaleMultiplier = 1.5
 
 -- Avoid clones of this
 -- TODO: move this to the gizmo object and do dependency injection
@@ -44,7 +47,7 @@ local verts = {}
 ---@param width number
 local function drawQuad(mat, color, pos, normal, scale, width)
 	for i, point in ipairs(linePositions) do
-		verts[i] = LocalToWorld(point * scale, angle_zero, pos, normal:Angle())
+		verts[i] = LocalToWorld(point * scale * scaleMultiplier, angle_zero, pos, normal:Angle())
 	end
 
 	local eyepos = LocalPlayer():EyePos()
@@ -66,11 +69,12 @@ end
 local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
 
 function disc:Intersect(eyepos, direction, props)
-	local hitPos = util.IntersectRayWithPlane(eyepos, direction * 16384, props.pos, self._axis)
-	local distSqr = hitPos and hitPos:DistToSqr(props.pos) or -1
+	local hitPos = util.IntersectRayWithPlane(eyepos, direction * 16384, props.finalPos, self._axis)
+	local distSqr = hitPos and hitPos:DistToSqr(props.finalPos) or -1
 	local halfScale = (self._facesUs and 0.625 or 0.5) * props.scale
 
-	local isValid = distSqr < (halfScale * 1.1) ^ 2 and distSqr > (halfScale * 0.8) ^ 2
+	local isValid = distSqr < (halfScale * 1.0 * scaleMultiplier * scaleMultiplier) ^ 2
+		and distSqr > (halfScale * 0.9 * scaleMultiplier * scaleMultiplier) ^ 2
 	if isValid and hitPos then
 		debugoverlay.Sphere(hitPos, 2, 0.1, nil, true)
 		return hitPos
@@ -86,15 +90,15 @@ function disc:Draw(props, selected)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 
 	local mat = not self._facesUs and props.partial and discMaterialPartial or discMaterial
-	local discScale = 1
+	local discScale = 1 * scaleMultiplier
 	if self._facesUs then
 		local forward = -eyeAng:Forward()
 		self._axis = forward
 		self._direction = forward
-		discScale = 1.25
+		discScale = 1.25 * scaleMultiplier
 	end
 
-	drawQuad(mat, color, props.pos, self._axis, discScale * props.scale, props.width)
+	drawQuad(mat, color, props.finalPos, self._axis, discScale * props.scale, props.width)
 end
 
 function disc:UpdateOrientation(orientation, props)
@@ -127,9 +131,10 @@ mirrorMatrix:Identity()
 
 function disc:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
-	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, self._axis) or start) - props.pos
-	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, self._axis) or endPos)
-		- props.pos
+	local startHit = (util.IntersectRayWithPlane(eyePos, start * 16384, props.finalPos, self._axis) or start)
+		- props.finalPos
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.finalPos, self._axis) or endPos)
+		- props.finalPos
 		+ eyeDelta
 
 	local mirrorNormal = vector_origin

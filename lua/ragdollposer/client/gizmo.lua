@@ -53,6 +53,9 @@ local MGR = {
 		sensitivity = 1,
 		---@type GizmoOrientation
 		orientation = 0,
+		localoffset = false,
+		relativerotate = false,
+		finalPos = Vector(),
 	},
 
 	_moving = false,
@@ -91,6 +94,25 @@ local MGR = {
 	_hovering = false,
 }
 
+function MGR:UpdateOffset()
+	local offset = Vector()
+	if MGR._gizmoProps.localoffset then
+		offset = self._gizmoProps.offset
+	end
+	local pos = self._gizmoProps.pos
+	local ang = self._gizmoProps.ang
+	self._gizmoProps.finalPos = LocalToWorld(offset, angle_zero, pos, ang)
+end
+
+function MGR:SetOffset(x, y, z)
+	self._gizmoProps.offset:SetUnpacked(x, y, z)
+	self:UpdateOffset()
+	hook.Run("RagdollPoser_Gizmo_OffsetChanged", self._gizmoProps.offset)
+end
+
+function MGR:GetOffset()
+	return self._gizmoProps.offset
+end
 ---@param selection table
 local function setPositionFromSelection(selection)
 	local pos = Vector()
@@ -109,6 +131,7 @@ local function setPositionFromSelection(selection)
 	end
 	pos:Div(count)
 	MGR:SetPosition(pos)
+	MGR:UpdateOffset()
 end
 
 ---@param selection table
@@ -252,6 +275,13 @@ local function sendSubPoseResponse()
 	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
+
+local function setOffset()
+	local worldPos = net.ReadVector()
+	local offset = WorldToLocal(worldPos, angle_zero, MGR._gizmoProps.pos, MGR._gizmoProps.ang)
+	MGR:SetOffset(offset.x, offset.y, offset.z)
+end
+RagdollPoser.Networking.DefineReceiver("SetOffset", setOffset)
 
 function MGR:TestIntersect()
 	-- Gizmos don't have a sense of depth, so we need to measure the depth after collecting depth interests
@@ -1160,6 +1190,9 @@ local function initializeGizmo()
 	MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
 	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
 		or MGR.Orientation.World
+	MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
+	MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
+	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
 	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 end
@@ -1200,8 +1233,21 @@ local function updateOrientation(_, old, new)
 	MGR._gizmoProps.orientation = newOrientation
 	MGR:UpdateOrientation()
 end
-cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_scale_callback")
-cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_scale_callback")
+cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_local_callback")
+cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_local_callback")
+
+local function updateRelativeRotate(_, old, new)
+	MGR._gizmoProps.relativerotate = tobool(new)
+end
+cvars.RemoveChangeCallback("ragdollposer_relativerotate", "ragdollposer_relativerotate_callback")
+cvars.AddChangeCallback("ragdollposer_relativerotate", updateRelativeRotate, "ragdollposer_relativerotate_callback")
+
+local function updateLocalOffset(_, old, new)
+	MGR._gizmoProps.localoffset = tobool(new)
+	MGR:UpdateOffset()
+end
+cvars.RemoveChangeCallback("ragdollposer_localoffset", "ragdollposer_localoffset_callback")
+cvars.AddChangeCallback("ragdollposer_localoffset", updateLocalOffset, "ragdollposer_localoffset_callback")
 
 concommand.Add("ragdollposer_resetgizmo", function()
 	initializeGizmo()

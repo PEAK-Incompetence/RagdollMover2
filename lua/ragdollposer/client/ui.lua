@@ -483,6 +483,25 @@ function MGR:ConstraintMenu(client, bone, keepOpen)
 	menu:Open()
 end
 
+local batch = false
+local function onGizmoChange(sliders)
+	if batch then
+		return
+	end
+	RagdollPoser.Gizmo:SetOffset(sliders[1]:GetValue(), sliders[2]:GetValue(), sliders[3]:GetValue())
+end
+
+local function gizmoOffsetHooks(slider, key, sliders)
+	local offset = RagdollPoser.Gizmo:GetOffset()
+	slider:SetDefaultValue(0)
+
+	slider:SetValue(offset[key])
+
+	slider.OnValueChanged = function()
+		onGizmoChange(sliders)
+	end
+end
+
 ---@param cpanel ControlPanel
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
@@ -493,6 +512,37 @@ function MGR:BuildCPanel(cpanel)
 
 	local gizmoOffsets =
 		makeCategory(gizmoCategory, language.GetPhrase("#tool.ragdollposer.gizmo.offset"), "ControlPanel")
+
+	gizmoOffsets:CheckBox("#tool.ragdollposer.gizmo.localoffset", "ragdollposer_localoffset")
+	gizmoOffsets:CheckBox("#tool.ragdollposer.gizmo.relativerotate", "ragdollposer_relativerotate")
+
+	-- this gizmo offset construction is uuuuuuuuuuuuuuuuuuuuuugly!
+	local x = gizmoOffsets:NumSlider("#tool.ragdollposer.gizmo.offset.x", "", -100, 100, 3)
+	local y = gizmoOffsets:NumSlider("#tool.ragdollposer.gizmo.offset.y", "", -100, 100, 3)
+	local z = gizmoOffsets:NumSlider("#tool.ragdollposer.gizmo.offset.z", "", -100, 100, 3)
+	local sliders = { x, y, z }
+	gizmoOffsetHooks(x, "x", sliders)
+	gizmoOffsetHooks(y, "y", sliders)
+	gizmoOffsetHooks(z, "z", sliders)
+
+	local resetOffsets = gizmoOffsets:Button("#tool.ragdollposer.gizmo.offset.reset", "")
+	function resetOffsets:DoClick()
+		batch = true
+		x:SetValue(0)
+		y:SetValue(0)
+		z:SetValue(0)
+		batch = false
+		onGizmoChange(sliders)
+	end
+
+	local function offsetChanged(offset)
+		batch = true
+		x:SetValue(offset.x)
+		y:SetValue(offset.y)
+		z:SetValue(offset.z)
+		batch = false
+	end
+	hook.Add("RagdollPoser_Gizmo_OffsetChanged", "UI", offsetChanged)
 
 	local boneManip = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.bone.manip"), "ControlPanel")
 	boneManip:CheckBox("#tool.ragdollposer.mirror", "ragdollposer_mirror")

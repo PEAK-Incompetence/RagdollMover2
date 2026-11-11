@@ -8,10 +8,16 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
-local BALL_SCALE = 0.45
+local scaleMultiplier = 1.5
+local BALL_SCALE = 0.6
 
 function ball:Intersect(eyepos, direction, props)
-	local hit1, hit2 = util.IntersectRayWithSphere(eyepos, direction * 16384, props.pos, props.scale * BALL_SCALE)
+	local hit1, hit2 = util.IntersectRayWithSphere(
+		eyepos,
+		direction * 16384,
+		props.finalPos,
+		props.scale * BALL_SCALE * scaleMultiplier
+	)
 
 	if hit1 then
 		-- debugoverlay.Sphere(eyepos + direction * hit1 * 16384, 2, 0.2, self._selectedColor, true)
@@ -25,7 +31,7 @@ function ball:Draw(props, selected)
 	local color = selected and self._selectedColor or self._color
 
 	render.SetColorMaterialIgnoreZ()
-	render.DrawSphere(props.pos, props.scale * BALL_SCALE, 12, 12, color)
+	render.DrawSphere(props.finalPos, props.scale * BALL_SCALE * scaleMultiplier, 12, 12, color)
 end
 
 ---Convert directions to quaternions
@@ -43,7 +49,7 @@ end
 function ball:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local x, y = input.GetCursorPos()
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
-	local eyedist = eyePos:Distance(props.pos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / 60
 	local forward = eyeAng:Forward()
 	local right = eyeAng:Right()
 
@@ -79,7 +85,7 @@ function ball:Transform(directions, deltaProps, transforms, accumulations, initi
 	local dx, dy = self.dx, self.dy
 
 	-- The closer we are to the gizmo, the more precise the movement should be
-	local eyedist = eyePos:Distance(props.pos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / 60
 	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
 	local scale = props.scale
 	-- The smaller the ball, the more rotation we give
@@ -90,7 +96,7 @@ function ball:Transform(directions, deltaProps, transforms, accumulations, initi
 
 	rotationQuaternion:SetAngleAxis(angle, axis)
 
-	debugoverlay.BoxAngles(props.pos, min, max, rotationQuaternion:Angle(), 0.2)
+	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
 	for i, matrix in ipairs(transforms) do
 		local quat = initials[i]

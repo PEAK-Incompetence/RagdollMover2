@@ -32,7 +32,7 @@ function scale:Intersect(eyepos, direction, props)
 	local angle = props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero
 	if developer:GetBool() then
 		render.DrawBox(
-			props.pos,
+			props.finalPos,
 			angle,
 			tempMin + self._direction * scale * centerPadding,
 			tempMax + self._direction * scale
@@ -41,7 +41,7 @@ function scale:Intersect(eyepos, direction, props)
 	local result = util.IntersectRayWithOBB(
 		eyepos,
 		direction * 16384,
-		props.pos,
+		props.finalPos,
 		angle,
 		tempMin + self._direction * scale * centerPadding,
 		tempMax + self._direction * scale
@@ -60,7 +60,7 @@ function scale:Draw(props, selected)
 	local mat = scaleMaterial
 	local color = selected and YELLOW or self._color
 
-	local endPos = props.pos + self._axis * props.scale
+	local endPos = props.finalPos + self._axis * props.scale
 
 	mat:SetFloat("$c0_x", props.width)
 	mat:SetFloat("$c0_y", color.r)
@@ -70,7 +70,7 @@ function scale:Draw(props, selected)
 	mat:SetFloat("$c1_w", 1 / height)
 	render.SetMaterial(mat)
 
-	render.DrawBeam(props.pos, endPos, props.scale * 0.5, 0, 1)
+	render.DrawBeam(props.finalPos, endPos, props.scale * 0.5, 0, 1)
 end
 
 ---@param props GizmoProps
@@ -89,14 +89,14 @@ function scale:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 	local forward = -eyeAng:Forward()
 	if not self.start then
-		self.start = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
+		self.start = (util.IntersectRayWithPlane(eyePos, start * 16384, props.finalPos, forward) or start)
 	end
 	if not self.mirrorStart and mirrorAxis >= 0 then
-		self.mirrorStart = (util.IntersectRayWithPlane(eyePos, start * 16384, props.pos, forward) or start)
+		self.mirrorStart = (util.IntersectRayWithPlane(eyePos, start * 16384, props.finalPos, forward) or start)
 	end
 
 	local startHit = mirrorAxis >= 0 and self.mirrorStart or self.start
-	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.pos, forward) or endPos)
+	local endHit = (util.IntersectRayWithPlane(eyePos, endPos * 16384, props.finalPos, forward) or endPos)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)

@@ -32,7 +32,7 @@ function arrow:Intersect(eyepos, direction, props)
 	local angle = props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero
 	if developer:GetBool() then
 		render.DrawBox(
-			props.pos,
+			props.finalPos,
 			angle,
 			tempMin + self._direction * scale * centerPadding,
 			tempMax + self._direction * scale
@@ -41,7 +41,7 @@ function arrow:Intersect(eyepos, direction, props)
 	local result = util.IntersectRayWithOBB(
 		eyepos,
 		direction * 16384,
-		props.pos,
+		props.finalPos,
 		angle,
 		tempMin + self._direction * scale * centerPadding,
 		tempMax + self._direction * scale
@@ -60,7 +60,7 @@ function arrow:Draw(props, selected)
 	local mat = arrowMaterial
 	local color = selected and YELLOW or self._color
 
-	local endPos = props.pos + self._axis * props.scale
+	local endPos = props.finalPos + self._axis * props.scale
 
 	mat:SetFloat("$c0_x", props.width)
 	mat:SetFloat("$c0_y", color.r)
@@ -70,7 +70,7 @@ function arrow:Draw(props, selected)
 	mat:SetFloat("$c1_w", 1 / height)
 	render.SetMaterial(mat)
 
-	render.DrawBeam(props.pos, endPos, props.scale * 0.5, 0, 1)
+	render.DrawBeam(props.finalPos, endPos, props.scale * 0.5, 0, 1)
 end
 
 ---@param props GizmoProps
@@ -93,8 +93,12 @@ function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local forward = eyeAng:Forward()
 	local back = -forward
 
-	local startHit = (util.IntersectRayWithPlane(eyePos + eyeDelta, start * 16384, props.pos + eyeDelta, back) or start)
-	local endHit = (util.IntersectRayWithPlane(eyePos + eyeDelta, endPos * 16384, props.pos + eyeDelta, back) or endPos)
+	local startHit = (
+		util.IntersectRayWithPlane(eyePos + eyeDelta, start * 16384, props.finalPos + eyeDelta, back) or start
+	)
+	local endHit = (
+		util.IntersectRayWithPlane(eyePos + eyeDelta, endPos * 16384, props.finalPos + eyeDelta, back) or endPos
+	)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)

@@ -11,7 +11,14 @@ local quaternion = include("ragdollposer/shared/quaternion.lua")
 local scaleMultiplier = 1.5
 local BALL_SCALE = 0.6
 
+---@param eyepos Vector
+---@param direction Vector
+---@param props GizmoProps
 function ball:Intersect(eyepos, direction, props)
+	if not props.drawsphere then
+		return
+	end
+
 	local hit1, hit2 = util.IntersectRayWithSphere(
 		eyepos,
 		direction * 16384,
@@ -28,6 +35,10 @@ end
 ---@param props GizmoProps
 ---@param selected boolean
 function ball:Draw(props, selected)
+	if not props.drawsphere then
+		return
+	end
+
 	local color = selected and self._selectedColor or self._color
 
 	render.SetColorMaterialIgnoreZ()

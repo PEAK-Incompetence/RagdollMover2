@@ -57,6 +57,7 @@ local MGR = {
 		orientation = 0,
 		localoffset = false,
 		relativerotate = false,
+		drawsphere = false,
 		finalPos = Vector(),
 	},
 
@@ -1297,6 +1298,7 @@ local function initializeGizmo()
 		or MGR.Orientation.World
 	MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
 	MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
+	MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
 	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
@@ -1322,19 +1324,21 @@ end
 cvars.RemoveChangeCallback("ragdollposer_scale", "ragdollposer_scale_callback")
 cvars.AddChangeCallback("ragdollposer_scale", updateScale, "ragdollposer_scale_callback")
 local function updateMirror(_, old, new)
-	MGR._mirror = tobool(new)
+	MGR._mirror = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
 cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
 
 local function updatePartial(_, old, new)
-	MGR._gizmoProps.partial = tobool(new)
+	MGR._gizmoProps.partial = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_partial", "ragdollposer_partial_callback")
 cvars.AddChangeCallback("ragdollposer_partial", updatePartial, "ragdollposer_partial_callback")
 
 local function updateOrientation(_, old, new)
-	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World
+	new = tonumber(new)
+	local newOrientation = Either(tobool(new), MGR.Orientation.Local, MGR.Orientation.World)
+
 	MGR._gizmoProps.orientation = newOrientation
 	MGR:UpdateOrientation()
 end
@@ -1342,17 +1346,24 @@ cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_local_callback")
 cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_local_callback")
 
 local function updateRelativeRotate(_, old, new)
-	MGR._gizmoProps.relativerotate = tobool(new)
+	MGR._gizmoProps.relativerotate = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_relativerotate", "ragdollposer_relativerotate_callback")
 cvars.AddChangeCallback("ragdollposer_relativerotate", updateRelativeRotate, "ragdollposer_relativerotate_callback")
 
 local function updateLocalOffset(_, old, new)
-	MGR._gizmoProps.localoffset = tobool(new)
+	MGR._gizmoProps.localoffset = tobool(tonumber(new))
 	MGR:UpdateOffset()
 end
 cvars.RemoveChangeCallback("ragdollposer_localoffset", "ragdollposer_localoffset_callback")
 cvars.AddChangeCallback("ragdollposer_localoffset", updateLocalOffset, "ragdollposer_localoffset_callback")
+
+local function updateDrawSphere(_, old, new)
+	MGR._gizmoProps.drawsphere = tobool(tonumber(new))
+	MGR:UpdateOffset()
+end
+cvars.RemoveChangeCallback("ragdollposer_drawsphere", "ragdollposer_drawsphere_callback")
+cvars.AddChangeCallback("ragdollposer_drawsphere", updateDrawSphere, "ragdollposer_localoffset_callback")
 
 concommand.Add("ragdollposer_resetgizmo", function()
 	initializeGizmo()

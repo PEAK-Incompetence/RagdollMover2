@@ -293,6 +293,7 @@ local function populateEntities(entityTree, clients, selectedEntities)
 		if parentNode then
 			parentNode:CreateChildNodes()
 			childNode:SetParentNode(parentNode)
+			---@diagnostic disable-next-line: unchecked-nil-access, undefined-field
 			parentNode.ChildNodes:Add(childNode)
 			parentNode:InvalidateLayout()
 			parentNode:SetExpanded(true, true)
@@ -554,7 +555,7 @@ function MGR:ConstraintMenu(client, bone, keepOpen)
 						influence = 1,
 					}
 				end
-
+				---@diagnostic disable-next-line: param-type-mismatch
 				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state)
 			end)
 			option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
@@ -587,8 +588,10 @@ end
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
 	gizmoCategory:CheckBox("#tool.ragdollposer.local", "ragdollposer_local")
+	local drawSphere = gizmoCategory:CheckBox("#tool.ragdollposer.gizmo.drawsphere", "ragdollposer_drawsphere")
 	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
+
 	local cycle = keyBinder(gizmoCategory, {
 		label = "#tool.ragdollposer.cycle",
 		cvar = "ragdollposer_cycle_key",
@@ -619,6 +622,7 @@ function MGR:BuildCPanel(cpanel)
 		batch = false
 		onGizmoChange(sliders)
 	end
+	gizmoOffsets:SetExpanded(false)
 
 	local function offsetChanged(offset)
 		batch = true
@@ -632,7 +636,8 @@ function MGR:BuildCPanel(cpanel)
 	local misc = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.misc"), "ControlPanel")
 	local xray = misc:CheckBox("#tool.ragdollposer.xray", "ragdollposer_xray")
 	xray:SetTooltip("#tool.ragdollposer.xray.tooltip")
-	xray:SetEnabled(RagdollPoser.Privileges:Check(LocalPlayer(), "ragdollposer_xray"))
+	local subtitle = misc:CheckBox("#tool.ragdollposer.misc.funsubtitles", "ragdollposer_funsubtitles")
+	subtitle:SetTooltip("#tool.ragdollposer.misc.funsubtitles.tooltip")
 
 	local boneManip = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.bone.manip"), "ControlPanel")
 	boneManip:CheckBox("#tool.ragdollposer.mirror", "ragdollposer_mirror")
@@ -644,7 +649,7 @@ function MGR:BuildCPanel(cpanel)
 	mirrorCombo:ChooseOption(mirrorMapping[id - 1], id)
 
 	local selectBoneAndRoot = keyBinder(boneManip, {
-		label = "#tool.ragdollposer.select",
+		label = "#tool.ragdollposer.select.toggle",
 		cvar = "ragdollposer_select_key",
 		action = RagdollPoser.Actions.SelectBone,
 	}, {
@@ -795,6 +800,45 @@ function MGR:Initialize(cpanel)
 		ErrorNoHaltWithStack(msg)
 	end
 end
+
+local firstStart = true
+local base = "#tool.ragdollposer.desc"
+local phraseCount = 0
+
+-- Load all fun subtitles
+function MGR:InitializeDraw()
+	if firstStart then
+		firstStart = false
+		for i = 1, 50 do
+			local test = language.GetPhrase(base .. i)
+			if string.find(test, base) then
+				phraseCount = i - 1
+				return
+			end
+		end
+	end
+end
+
+-- Change the subtitle every 30 minutes
+local cooldown = 30 * 60
+local last = CurTime() - 30 * 60
+local phrase = language.GetPhrase("#tool.ragdollposer.desc1")
+function MGR:Draw()
+	if GetConVar("ragdollposer_funsubtitles"):GetBool() then
+		local now = CurTime()
+		if now - last > cooldown then
+			last = now
+			local index = math.random(1, phraseCount)
+			phrase = language.GetPhrase("#tool.ragdollposer.desc" .. index)
+		end
+	else
+		last = CurTime() - 30 * 60
+		phrase = language.GetPhrase("#tool.ragdollposer.desc1")
+	end
+	language.Add("tool.ragdollposer.desc", phrase)
+end
+
+MGR:InitializeDraw()
 
 RagdollPoser.UI = MGR
 

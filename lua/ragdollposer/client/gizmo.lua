@@ -981,9 +981,12 @@ function MGR:Draw()
 end
 
 local hovered = {}
+-- This hook runs repeatedly!
 hook.Add("RagdollPoser_Selection_Hover", "Gizmo", function(bone, entity)
 	hovered = {}
-	hovered[entity] = bone
+	if bone and IsValid(entity) then
+		hovered[entity] = bone
+	end
 end)
 
 local BLUE = Color(0, 0, 255, 255)
@@ -1001,7 +1004,32 @@ function MGR:DrawHovered()
 
 		-- TODO: Categorize based on bone type
 		surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
+		for _, childBone in ipairs(entity:GetChildBones(bone)) do
+			entity:CopyBoneMatrix(childBone, mat)
+			local p = mat:GetTranslation()
+			local data = p:ToScreen()
+			if not data.visible then
+				continue
+			end
+
+			local cx, cy = data.x, data.y
+
+			surface.DrawLine(tx, ty, cx, cy)
+		end
+		local boneName = entity:GetBoneName(bone)
+		draw.SimpleTextOutlined(
+			boneName,
+			"RagdollPoserFont",
+			tx,
+			ty,
+			color,
+			TEXT_ALIGN_LEFT,
+			TEXT_ALIGN_BOTTOM,
+			OUTLINE_WIDTH,
+			BLACK
+		)
 	end
+	hovered = {}
 end
 
 -- TODO: Move drawing functions into another file? render.lua

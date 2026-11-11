@@ -341,6 +341,9 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 	child:SetIcon(child.boneIcon)
 	child:SetExpanded(true, false)
 
+	function child:TestHover()
+		hook.Run("RagdollPoser_Selection_Hover", bone, entity)
+	end
 	function child:DoClick()
 		local root = getRootNode(self)
 		if not input.IsShiftDown() then

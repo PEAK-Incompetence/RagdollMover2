@@ -903,6 +903,7 @@ function MGR:PostTransform()
 end
 
 local function onLeftClickDown(x, y, tr)
+	RagdollPoser.Input:ResetDelta()
 	-- If we're not accepting drag selections, then don't do anything
 	if RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
 		-- Click on gizmo and do stuff

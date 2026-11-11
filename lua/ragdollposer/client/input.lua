@@ -141,4 +141,9 @@ local function mouseDelta(cmd, x, y, ang)
 end
 hook.Add("InputMouseApply", "RagdollPoser_MouseDelta", mouseDelta)
 
+function MGR:ResetDelta()
+	self.xMove = 0
+	self.yMove = 0
+end
+
 RagdollPoser.Input = MGR

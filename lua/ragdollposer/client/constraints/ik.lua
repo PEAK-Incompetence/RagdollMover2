@@ -296,7 +296,7 @@ function ik:ConstructUI(entry, props, state)
 	footer()
 end
 
-function ik:PreEvaluate(entity)
+function ik:PreEvaluate(entity, transforms, indices, locals, parents)
 	self._goal = nil
 	self._poseLocals = nil
 	self._effectorLocal = nil
@@ -369,6 +369,7 @@ function ik:EvaluatePose(entity, controlledBones, transforms)
 		return
 	end
 
+	-- TODO: Add support for moving locked bones with IKs and doing the IK stuff all at once
 	local selectedEffector = false
 	for _, bone in ipairs(controlledBones) do
 		if bone == effector then
@@ -410,6 +411,7 @@ function ik:EvaluatePose(entity, controlledBones, transforms)
 		if not parentMatrix then
 			return
 		end
+		---@cast parentMatrix VMatrix
 		for _, child in ipairs(client:GetChildBones(bone)) do
 			local localMatrix = self._poseLocals[child]
 			if localMatrix and transforms[child + 1] then

@@ -377,6 +377,11 @@ function MGR:PreTransform()
 			end
 		end
 	end
+
+	-- TODO: SIMPLIFY THE BS BELOW.
+	-- New method:
+	-- PreTransform -> Transform -> Post Transform (resolve parent bone hierarchies) -> Constraints -> IK
+
 	-- TODO: Maybe simplify the tables used below for doing transforms?
 	-- There could be a simpler, possibly more performant way to doing things
 	self._matrices = {}
@@ -563,6 +568,7 @@ function MGR:PreTransform()
 	self.startPos = newPos
 
 	local evaluatedEntities = {}
+	-- added by gpt for IK and lock constraints
 	local function preEvaluateConstraints(selectionToEvaluate)
 		for i = 1, #selectionToEvaluate - 1, 2 do
 			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
@@ -625,6 +631,7 @@ function MGR:Transform()
 					eyeDelta
 				)
 
+				-- Move the selected bone
 				gizmo:Transform(
 					pivots[client],
 					deltaProps,
@@ -634,6 +641,7 @@ function MGR:Transform()
 					self._gizmoProps
 				)
 
+				-- Resolve parent bone hierarchies (if I moved an arm, all the child bones of that should move along with it)
 				gizmo:PostTransform(
 					self._matrices[client][bone],
 					self._localMatrices[client][bone],
@@ -670,12 +678,8 @@ function MGR:Transform()
 			end
 		end
 
-		transformSelected(selection, self._pivots, false)
-		if self._mirroredSelection[1] then
-			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
-		end
-
 		local controlledBones = {}
+		-- more gpt slop
 		local function collectControlledBones(selectionToCollect)
 			for i = 1, #selectionToCollect - 1, 2 do
 				local bone, client = selectionToCollect[i], selectionToCollect[i + 1]
@@ -687,6 +691,11 @@ function MGR:Transform()
 		end
 		collectControlledBones(selection)
 		collectControlledBones(self._mirroredSelection)
+
+		transformSelected(selection, self._pivots, false)
+		if self._mirroredSelection[1] then
+			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
+		end
 
 		for entity, bones in pairs(controlledBones) do
 			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
@@ -775,20 +784,33 @@ local function sendSubPose(selection)
 		end
 	end
 
-	for _, entity in ipairs(entities) do
-		local arr = bones[entity]
-		local set = boneSet[entity]
+	-- pyraMid of geez! uhh
+	-- FIXME: why did A.I. make this?
+	local entityIndex = 1
+	while entityIndex <= #entities do
+		local entity = entities[entityIndex]
 		for _, constraint in ipairs(RagdollPoser.Constraints:GetConstraintStack(entity)) do
-			if constraint.GetOutputRoot then
-				local root = constraint:GetOutputRoot()
-				if root and not set[root] then
-					addChildBones(entity, root, arr, set)
+			local outputEntity = constraint.GetOutputEntity and constraint:GetOutputEntity() or entity
+			local root = constraint.GetOutputRoot and constraint:GetOutputRoot()
+			if IsValid(outputEntity) and root then
+				RagdollPoser.Entity.ExposeBones(outputEntity)
+				local arr = bones[outputEntity]
+				local set = boneSet[outputEntity]
+				if not arr then
+					arr = {}
+					set = {}
+					bones[outputEntity] = arr
+					boneSet[outputEntity] = set
+					table.insert(entities, outputEntity)
+				end
+				if not set[root] then
+					addChildBones(outputEntity, root, arr, set)
 				end
 			end
 		end
+		entityIndex = entityIndex + 1
 	end
 
-	-- TODO: Add support for parented entities
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
@@ -797,12 +819,32 @@ local function sendSubPose(selection)
 		local bs = bones[entity]
 		local count = #bs
 		net.WriteUInt(count, 8)
+		local physCount = RagdollPoser.Entity.GetPhysBoneCount(entity)
 		for _, b in ipairs(bs) do
 			net.WriteUInt(b, 8)
-			local matrix = matrices[b + 1]
+			local matrix = matrices[b + 1] * IDENTITY_MATRIX
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 			if physbone >= 0 or isStaticProp(entity) then
+				-- Compare if bone matrices and angles match up
+				-- if not, then we need to apply corrections
+				-- TODO: Does this happen with ragdolls too?
+				-- TODO: Add parented entity layer so that matrices sent there is correct
+				-- All bonemerged entities use manipulates, while parented use setpos/setang
+				if physCount == 1 then
+					local m1 = Matrix()
+					m1:Rotate(entity:GetAngles())
+					local m2 = Matrix()
+					m2:Rotate(entity:GetBoneMatrix(b):GetAngles())
+					local offset = m2:GetTransposed() * m1
+					local trace = offset:GetField(1, 1) + offset:GetField(2, 2) + offset:GetField(3, 3)
+					local difference = math.acos(math.Clamp((trace - 1) * 0.5, -1, 1))
+					if difference >= 1e-6 then
+						local rotation = matrix * offset
+						matrix:SetAngles(rotation:GetAngles())
+					end
+				end
+
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
@@ -887,12 +929,20 @@ local CYAN = Color(0, 128, 255, 255)
 local RED = Color(255, 0, 0, 255)
 local YELLOW = Color(255, 255, 0, 255)
 
--- TODO: Use theming
+-- TODO: Use themings
 local boneTypeToColor = {
 	[RagdollPoser.Bones.BoneType.Physics] = GREEN,
 	[RagdollPoser.Bones.BoneType.Manipulate] = CYAN,
 	[RagdollPoser.Bones.BoneType.Procedural] = RED,
 }
+
+---@param theme Theme
+local function updateTheme(theme)
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Physics] = theme.gizmoColors.physics
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Manipulate] = theme.gizmoColors.manipulate
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Procedural] = theme.gizmoColors.procedural
+end
+hook.Add("RagdollPoser_Themes_Update", "Gizmo", updateTheme)
 
 -- Make sure you are in the 2D rendering context
 function MGR:DrawBones()

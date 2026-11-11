@@ -9,7 +9,7 @@ lock.Properties = {
 	name = "#tool.ragdollposer.constraint.lockscale.name",
 	desc = "#tool.ragdollposer.constraint.lockscale.desc",
 	help = "#tool.ragdollposer.constraint.lockscale.help",
-	icon = "",
+	icon = "icon16/arrow_out.png",
 }
 
 function lock:ConstructUI(entry, props, state)

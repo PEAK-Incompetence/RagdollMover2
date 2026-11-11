@@ -5,6 +5,24 @@
 ---@class RagdollPoser.UI
 local MGR = {}
 
+---@enum BoneCategory
+MGR.BoneCategory = {
+	All = 0,
+	Phys = 1,
+	NonPhys = 2,
+}
+
+local categoryToType = {
+	[MGR.BoneCategory.Phys] = RagdollPoser.Bones.BoneType.Physics,
+	[MGR.BoneCategory.NonPhys] = RagdollPoser.Bones.BoneType.Manipulate,
+}
+
+---@param category BoneCategory
+---@return boolean|BoneType
+function MGR:CategoryToType(category)
+	return category ~= self.BoneCategory.All and categoryToType[category]
+end
+
 local getModelIcon, getNiceModelName = RagdollPoser.Helpers.GetModelNodeIconPath, RagdollPoser.Helpers.GetModelNameNice
 
 ---@param cpanel ControlPanel|DForm
@@ -209,10 +227,21 @@ local mirrorMapping = {
 }
 local mirrorMappingInverse = table.Flip(mirrorMapping)
 
+--- Preserve the old position of the scroll when clearing up things, for consistency
+---@param tree rgp_tree
+local function preserveScroll(tree)
+	local oldVScroll, oldHScroll = tree.VBar:GetScroll(), tree.HBar:GetScroll()
+	return function()
+		tree.VBar:SetScroll(oldVScroll)
+		tree.HBar:SetScroll(oldHScroll)
+	end
+end
+
 ---@param entityTree EntityTree
 ---@param clients ClientEntity[]
 ---@param selectedEntities SelectedEntities
 local function populateEntities(entityTree, clients, selectedEntities)
+	local preserve = preserveScroll(entityTree)
 	entityTree:Clear()
 
 	for _, entity in ipairs(clients) do
@@ -243,6 +272,7 @@ local function populateEntities(entityTree, clients, selectedEntities)
 			parentNode:SetExpanded(true, true)
 		end
 	end
+	preserve()
 end
 
 local boneTypes = {
@@ -255,6 +285,11 @@ local boneTypes = {
 
 ---From Ragdoll Puppeteer
 ---@class BoneTreeNode: DTree_Node
+---@field bone integer
+---@field boneType BoneType
+
+---@class BoneTreeRoot: DTree
+---@field nodes table<integer, BoneTreeNode>
 
 ---@param node DTree_Node
 ---@return DTree_Node root
@@ -349,10 +384,11 @@ end
 
 ---Add the bone nodes for the boneTree from the puppet
 ---@param entity ClientEntity
----@param boneTree DTree
-local function setupBoneNodesOf(entity, boneTree)
+---@param boneTree BoneTreeRoot
+---@param boneTypeRestriction BoneType|boolean
+local function setupBoneNodesOf(entity, boneTree, boneTypeRestriction)
+	---@type table<integer, BoneTreeNode>
 	boneTree.nodes = {}
-	---@type BoneTreeNode[]
 	local parentSet = {}
 	for b = 0, entity:GetBoneCount() - 1 do
 		if entity:GetBoneName(b) == "__INVALIDBONE__" then
@@ -362,25 +398,33 @@ local function setupBoneNodesOf(entity, boneTree)
 		RagdollPoser.Entity.ExposeBones(entity)
 
 		local boneType = getBoneType(entity, b)
+		if boneTypeRestriction and boneType ~= boneTypeRestriction then
+			continue
+		end
 
 		local parent = entity:GetBoneParent(b)
 		if parent > -1 and parentSet[parent] then
 			local node = addBoneNode(parentSet[parent], entity, b, entity:GetBoneName(b), boneType)
 			parentSet[b] = node
 			parentSet[b].boneId = b
+			parentSet[b].boneType = boneType
 		else
 			local node = addBoneNode(boneTree, entity, b, entity:GetBoneName(b), boneType)
 			parentSet[b] = node
 			parentSet[b].boneId = b
+			parentSet[b].boneType = boneType
 		end
 	end
 	boneTree.nodes = parentSet
 end
 
----@param boneTree DTree
+---@param boneTree BoneTree
 ---@param selection Selection
-local function populateBoneTree(boneTree, selection)
+---@param boneTypeRestriction BoneType|boolean
+local function populateBoneTree(boneTree, selection, boneTypeRestriction)
+	local preserve = preserveScroll(boneTree)
 	boneTree:Clear()
+	---@type table<ClientEntity, BoneTreeRoot>
 	boneTree.Entities = {}
 
 	for i = 1, #selection - 1, 2 do
@@ -389,14 +433,19 @@ local function populateBoneTree(boneTree, selection)
 
 		local boneRoot = boneTree.Entities[entity]
 		if not boneTree.Entities[entity] then
+			---@class BoneTreeRoot
 			boneRoot = boneTree:AddNode(getNiceModelName(entity), getModelIcon(entity)) --[[@as DTree]]
 			boneRoot:SetExpanded(true)
-			setupBoneNodesOf(entity, boneRoot)
+			setupBoneNodesOf(entity, boneRoot, boneTypeRestriction)
 			boneTree.Entities[entity] = boneRoot
 		end
 
-		boneRoot.nodes[bone]:SetSelected(true)
+		local selectedNode = boneRoot.nodes[bone]
+		if selectedNode then
+			selectedNode:SetSelected(true)
+		end
 	end
+	preserve()
 end
 
 local function updateBoneTree(boneTree, selection)
@@ -416,12 +465,15 @@ local function updateBoneTree(boneTree, selection)
 			boneRoot = boneTree:AddNode(getNiceModelName(entity), getModelIcon(entity)) --[[@as DTree]]
 			boneRoot:SetExpanded(true)
 			boneRoot:SetSelectable(false)
-			setupBoneNodesOf(entity, boneRoot)
+			setupBoneNodesOf(entity, boneRoot, boneTypeRestriction)
 			boneTree.Entities[entity] = boneRoot
 		end
 
 		selected[entity] = true
-		boneRoot.nodes[bone]:SetSelected(true)
+		local selectedNode = boneRoot.nodes[bone]
+		if selectedNode then
+			selectedNode:SetSelected(true)
+		end
 	end
 
 	for entity, node in pairs(boneTree.Entities) do
@@ -557,6 +609,28 @@ function MGR:BuildCPanel(cpanel)
 
 	local boneTreeCategory = makeCategory(boneManip, language.GetPhrase("tool.ragdollposer.bone.tree"), "ControlPanel")
 
+	local buttonContainer = boneTreeCategory:Add("DSizeToContents")
+	local phys, all, nonPhys =
+		buttonContainer:Add("DButton"), buttonContainer:Add("DButton"), buttonContainer:Add("DButton")
+	phys:Dock(LEFT)
+	all:Dock(FILL)
+	nonPhys:Dock(RIGHT)
+	phys:SetText("#tool.ragdollposer.bone.phys")
+	all:SetText("#tool.ragdollposer.bone.all")
+	nonPhys:SetText("#tool.ragdollposer.bone.nonphys")
+	buttonContainer:SetTall(25)
+
+	-- Notify other systems to show or hide certain bones
+	function phys.DoClick()
+		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.Phys)
+	end
+	function all.DoClick()
+		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.All)
+	end
+	function nonPhys.DoClick()
+		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.NonPhys)
+	end
+
 	local panelContainer = vgui.Create("DPanel", boneTreeCategory)
 	panelContainer:SizeTo(-1, 400, 0)
 	boneTreeCategory:AddItem(panelContainer)
@@ -574,6 +648,8 @@ function MGR:BuildCPanel(cpanel)
 	local entitySelector = entitySelectorContainer:Add("rgp_tree")
 
 	---@class BoneTree: rgp_tree
+	---@field [ClientEntity] DTree_Node
+	---@field [ClientEntity] DTree_Node
 	local boneTree = boneTreeContainer:Add("rgp_tree")
 
 	entitySelector:Dock(FILL)
@@ -584,7 +660,7 @@ function MGR:BuildCPanel(cpanel)
 		RagdollPoser.Entity.GetClientEntities(),
 		RagdollPoser.Selection:GetSelectedEntities()
 	)
-	populateBoneTree(boneTree, RagdollPoser.Selection:GetSelection())
+	populateBoneTree(boneTree, RagdollPoser.Selection:GetSelection(), false)
 
 	local constraintCategory = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.constraint"), "ControlPanel")
 	local addConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.add"))
@@ -624,9 +700,11 @@ function MGR:BuildCPanel(cpanel)
 		updateConstraintUI(client)
 	end
 
+	---@type BoneType|boolean
+	local boneTypeRestriction = false
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
 		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
-		updateBoneTree(boneTree, selection)
+		updateBoneTree(boneTree, selection, boneTypeRestriction)
 		print("selected check ui")
 		PrintTable(selection)
 		local selectedEntity = selection[#selection]
@@ -653,10 +731,16 @@ function MGR:BuildCPanel(cpanel)
 		-- 	updateConstraintUI(client)
 		-- end
 	end)
+
+	hook.Add("RagdollPoser_UI_Bone_Show", "UI_ShowAllBones", function(boneCategory)
+		boneTypeRestriction = self:CategoryToType(boneCategory)
+		populateBoneTree(boneTree, RagdollPoser.Selection:GetSelection(), boneTypeRestriction)
+	end)
 end
 
 ---@param cpanel ControlPanel
 function MGR:Initialize(cpanel)
+	hook.Remove("RagdollPoser_UI_Bone_Show", "UI_ShowAllBones")
 	hook.Remove("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities")
 	hook.Remove("RagdollPoser_Selection_Selected", "UI_UpdateEntities")
 	hook.Remove("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities")

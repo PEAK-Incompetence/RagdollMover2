@@ -889,7 +889,8 @@ function MGR:DrawBones()
 	local mouseHovered = {}
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
-	if RagdollPoser.Selection:GetEnabled() then
+	local selection = RagdollPoser.Selection
+	if selection:GetEnabled() then
 		local ents = RagdollPoser.Entity.GetClientEntities()
 		for _, ent in ipairs(ents) do
 			if not IsValid(ent) then
@@ -914,9 +915,12 @@ function MGR:DrawBones()
 				local tx, ty = data.x, data.y
 				local x, y = input.GetCursorPos()
 				local boneType = bones:GetBoneType(ent, b)
+				if selection._filter and selection._filter ~= boneType then
+					continue
+				end
 				local color = boneTypeToColor[boneType]
 
-				local pointSelected = RagdollPoser.Selection:RaycastBone(x, y, tx, ty)
+				local pointSelected = selection:RaycastBone(x, y, tx, ty)
 				if pointSelected then
 					color = YELLOW
 					table.insert(mouseHovered, b)
@@ -935,11 +939,7 @@ function MGR:DrawBones()
 
 					local cx, cy = data.x, data.y
 
-					if
-						not pointSelected
-						and not childSelected
-						and RagdollPoser.Selection:RaycastBoneLine(x, y, tx, ty, cx, cy)
-					then
+					if not pointSelected and not childSelected and selection:RaycastBoneLine(x, y, tx, ty, cx, cy) then
 						color = YELLOW
 						table.insert(mouseHovered, b)
 						childSelected = true

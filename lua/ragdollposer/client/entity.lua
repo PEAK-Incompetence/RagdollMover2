@@ -403,6 +403,7 @@ local function sendAssemblyInfo()
 		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
 		local selection = RagdollPoser.Selection:GetSelection()
 		if selection[#selection] ~= ent then
+			RagdollPoser.Selection:ResetFilter()
 			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent], false)
 		end
 	else

@@ -36,6 +36,10 @@ local MGR = {
 	_dragY = -1,
 
 	_busy = false,
+
+	-- Set the filter to a BoneType to ignore certain bones from selection
+	---@type BoneType|boolean
+	_filter = false,
 }
 
 function MGR:StartDrag(x, y)
@@ -56,6 +60,11 @@ function MGR:SelectOne(bone, entity, accumulate)
 	-- Accumulate selections if we want to manipulate them all at once
 
 	entitySelectedBones[entity] = entitySelectedBones[entity] or {}
+	local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
+	if self._filter and self._filter ~= boneType then
+		return
+	end
+
 	if accumulate then
 		if not entitySelectedBones[entity][bone] then
 			local count = #entityBonePairs + 1
@@ -75,6 +84,19 @@ function MGR:SelectOne(bone, entity, accumulate)
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
+function MGR:SetSelection(selection)
+	local selectedEntities = {}
+	for i = 1, #selection - 1, 2 do
+		local entity = selection[i + 1]
+		if not selectedEntities[entity] then
+			selectedEntities[entity] = true
+		end
+	end
+	entityBonePairs = selection
+
+	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
+end
+
 ---@param selection Selection
 function MGR:SelectGroup(selection, accumulate)
 	if not accumulate then
@@ -86,6 +108,11 @@ function MGR:SelectGroup(selection, accumulate)
 	local j = 0
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
+
+		local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
+		if self._filter and self._filter ~= boneType then
+			continue
+		end
 
 		entitySelectedBones[entity] = entitySelectedBones[entity] or {}
 		selectedEntities[entity] = true
@@ -221,6 +248,9 @@ local function getBones(x, y)
 				continue
 			end
 			local boneType = bones:GetBoneType(entity, b)
+			if MGR._filter and MGR._filter ~= boneType then
+				continue
+			end
 
 			entity:CopyBoneMatrix(b, matrix)
 			local screenData = matrix and matrix:GetTranslation():ToScreen()
@@ -398,6 +428,10 @@ hook.Add("RagdollPoser_Selection_Selected", "UpdateSelectedBone", function(selec
 		net.WriteEntity(selectedEntity)
 		net.SendToServer()
 	end
+end)
+
+hook.Add("RagdollPoser_UI_Bone_Show", "Selection", function(boneCategory)
+	MGR._filter = RagdollPoser.UI:CategoryToType(boneCategory)
 end)
 
 RagdollPoser.Selection = MGR

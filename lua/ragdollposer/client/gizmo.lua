@@ -1269,6 +1269,9 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 end)
 
 local function onKeyPress(actions)
+	if MGR:GetMoving() then
+		return
+	end
 	if actions[RagdollPoser.Actions.CycleGizmo] then
 		MGR:OnModeChanged(MGR:CycleMode())
 	end

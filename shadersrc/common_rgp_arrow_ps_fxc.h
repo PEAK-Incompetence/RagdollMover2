@@ -45,17 +45,25 @@ float4 main( PS_INPUT frag ) : COLOR
     float width = WidthColor.x;
     float4 color = float4(WidthColor.yzw, 1);
 
-    texelSize *= (1.0 - width);
+    // Keep the erosion small enough that narrow arrow features remain visible.
+    float minTextureDimension = min(1.0 / texelSize.x, 1.0 / texelSize.y);
+    float2 erosionOffset = texelSize * minTextureDimension * (1.0 - width) * 0.03;
 
     float4 tex = sampleBase(frag.uv);
     color.xyz *= tex.xyz;
 
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
-            tex = sampleBase(frag.uv + texelSize * float2(x, y));
+            tex = sampleBase(frag.uv + erosionOffset * float2(x, y));
             color.a *= min(tex.a, color.a);
         } 
     }
+
+    #if defined(DX11)
+    float alpha = color.a;
+    float aa = max(abs(ddx(alpha)) + abs(ddy(alpha)), 1.0 / 255.0);
+    color.a = smoothstep(0.5 - aa, 0.5 + aa, alpha);
+    #endif
 
     // Gotcha: DX11 shaderapi (v0331) requires explicit instructions for removing alpha
     if (color.a == 0.0)

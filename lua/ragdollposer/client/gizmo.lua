@@ -16,20 +16,22 @@ surface.CreateFont("RagdollPoserHeaderFont", {
 	antialias = true,
 })
 
----@module "disc"
-local disc = include("gizmos/disc.lua")
----@module "arrow"
-local arrow = include("gizmos/arrow.lua")
----@module "scale"
-local scale = include("gizmos/scale.lua")
----@module "ball"
-local ball = include("gizmos/ball.lua")
----@module "sidemove"
-local sidemove = include("gizmos/sidemove.lua")
----@module "sidescale"
-local sidescale = include("gizmos/sidescale.lua")
----@module "omni"
-local omni = include("gizmos/omni.lua")
+local gizmos = {
+	---@module "disc"
+	disc = include("ragdollposer/client/gizmos/disc.lua"),
+	---@module "arrow"
+	arrow = include("ragdollposer/client/gizmos/arrow.lua"),
+	---@module "scale"
+	scale = include("ragdollposer/client/gizmos/scale.lua"),
+	---@module "ball"
+	ball = include("ragdollposer/client/gizmos/ball.lua"),
+	---@module "sidemove"
+	sidemove = include("ragdollposer/client/gizmos/sidemove.lua"),
+	---@module "sidescale"
+	sidescale = include("ragdollposer/client/gizmos/sidescale.lua"),
+	---@module "omni"
+	omni = include("ragdollposer/client/gizmos/omni.lua"),
+}
 
 local MAX_BONE_SIZE = RagdollPoser.Constants.MAX_BONE_SIZE
 local OUTLINE_WIDTH = 1
@@ -175,16 +177,29 @@ local numModes = table.Count(MGR.Mode)
 
 ---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializer = {
-	[MGR.Mode.Translation] = arrow,
-	[MGR.Mode.Rotation] = disc,
-	[MGR.Mode.Scale] = scale,
+	[MGR.Mode.Translation] = gizmos.arrow,
+	[MGR.Mode.Rotation] = gizmos.disc,
+	[MGR.Mode.Scale] = gizmos.scale,
 }
 
 ---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializerSide = {
-	[MGR.Mode.Translation] = sidemove,
-	[MGR.Mode.Scale] = sidescale,
+	[MGR.Mode.Translation] = gizmos.sidemove,
+	[MGR.Mode.Scale] = gizmos.sidescale,
 }
+
+function MGR:UpdateInitializers()
+	modeToInitializer = {
+		[MGR.Mode.Translation] = gizmos.arrow,
+		[MGR.Mode.Rotation] = gizmos.disc,
+		[MGR.Mode.Scale] = gizmos.scale,
+	}
+
+	modeToInitializerSide = {
+		[MGR.Mode.Translation] = gizmos.sidemove,
+		[MGR.Mode.Scale] = gizmos.sidescale,
+	}
+end
 
 function MGR:SetWidth(width)
 	self._gizmoProps.width = width
@@ -216,7 +231,7 @@ function MGR:OnModeChanged(mode)
 	if mode == self.Mode.Rotation then
 		-- Big disc
 
-		local disc, ball = disc(), ball()
+		local disc, ball = gizmos.disc(), gizmos.ball()
 		self._directions[4] = disc
 		self._directions[5] = ball
 	elseif mode == self.Mode.Scale or mode == self.Mode.Translation then
@@ -227,7 +242,7 @@ function MGR:OnModeChanged(mode)
 			self._directions[i] = gizmoType
 		end
 		if mode == self.Mode.Translation then
-			self._directions[7] = omni()
+			self._directions[7] = gizmos.omni()
 		end
 	end
 	self:UpdateOrientation()
@@ -252,6 +267,10 @@ end
 ---@param state boolean
 function MGR:SetMoving(state)
 	self._moving = state
+end
+
+function MGR:GetMoving()
+	return self._moving
 end
 
 function MGR:IsMoving()
@@ -1281,15 +1300,35 @@ end
 hook.Add("RagdollPoser_Gizmo_Hovering", "UpdateServer", updateHover)
 RagdollPoser.Networking.UpdateHovering = RagdollPoser.Networking.DefineSender("UpdateHovering")
 
-local function initializeGizmo()
+function MGR:StartRefreshing()
+	self._refreshing = true
+end
+
+function MGR:StopRefreshing()
+	self._refreshing = false
+end
+
+function MGR:IsRefreshing()
+	return self._refreshing
+end
+
+---@param gizmo string?
+local function initializeGizmo(gizmo)
 	-- Refresh gizmos
-	disc = include("ragdollposer/client/gizmos/disc.lua")
-	arrow = include("ragdollposer/client/gizmos/arrow.lua")
-	scale = include("ragdollposer/client/gizmos/scale.lua")
-	ball = include("ragdollposer/client/gizmos/ball.lua")
-	sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
-	sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
-	omni = include("ragdollposer/client/gizmos/omni.lua")
+	MGR:StartRefreshing()
+	if isstring(gizmo) then
+		gizmos[gizmo] = include(Format("ragdollposer/client/gizmos/%s.lua", gizmo))
+	else
+		gizmos.disc = include("ragdollposer/client/gizmos/disc.lua")
+		gizmos.arrow = include("ragdollposer/client/gizmos/arrow.lua")
+		gizmos.scale = include("ragdollposer/client/gizmos/scale.lua")
+		gizmos.ball = include("ragdollposer/client/gizmos/ball.lua")
+		gizmos.sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
+		gizmos.sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
+		gizmos.omni = include("ragdollposer/client/gizmos/omni.lua")
+	end
+	MGR:StopRefreshing()
+	MGR:UpdateInitializers()
 
 	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
 	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
@@ -1306,6 +1345,9 @@ local function initializeGizmo()
 end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", initializeGizmo)
+
+hook.Remove("RagdollPoser_Gizmo_Refresh", "Gizmo")
+hook.Add("RagdollPoser_Gizmo_Refresh", "Gizmo", initializeGizmo)
 
 -- FIXME: Icky boilerplate below. How to improve this?
 local function updateWidth(_, old, new)

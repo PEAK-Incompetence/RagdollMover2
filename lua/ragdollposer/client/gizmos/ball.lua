@@ -168,4 +168,8 @@ local function initialize()
 	return base
 end
 
+if not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "ball")
+end
+
 return initialize

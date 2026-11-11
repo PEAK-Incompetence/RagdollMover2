@@ -243,4 +243,8 @@ local function initialize(v)
 	return base
 end
 
+if not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "disc")
+end
+
 return initialize

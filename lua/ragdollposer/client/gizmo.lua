@@ -1132,6 +1132,8 @@ function MGR:Render()
 	-- Draw selected bone
 end
 
+local rootResetBone = {}
+
 function MGR:SetTransformFromSelection(selection)
 	setPositionFromSelection(selection)
 	setAngleFromSelection(selection)
@@ -1145,6 +1147,7 @@ local function selected(selection)
 	RagdollPoser.Selection:SetEnabled(false)
 	MGR:OnModeChanged(MGR._mode)
 	hovered = {}
+	rootResetBone = {}
 end
 hook.Add("RagdollPoser_Selection_Selected", "Gizmo", selected)
 
@@ -1163,6 +1166,19 @@ local function onKeyPress(actions)
 	if actions[RagdollPoser.Actions.SelectBone] then
 		MGR:SetEnabled(not MGR:IsEnabled())
 		RagdollPoser.Selection:SetEnabled(not MGR:IsEnabled())
+	end
+	if actions[RagdollPoser.Actions.SelectRoot] then
+		local selection = RagdollPoser.Selection:GetSelection()
+		if not rootResetBone[1] then
+			local newestEntity = selection[#selection]
+			if IsValid(newestEntity) then
+				local rootBone = newestEntity:TranslatePhysBoneToBone(0)
+				rootResetBone = { rootBone, newestEntity }
+			end
+		end
+
+		RagdollPoser.Selection:SetSelection(table.Copy(rootResetBone))
+		rootResetBone = table.Copy(selection)
 	end
 end
 hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", onKeyPress)

@@ -25,29 +25,56 @@ end
 
 local getModelIcon, getNiceModelName = RagdollPoser.Helpers.GetModelNodeIconPath, RagdollPoser.Helpers.GetModelNameNice
 
+---@class KeyBinderProps
+---@field label string
+---@field cvar string
+---@field action InputAction
+---@field keyChangedCallback fun(newKey: BUTTON_CODE)?
+
 ---@param cpanel ControlPanel|DForm
----@param label string
----@param cvar string
----@param action InputAction
----@param keyChangedCallback fun(newKey: BUTTON_CODE)?
+---@param leftProps KeyBinderProps
+---@param rightProps KeyBinderProps?
 ---@return CtrlNumPad
-local function keyBinder(cpanel, label, cvar, action, keyChangedCallback)
+local function keyBinder(cpanel, leftProps, rightProps)
 	---@class CtrlNumPad
 	---@field NumPad1 DBinder
-	local binder = cpanel:KeyBinder(label, cvar)
+	---@field NumPad2 DBinder
+	local binder
+	if rightProps then
+		binder = cpanel:KeyBinder(leftProps.label, leftProps.cvar, rightProps.label, rightProps.cvar)
+	else
+		binder = cpanel:KeyBinder(leftProps.label, leftProps.cvar)
+	end
 
-	local oldClick = binder.NumPad1.DoClick
+	local oldClick1 = binder.NumPad1.DoClick
 	function binder.NumPad1:DoClick()
 		local oldKey = self:GetValue()
 		print(oldKey)
-		oldClick(self)
-		RagdollPoser.Input:UnregisterKey(action, oldKey)
+		oldClick1(self)
+		RagdollPoser.Input:UnregisterKey(leftProps.action, oldKey)
 	end
 
 	function binder.NumPad1:OnChange(newKey)
-		RagdollPoser.Input:RegisterKey(action, newKey)
+		RagdollPoser.Input:RegisterKey(leftProps.action, newKey)
 		if keyChangedCallback then
 			keyChangedCallback(newKey)
+		end
+	end
+
+	if rightProps then
+		local oldClick2 = binder.NumPad2.DoClick
+		function binder.NumPad2:DoClick()
+			local oldKey = self:GetValue()
+			print(oldKey)
+			oldClick2(self)
+			RagdollPoser.Input:UnregisterKey(rightProps.action, oldKey)
+		end
+
+		function binder.NumPad2:OnChange(newKey)
+			RagdollPoser.Input:RegisterKey(rightProps.action, newKey)
+			if keyChangedCallback then
+				keyChangedCallback(newKey)
+			end
 		end
 	end
 	return binder
@@ -201,17 +228,16 @@ local function makeConstraintEntry(parent, entity, constraint)
 	-- Inside the entry, construct the ui based on the instructions from the constraint file
 	entry.ui = constraint:ConstructUI(entry, props, state)
 
-	entry.keybinder = keyBinder(
-		entry,
-		"#tool.ragdollposer.constraint.bind",
-		"",
-		RagdollPoser.Actions.ToggleConstraint,
-		function(newKey)
+	entry.keybinder = keyBinder(entry, {
+		label = "#tool.ragdollposer.constraint.bind",
+		cvar = "",
+		action = RagdollPoser.Actions.ToggleConstraint,
+		keyChangedCallback = function(newKey)
 			print("run this!")
 			constraint.State.key = newKey
 			RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
-		end
-	)
+		end,
+	})
 
 	if constraint.State.key > -1 then
 		entry.keybinder.NumPad1:SetValue(constraint.State.key)
@@ -448,7 +474,7 @@ local function populateBoneTree(boneTree, selection, boneTypeRestriction)
 	preserve()
 end
 
-local function updateBoneTree(boneTree, selection)
+local function updateBoneTree(boneTree, selection, boneTypeRestriction)
 	for _, rootNode in pairs(boneTree.Entities) do
 		for _, node in pairs(rootNode.nodes) do
 			node:SetSelected(false)
@@ -560,7 +586,11 @@ function MGR:BuildCPanel(cpanel)
 	gizmoCategory:CheckBox("#tool.ragdollposer.local", "ragdollposer_local")
 	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
-	keyBinder(gizmoCategory, "#tool.ragdollposer.cycle", "ragdollposer_cycle_key", RagdollPoser.Actions.CycleGizmo)
+	local cycle = keyBinder(gizmoCategory, {
+		label = "#tool.ragdollposer.cycle",
+		cvar = "ragdollposer_cycle_key",
+		action = RagdollPoser.Actions.CycleGizmo,
+	})
 
 	local gizmoOffsets =
 		makeCategory(gizmoCategory, language.GetPhrase("#tool.ragdollposer.gizmo.offset"), "ControlPanel")
@@ -605,7 +635,15 @@ function MGR:BuildCPanel(cpanel)
 	local id = GetConVar("ragdollposer_mirror_axis"):GetInt() + 1
 	mirrorCombo:ChooseOption(mirrorMapping[id - 1], id)
 
-	keyBinder(boneManip, "#tool.ragdollposer.select", "ragdollposer_select_key", RagdollPoser.Actions.SelectBone)
+	local selectBoneAndRoot = keyBinder(boneManip, {
+		label = "#tool.ragdollposer.select",
+		cvar = "ragdollposer_select_key",
+		action = RagdollPoser.Actions.SelectBone,
+	}, {
+		label = "#tool.ragdollposer.select.root",
+		cvar = "ragdollposer_select_root_key",
+		action = RagdollPoser.Actions.SelectRoot,
+	})
 
 	local boneTreeCategory = makeCategory(boneManip, language.GetPhrase("tool.ragdollposer.bone.tree"), "ControlPanel")
 

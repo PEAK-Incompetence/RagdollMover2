@@ -11,6 +11,8 @@ TOOL.ClientConVar["width"] = 0.25
 TOOL.ClientConVar["scale"] = 30
 TOOL.ClientConVar["partial"] = 1
 TOOL.ClientConVar["local"] = 0
+TOOL.ClientConVar["localoffset"] = 0
+TOOL.ClientConVar["relativerotate"] = 0
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
@@ -21,6 +23,11 @@ function TOOL:LeftClick(tr)
 		filter = { pl, pl:GetViewEntity() },
 		ignoreworld = false, -- TODO: implement ignore world privileges
 	})
+
+	if pl:KeyDown(IN_USE) and tr.HitPos then
+		RagdollPoser.Data:SetOffset(pl, tr.HitPos)
+		return true
+	end
 
 	if CLIENT then
 		return false

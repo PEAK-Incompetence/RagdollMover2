@@ -128,6 +128,10 @@ function MGR:SelectGroup(selection, accumulate)
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
+function MGR:ResetFilter()
+	self._filter = false
+end
+
 function MGR:GetSelection()
 	return entityBonePairs
 end
@@ -215,7 +219,7 @@ function MGR:RaycastBoneLine(x0, y0, x1, y1, x2, y2)
 		return false
 	end
 	local t = ((x0 - x1) * dx + (y0 - y1) * dy) / Lsq
-	-- TODO: Test other selection radii and find line of best fit
+	-- TODO: Test other selection radii at different resolutions and find line of best fit
 	-- x = 24 => y = 0.25 at 1080p
 	-- Prevents double selecting the bone itself and the line segment that the bone encompasses
 	local offset = 0.3

@@ -319,4 +319,11 @@ local function updateSelectedBone(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateSelectedBone", updateSelectedBone)
 
+function MGR:SetOffset(ply, offset)
+	RagdollPoser.Networking.SetOffset()
+	net.WriteVector(offset)
+	net.Send(ply)
+end
+RagdollPoser.Networking.SetOffset = RagdollPoser.Networking.DefineSender("SetOffset")
+
 RagdollPoser.Data = MGR

@@ -36,6 +36,12 @@ registerInputConVar(
 	KEY_LALT,
 	RagdollPoser.Actions.SelectBone
 )
+registerInputConVar(
+	"ragdollposer_select_root_key",
+	"Input for switching between the root bone and selected bone",
+	KEY_R,
+	RagdollPoser.Actions.SelectRoot
+)
 
 local function refreshKeys()
 	for _, convarInfo in ipairs(inputConVars) do

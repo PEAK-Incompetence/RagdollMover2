@@ -113,3 +113,8 @@ hook.Add("RagdollPoser_UI_Refresh", "ToolUI", function()
 	---@cast tool TOOL
 	tool:RebuildControlPanel()
 end)
+
+TOOL.Information = {
+	{ name = "left" },
+	{ name = "left_use", icon2 = "gui/e.png" },
+}

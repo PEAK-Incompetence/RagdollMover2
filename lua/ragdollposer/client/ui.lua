@@ -678,15 +678,15 @@ function MGR:BuildCPanel(cpanel)
 	end
 
 	local panelContainer = vgui.Create("DPanel", boneTreeCategory)
-	panelContainer:SizeTo(-1, 400, 0)
+	panelContainer:SizeTo(-1, 600, 0)
 	boneTreeCategory:AddItem(panelContainer)
-	local divider = panelContainer:Add("DHorizontalDivider")
-	divider:Dock(FILL)
-
-	local entitySelectorContainer = vgui.Create("DPanel", boneTreeCategory)
-	local boneTreeContainer = vgui.Create("DPanel", boneTreeCategory)
-	divider:SetLeft(entitySelectorContainer)
-	divider:SetRight(boneTreeContainer)
+	local boneTreeContainer = vgui.Create("DPanel", panelContainer)
+	local drawer = vgui.Create("rgp_dhdrawer", panelContainer)
+	local entitySelectorContainer = vgui.Create("DPanel", drawer)
+	entitySelectorContainer:Dock(FILL)
+	boneTreeContainer:Dock(FILL)
+	drawer:Open()
+	drawer:Close()
 
 	---@class EntityTree: rgp_tree
 	---@field [ClientEntity] DTree_Node
@@ -694,7 +694,6 @@ function MGR:BuildCPanel(cpanel)
 	local entitySelector = entitySelectorContainer:Add("rgp_tree")
 
 	---@class BoneTree: rgp_tree
-	---@field [ClientEntity] DTree_Node
 	---@field [ClientEntity] DTree_Node
 	local boneTree = boneTreeContainer:Add("rgp_tree")
 

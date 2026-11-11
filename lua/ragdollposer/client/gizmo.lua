@@ -28,6 +28,8 @@ local ball = include("gizmos/ball.lua")
 local sidemove = include("gizmos/sidemove.lua")
 ---@module "sidescale"
 local sidescale = include("gizmos/sidescale.lua")
+---@module "omni"
+local omni = include("gizmos/omni.lua")
 
 local MAX_BONE_SIZE = RagdollPoser.Constants.MAX_BONE_SIZE
 local OUTLINE_WIDTH = 1
@@ -223,6 +225,9 @@ function MGR:OnModeChanged(mode)
 			local gizmoType = modeToInitializerSide[mode](v)
 			self._directions[i] = gizmoType
 		end
+		if mode == self.Mode.Translation then
+			self._directions[7] = omni()
+		end
 	end
 	self:UpdateOrientation()
 end
@@ -303,6 +308,11 @@ function MGR:TestIntersect()
 				targetIndex = i
 			end
 		end
+	end
+
+	-- Prioritize the omnipos gizmo over everything else
+	if intersections[7] then
+		targetIndex = 7
 	end
 
 	if targetIndex <= 0 then
@@ -1227,6 +1237,7 @@ local function initializeGizmo()
 	ball = include("ragdollposer/client/gizmos/ball.lua")
 	sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
 	sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
+	omni = include("ragdollposer/client/gizmos/omni.lua")
 
 	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
 	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()

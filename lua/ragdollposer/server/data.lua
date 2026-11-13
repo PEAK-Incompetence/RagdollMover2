@@ -98,7 +98,7 @@ hook.Add("CanTool", "RagdollPoser_Data_TrackDuplicator", function(ply, tr, tooln
 	if toolname == "duplicator" and ply:KeyDown(IN_ATTACK2) then
 		local ent = tr.Entity
 		if IsValid(ent) then
-			RagdollPoser.Log(ply, " copied ", entity, " for duplication")
+			RagdollPoser.Log(ply, " copied ", ent, " for duplication")
 			ent.rgp_player = ply
 		end
 	end

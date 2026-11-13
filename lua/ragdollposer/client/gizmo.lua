@@ -43,6 +43,10 @@ local FLOAT_1DIVIDE540 = 0.00185185185
 
 local isStaticProp = RagdollPoser.Helpers.IsStaticProp
 
+---@class LocalMatrixInfo
+---@field [1] integer
+---@field [2] VMatrix
+
 ---[CLIENT]
 ---
 ---Gizmo transform
@@ -91,7 +95,7 @@ local MGR = {
 	---@type table<ClientEntity, VMatrix[]>
 	_transformBaseline = {},
 	---Matrices local to parent matrices. Useful for transforms
-	---@type {[integer]: {[1]: integer, [2]: VMatrix}}
+	---@type table<ClientEntity, table<integer, LocalMatrixInfo[]>>
 	_localMatrices = {},
 	---@type {[Entity]: Vector[]}
 	_pivots = {},
@@ -530,9 +534,11 @@ function MGR:PreTransform()
 		self._mirrorAxis = GetConVar("ragdollposer_mirror_axis"):GetInt()
 		collectBones(mirroredSelection)
 
+		-- We use the root bone as our mirror plane
+		-- This assumes that the mirrored bone is truly symmetric to the bone with respect to the root mirror plane
 		---@type {[Entity]: VMatrix}
 		local rootBones = {}
-		local maxIter = 256
+		local maxBones = 256
 		for i = 1, #mirroredSelection - 1, 2 do
 			local bone, entity = mirroredSelection[i], mirroredSelection[i + 1]
 			---@cast bone integer
@@ -544,7 +550,7 @@ function MGR:PreTransform()
 			if self._parents[entity] then
 				local iter = 0
 				local walk = bone
-				while walk ~= -1 and iter < maxIter do
+				while walk ~= -1 and iter < maxBones do
 					local parent = entity:GetBoneParent(walk)
 					if parent == -1 then
 						entity:CopyBoneMatrix(walk, rootBones[entity])
@@ -576,6 +582,9 @@ function MGR:PreTransform()
 	self.start = gui.ScreenToVector(x, y)
 	self.startPos = newPos
 
+	-- After getting transformed bones for the selected bones, we have to consider constrained bones
+	-- Even if they're not within our initial transformed bone set, we'll have to add them anyway
+
 	local evaluatedEntities = {}
 	-- added by gpt for IK and lock constraints
 	local function preEvaluateConstraints(selectionToEvaluate)
@@ -584,8 +593,13 @@ function MGR:PreTransform()
 			---@cast client ClientEntity
 			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 			if not evaluatedEntities[entity] then
-				RagdollPoser.Constraints:PreEvaluate(entity)
+				local bones = RagdollPoser.Constraints:PreEvaluate(entity)
 				evaluatedEntities[entity] = true
+				for _, bone in ipairs(bones) do
+					if not self._transformedBoneSet[client][bone] then
+						self._transformedBoneSet[client][bone] = table.insert(self._transformedBones, bones)
+					end
+				end
 			end
 		end
 	end
@@ -664,16 +678,17 @@ function MGR:Transform()
 					self._transformed[client]
 				)
 
-				-- local constrainedMatrix = self._constraintMatrices[client][bone]
-				-- constrainedMatrix:Set(self._matrices[client][bone])
+				local constrainedMatrix = self._constraintMatrices[client][bone]
+				constrainedMatrix:Set(self._matrices[client][bone])
 
-				-- RagdollPoser.Constraints:Evaluate(
-				-- 	entity,
-				-- 	bone,
-				-- 	constrainedMatrix,
-				-- 	self._localMatrices[client][bone],
-				-- 	self._parents[client]
-				-- )
+				RagdollPoser.Constraints:Evaluate(
+					entity,
+					bone,
+					constrainedMatrix,
+					self._localMatrices[client][bone],
+					self._parents[client],
+					self._transformed[client]
+				)
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 

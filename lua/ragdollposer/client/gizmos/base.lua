@@ -66,7 +66,7 @@ function Base:PreTransform(direction, initials) end
 function Base:Transform(directions, deltaProps, transform, accumulations, initials, gizmoProps) end
 
 ---@param transform VMatrix
----@param locals VMatrix[] Matrices where the key is the child bone and the value is the child bone matrix relative to its parent
+---@param locals LocalMatrixInfo[] Matrices where [1] is the child bone and [2] is the child bone matrix relative to its parent
 ---@param parents integer[] Dictionary where a child bones are keys and their parent bone is the value
 ---@param output VMatrix[]
 function Base:PostTransform(transform, locals, parents, output) end

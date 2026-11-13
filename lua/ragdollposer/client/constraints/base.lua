@@ -234,14 +234,16 @@ end
 ---@param transform VMatrix
 ---@param locals VMatrix[]
 ---@param parents integer[]
+---@return integer[]
 function Base:PreEvaluate(entity, transform, locals, parents) end
 
 ---@param entity Entity
 ---@param controlledBone integer
 ---@param transform VMatrix
----@param locals VMatrix[]
+---@param locals LocalMatrixInfo[]
 ---@param parents integer[]
-function Base:Evaluate(entity, controlledBone, transform, locals, parents) end
+---@param output VMatrix[]
+function Base:Evaluate(entity, controlledBone, transform, locals, parents, output) end
 
 ---@param entity Entity
 ---@param controlledBones integer[]
@@ -272,11 +274,13 @@ function Base:CaptureLockPose()
 	local matrices = RagdollPoser.Entity.GetMatrices(client)
 	local visited = {}
 
+	local transformedBones = {}
 	local function capture(bone)
 		if visited[bone] then
 			return
 		end
 		visited[bone] = true
+		table.insert(transformedBones, bone)
 
 		local matrix = matrices and matrices[bone + 1] or client:GetBoneMatrix(bone)
 		if matrix then
@@ -289,16 +293,17 @@ function Base:CaptureLockPose()
 	end
 
 	capture(lockedBone)
+	return transformedBones
 end
 
-function Base:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, component)
+function Base:ApplyLock(entity, controlledBone, transforms, locals, parents, component, output)
 	if self.State.enabled == false then
 		return
 	end
 
 	local target = self.State.target
 	local lockedBone = self.State.bone
-	if not IsValid(target) or target ~= entity or not self._snapshot or not indices then
+	if not IsValid(target) or target ~= entity or not self._snapshot then
 		return
 	end
 	local client = RagdollPoser.Entity.GetClientFromEntity(target)
@@ -318,20 +323,21 @@ function Base:ApplyLock(entity, controlledBone, transforms, indices, locals, par
 
 	if component == "rotation" then
 		local boneIndices = {}
-		for index, bone in ipairs(indices) do
-			boneIndices[bone] = index
+		for _, localMatrixInfo in ipairs(locals) do
+			local bone = localMatrixInfo[1]
+			boneIndices[bone] = bone
 		end
 
-		local lockedIndex = boneIndices[lockedBone]
 		local initial = self._snapshot[lockedBone]
-		local matrix = lockedIndex and transforms[lockedIndex]
+		local matrix = output[lockedBone]
 		if not initial or not matrix then
 			return
 		end
 
 		matrix:SetAngles(LerpAngle(influence, matrix:GetAngles(), initial:GetAngles()))
 
-		for index, bone in ipairs(indices) do
+		for _, localMatrixInfo in ipairs(locals) do
+			local bone = localMatrixInfo[1]
 			local isLockedDescendant = false
 			local parentBone = parents and parents[bone]
 			while parentBone and parentBone >= 0 do
@@ -344,20 +350,20 @@ function Base:ApplyLock(entity, controlledBone, transforms, indices, locals, par
 
 			if isLockedDescendant then
 				local directParent = parents and parents[bone]
-				local parentIndex = directParent and boneIndices[directParent]
-				local localMatrix = locals and locals[bone]
-				local parent = parentIndex and transforms[parentIndex]
+				local localMatrix = localMatrixInfo[2]
+				local parent = directParent and output[directParent]
 				if parent and localMatrix then
-					transforms[index] = parent * localMatrix
+					output[bone] = parent * localMatrix
 				end
 			end
 		end
 		return
 	end
 
-	for index, bone in ipairs(indices) do
+	for _, localMatrixInfo in ipairs(locals) do
+		local bone = localMatrixInfo[1]
 		local initial = self._snapshot[bone]
-		local matrix = transforms[index]
+		local matrix = output[bone]
 		if initial and matrix then
 			if component == "position" then
 				matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))

@@ -20,11 +20,11 @@ function lock:ConstructUI(entry, props, state)
 end
 
 function lock:PreEvaluate()
-	self:CaptureLockPose()
+	return self:CaptureLockPose()
 end
 
-function lock:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
-	self:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, "rotation")
+function lock:Evaluate(entity, controlledBone, transforms, locals, parents, output)
+	self:ApplyLock(entity, controlledBone, transforms, locals, parents, "rotation", output)
 end
 
 function lock:PostEvaluate()

@@ -110,17 +110,25 @@ function MGR:ValidateStack() end
 
 function MGR:PreEvaluate(entity, transform, locals, parents)
 	local stack = EntityConstraintStacks[entity]
+	local transformedBones = {}
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:PreEvaluate(entity, transform, locals, parents)
+			table.Add(transformedBones, constraint:PreEvaluate(entity, transform, locals, parents))
 		end
 	end
+	return transformedBones
 end
-function MGR:Evaluate(entity, controlledBone, transform, locals, parents)
+
+---@param entity Entity
+---@param controlledBone integer
+---@param transform VMatrix
+---@param locals LocalMatrixInfo[]
+---@param output VMatrix[]
+function MGR:Evaluate(entity, controlledBone, transform, locals, parents, output)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:Evaluate(entity, controlledBone, transform, locals, parents)
+			constraint:Evaluate(entity, controlledBone, transform, locals, parents, output)
 		end
 	end
 end

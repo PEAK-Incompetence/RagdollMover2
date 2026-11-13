@@ -20,12 +20,12 @@ function lock:ConstructUI(entry, props, state)
 end
 
 function lock:PreEvaluate()
-	self:CaptureLockPose()
+	return self:CaptureLockPose()
 end
 
 -- FIXME: This doesn't lock scales!
-function lock:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
-	self:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, "scale")
+function lock:Evaluate(entity, controlledBone, transforms, locals, parents, output)
+	self:ApplyLock(entity, controlledBone, transforms, locals, parents, "scale", output)
 end
 
 function lock:PostEvaluate()

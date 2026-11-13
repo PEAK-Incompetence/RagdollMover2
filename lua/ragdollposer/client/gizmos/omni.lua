@@ -71,6 +71,14 @@ local sharedDeltaProps = {
 local mirrorMatrix = Matrix()
 mirrorMatrix:Identity()
 
+---@param v Vector Vector to project
+---@param n Vector Normal vector of plane
+---@return Vector projection Projection of vector on the plane
+local function projectVectorToPlane(v, n)
+	local projection = v - v:Dot(n) / n:LengthSqr() * n
+	return projection
+end
+
 function omni:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local eyePos, eyeVec, eyeAng = self.eyePos, self.eyeVec, self.eyeAng
 	local forward = eyeAng:Forward()
@@ -85,7 +93,7 @@ function omni:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)
-	sharedDeltaProps[1]:Add(eyeDelta)
+	sharedDeltaProps[1]:Add(projectVectorToPlane(eyeDelta, back))
 
 	if mirrorAxis >= 0 then
 		local length = sharedDeltaProps[1]:Length()

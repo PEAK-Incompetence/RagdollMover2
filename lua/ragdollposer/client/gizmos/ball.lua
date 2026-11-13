@@ -11,6 +11,11 @@ local quaternion = include("ragdollposer/shared/quaternion.lua")
 local scaleMultiplier = 1.5
 local BALL_SCALE = 0.6
 
+-- This modifies how much we want to rotate our rotation such that when our mouse
+-- reaches the end of the ball, we have rotated our bone by 90 degrees
+-- Higher means more precision
+local PRECISION_FACTOR = 120
+
 ---@param eyepos Vector
 ---@param direction Vector
 ---@param props GizmoProps
@@ -60,7 +65,7 @@ end
 function ball:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local x, y = input.GetCursorPos()
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
-	local eyedist = eyePos:Distance(props.finalPos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
 	local forward = eyeAng:Forward()
 	local right = eyeAng:Right()
 
@@ -96,7 +101,7 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 	local dx, dy = self.dx, self.dy
 
 	-- The closer we are to the gizmo, the more precise the movement should be
-	local eyedist = eyePos:Distance(props.finalPos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
 	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
 	local scale = props.scale
 	-- The smaller the ball, the more rotation we give

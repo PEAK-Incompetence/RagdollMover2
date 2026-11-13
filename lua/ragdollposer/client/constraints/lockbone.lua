@@ -141,6 +141,7 @@ function lock:ConstructUI(entry, props, state)
 				menu:AddOption(getEntityName(target), function()
 					constraint.State.otherTarget = target
 					constraint.State.otherBone = -1
+					updateTarget(target)
 					ui.otherTarget:SetText(getEntityName(target))
 					RagdollPoser.Constraints:UpdateConstraint(constraint.Owner, constraint)
 				end)
@@ -270,10 +271,6 @@ function lock:GetOutputRoot()
 	if IsValid(target) and isnumber(bone) and bone >= 0 and bone < target:GetBoneCount() then
 		return bone
 	end
-end
-
-function lock:PostEvaluate()
-	self._snapshot = nil
 end
 
 local function createConstraint(state, name)

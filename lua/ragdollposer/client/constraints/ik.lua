@@ -495,13 +495,6 @@ function ik:Draw()
 	end
 end
 
-function ik:PostEvaluate()
-	self._goal = nil
-	self._poseLocals = nil
-	self._effectorLocal = nil
-	self._effectorAngles = nil
-end
-
 local function createConstraint(entity, state, name)
 	local base = ik:Init(entity, state, name)
 	---@cast base IKConstraint

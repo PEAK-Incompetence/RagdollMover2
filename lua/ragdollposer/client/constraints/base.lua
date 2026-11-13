@@ -252,7 +252,12 @@ function Base:EvaluatePose(entity, controlledBones, transforms) end
 
 function Base:Draw() end
 
-function Base:PostEvaluate() end
+---@param entity Entity
+---@param controlledBone integer
+---@param locals LocalMatrixInfo[]
+---@param parents integer[]
+---@param output VMatrix[]
+function Base:PostEvaluate(entity, controlledBone, locals, parents, output) end
 
 function Base:CaptureLockPose()
 	self._snapshot = {}
@@ -296,80 +301,66 @@ function Base:CaptureLockPose()
 	return transformedBones
 end
 
-function Base:ApplyLock(entity, controlledBone, transforms, locals, parents, component, output)
+function Base:ApplyLock(entity, controlledBone, component, output)
 	if self.State.enabled == false then
-		return
+		return false
 	end
 
 	local target = self.State.target
 	local lockedBone = self.State.bone
 	if not IsValid(target) or target ~= entity or not self._snapshot then
-		return
+		return false
 	end
 	local client = RagdollPoser.Entity.GetClientFromEntity(target)
 
 	local walk = controlledBone
 	while walk and walk >= 0 do
 		if walk == lockedBone then
-			return
+			return false
 		end
 		walk = client:GetBoneParent(walk)
 	end
 
 	local influence = math.Clamp(self.State.influence or 1, 0, 1)
 	if influence == 0 then
-		return
+		return false
 	end
 
-	if component == "rotation" then
-		local boneIndices = {}
-		for _, localMatrixInfo in ipairs(locals) do
-			local bone = localMatrixInfo[1]
-			boneIndices[bone] = bone
-		end
+	local initial = self._snapshot[lockedBone]
+	local matrix = output[lockedBone]
+	if not initial or not matrix then
+		return false
+	end
 
-		local initial = self._snapshot[lockedBone]
-		local matrix = output[lockedBone]
-		if not initial or not matrix then
-			return
-		end
-
+	if component == "position" then
+		matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))
+	elseif component == "rotation" then
 		matrix:SetAngles(LerpAngle(influence, matrix:GetAngles(), initial:GetAngles()))
+	elseif component == "scale" then
+		matrix:SetScale(LerpVector(influence, matrix:GetScale(), initial:GetScale()))
+	else
+		return false
+	end
 
-		for _, localMatrixInfo in ipairs(locals) do
-			local bone = localMatrixInfo[1]
-			local isLockedDescendant = false
-			local parentBone = parents and parents[bone]
-			while parentBone and parentBone >= 0 do
-				if parentBone == lockedBone then
-					isLockedDescendant = true
-					break
-				end
-				parentBone = parents and parents[parentBone]
-			end
+	return true
+end
 
-			if isLockedDescendant then
-				local directParent = parents and parents[bone]
-				local localMatrix = localMatrixInfo[2]
-				local parent = directParent and output[directParent]
-				if parent and localMatrix then
-					output[bone] = parent * localMatrix
-				end
-			end
-		end
+function Base:PostApplyLock(lockedBone, locals, parents, output)
+	local matrix = output[lockedBone]
+	if not matrix then
 		return
 	end
 
+	local worldMatrix = { [lockedBone] = matrix }
 	for _, localMatrixInfo in ipairs(locals) do
 		local bone = localMatrixInfo[1]
-		local initial = self._snapshot[bone]
-		local matrix = output[bone]
-		if initial and matrix then
-			if component == "position" then
-				matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))
-			elseif component == "scale" then
-				matrix:SetScale(LerpVector(influence, matrix:GetScale(), initial:GetScale()))
-			end
+		local localMatrix = localMatrixInfo[2]
+		local parentBone = parents[bone]
+		local parentMatrix = worldMatrix[parentBone]
+		if parentMatrix and localMatrix then
+			local childMatrix = parentMatrix * localMatrix
+			output[bone] = childMatrix
+			worldMatrix[bone] = childMatrix
 		end
 	end
 end

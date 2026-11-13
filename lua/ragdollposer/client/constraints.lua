@@ -150,11 +150,16 @@ function MGR:Draw()
 	end
 end
 
-function MGR:PostEvaluate(entity)
+---@param entity Entity
+---@param controlledBone integer
+---@param locals LocalMatrixInfo[]
+---@param parents integer[]
+---@param output VMatrix[]
+function MGR:PostEvaluate(entity, controlledBone, locals, parents, output)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:PostEvaluate()
+			constraint:PostEvaluate(entity, controlledBone, locals, parents, output)
 		end
 	end
 end

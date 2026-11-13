@@ -689,6 +689,13 @@ function MGR:Transform()
 					self._parents[client],
 					self._transformed[client]
 				)
+				RagdollPoser.Constraints:PostEvaluate(
+					entity,
+					bone,
+					self._localMatrices[client][bone],
+					self._parents[client],
+					self._transformed[client]
+				)
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 
@@ -722,13 +729,13 @@ function MGR:Transform()
 			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
 		end
 
-		-- for entity, bones in pairs(controlledBones) do
-		-- 	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		-- 	local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
-		-- 	if matrices then
-		-- 		RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
-		-- 	end
-		-- end
+		for entity, bones in pairs(controlledBones) do
+			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+			local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
+			if matrices then
+				RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
+			end
+		end
 	end
 
 	-- After caching our directions,
@@ -909,21 +916,6 @@ function MGR:PostTransform()
 		sendSubPose(complete)
 		-- print("post transform!")
 	end
-
-	local evaluatedEntities = {}
-	local function postEvaluateConstraints(selectionToEvaluate)
-		for i = 1, #selectionToEvaluate - 1, 2 do
-			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
-			---@cast client ClientEntity
-			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-			if not evaluatedEntities[entity] then
-				RagdollPoser.Constraints:PostEvaluate(entity)
-				evaluatedEntities[entity] = true
-			end
-		end
-	end
-	postEvaluateConstraints(selection)
-	postEvaluateConstraints(mirrorSelection)
 end
 
 local function onLeftClickDown(x, y, tr)

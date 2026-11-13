@@ -25,11 +25,15 @@ end
 
 -- FIXME: This doesn't lock scales!
 function lock:Evaluate(entity, controlledBone, transforms, locals, parents, output)
-	self:ApplyLock(entity, controlledBone, transforms, locals, parents, "scale", output)
+	self._postEvaluateBone = self:ApplyLock(entity, controlledBone, "scale", output)
+		and self.State.bone
 end
 
-function lock:PostEvaluate()
-	self._snapshot = nil
+function lock:PostEvaluate(entity, controlledBone, locals, parents, output)
+	if self._postEvaluateBone then
+		self:PostApplyLock(self._postEvaluateBone, locals, parents, output)
+	end
+	self._postEvaluateBone = nil
 end
 
 local function createConstraint(state, name)

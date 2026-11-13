@@ -196,6 +196,7 @@ function lock:PreEvaluate(entity)
 		locals = {},
 	}
 	local visited = {}
+	local transformedBones = {}
 
 	local function capture(bone)
 		if visited[bone] then
@@ -206,6 +207,7 @@ function lock:PreEvaluate(entity)
 		local matrix = childMatrices[bone + 1]
 		if matrix then
 			snapshot.locals[bone] = parentMatrix:GetInverse() * matrix
+			transformedBones[#transformedBones + 1] = bone
 		end
 
 		for _, child in ipairs(childClient:GetChildBones(bone)) do
@@ -215,8 +217,10 @@ function lock:PreEvaluate(entity)
 
 	capture(childBone)
 	self._snapshot = snapshot
+	return transformedBones
 end
 
+---@return boolean
 function lock:EvaluatePose(entity, controlledBones, transforms)
 	local snapshot = self._snapshot
 	local parentTarget = self.State.target
@@ -230,18 +234,18 @@ function lock:EvaluatePose(entity, controlledBones, transforms)
 		or not snapshot
 		or not transforms
 	then
-		return
+		return false
 	end
 
 	local currentParent = transforms[parentBone + 1]
 	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
 	if not currentParent or not childMatrices then
-		return
+		return false
 	end
 
 	local influence = math.Clamp(self.State.influence or 1, 0, 1)
 	if influence == 0 then
-		return
+		return false
 	end
 
 	local parentMatrix = snapshot.parent * IDENTITY_MATRIX
@@ -255,6 +259,8 @@ function lock:EvaluatePose(entity, controlledBones, transforms)
 			matrix:Set(parentMatrix * relativeMatrix)
 		end
 	end
+
+	return true
 end
 
 -- FIXME: What's the point of these output stuff?

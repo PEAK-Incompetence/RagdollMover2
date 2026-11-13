@@ -206,6 +206,7 @@ function Base:Serialize()
 		Type = self.Properties.type,
 		Name = self.Properties.name,
 		State = self.State,
+		_id = self._id,
 	}
 end
 
@@ -248,6 +249,7 @@ function Base:Evaluate(entity, controlledBone, transform, locals, parents, outpu
 ---@param entity Entity
 ---@param controlledBones integer[]
 ---@param transforms VMatrix[]
+---@return boolean?
 function Base:EvaluatePose(entity, controlledBones, transforms) end
 
 function Base:Draw() end

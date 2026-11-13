@@ -33,13 +33,19 @@ MGR.EntityConstraintStacks = EntityConstraintStacks
 ---@param type string
 ---@param state ConstraintState?
 ---@param name string?
-local function constructConstraint(entity, type, state, name)
+---@param id integer?
+local function constructConstraint(entity, type, state, name, id)
 	local constructor = MGR.ConstraintConstructors[type]
 	if constructor then
 		local constraint = constructor(entity, state, name)
 		if constraint then
-			MGR._nextConstraintID = (MGR._nextConstraintID or 0) + 1
-			constraint._id = MGR._nextConstraintID
+			if isnumber(id) then
+				constraint._id = id
+				MGR._nextConstraintID = math.max(MGR._nextConstraintID or 0, id)
+			else
+				MGR._nextConstraintID = (MGR._nextConstraintID or 0) + 1
+				constraint._id = MGR._nextConstraintID
+			end
 		end
 		return constraint
 	end
@@ -68,6 +74,61 @@ local function refreshStack(entity)
 		end
 		seen[constraint._id] = true
 		stack.set[constraint._id] = index
+	end
+end
+
+local function getLockBoneOutput(constraint)
+	if constraint.Properties.type ~= "lockbone" or constraint.State.enabled == false then
+		return
+	end
+
+	local target = constraint.State.otherTarget
+	local bone = constraint.State.otherBone
+	if IsValid(target) and isnumber(bone) and bone >= 0 and bone < target:GetBoneCount() then
+		return target, bone
+	end
+end
+
+local function isBoneInSubtree(entity, bone, root)
+	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	if not IsValid(client) then
+		return false
+	end
+
+	local current = bone
+	while current and current >= 0 do
+		if current == root then
+			return true
+		end
+		current = client:GetBoneParent(current)
+	end
+	return false
+end
+
+local function wasBoneTransformed(entity, bone, transformedByClient)
+	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	local transformed = transformedByClient and transformedByClient[client]
+	return transformed and transformed[bone] ~= nil
+end
+
+local function forEachIKAfterLock(constraint, callback)
+	local target, bone = getLockBoneOutput(constraint)
+	if not target or target == constraint.Owner then
+		return
+	end
+
+	local stack = EntityConstraintStacks[target]
+	if stack then
+		for _, dependent in ipairs(stack.array) do
+			local effector = dependent.State.bone
+			if
+				dependent.Properties.type == "ik"
+				and dependent._id > constraint._id
+				and isBoneInSubtree(target, effector, bone)
+			then
+				callback(dependent, target, effector)
+			end
+		end
 	end
 end
 
@@ -108,12 +169,31 @@ end
 -- Check for cycles on the stack.
 function MGR:ValidateStack() end
 
+---@return table<Entity, integer[]>
 function MGR:PreEvaluate(entity, transform, locals, parents)
 	local stack = EntityConstraintStacks[entity]
 	local transformedBones = {}
 	if stack then
+		local preparedConstraints = {}
 		for _, constraint in ipairs(stack.array) do
-			table.Add(transformedBones, constraint:PreEvaluate(entity, transform, locals, parents))
+			local target = getLockBoneOutput(constraint)
+			local outputEntity = target or entity
+			local bones = constraint:PreEvaluate(entity, transform, locals, parents)
+			if bones then
+				transformedBones[outputEntity] = transformedBones[outputEntity] or {}
+				table.Add(transformedBones[outputEntity], bones)
+			end
+
+			forEachIKAfterLock(constraint, function(dependent, target)
+				if not preparedConstraints[dependent] then
+					local dependentBones = dependent:PreEvaluate(target)
+					if dependentBones then
+						transformedBones[target] = transformedBones[target] or {}
+						table.Add(transformedBones[target], dependentBones)
+					end
+					preparedConstraints[dependent] = true
+				end
+			end)
 		end
 	end
 	return transformedBones
@@ -133,11 +213,55 @@ function MGR:Evaluate(entity, controlledBone, transform, locals, parents, output
 	end
 end
 
-function MGR:EvaluatePose(entity, controlledBones, transforms)
+function MGR:EvaluatePose(entity, controlledBones, transforms, transformedByClient)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
+		local appliedLockBones = {}
+		local linkedLockBones = {}
 		for _, constraint in ipairs(stack.array) do
-			constraint:EvaluatePose(entity, controlledBones, transforms)
+			local target, bone = getLockBoneOutput(constraint)
+			local outputSelected = target and wasBoneTransformed(target, bone, transformedByClient)
+			if target and target ~= entity then
+				if not outputSelected then
+					table.insert(linkedLockBones, constraint)
+				end
+			elseif outputSelected then
+				continue
+			else
+				local evaluationBones = controlledBones
+				if constraint.Properties.type == "ik" and #appliedLockBones > 0 then
+					evaluationBones = table.Copy(controlledBones)
+					for _, lockedBone in ipairs(appliedLockBones) do
+						local effector = constraint.State.bone
+						if
+							isBoneInSubtree(entity, effector, lockedBone.bone)
+							and not table.HasValue(evaluationBones, effector)
+						then
+							table.insert(evaluationBones, effector)
+						end
+					end
+				end
+
+				local applied = constraint:EvaluatePose(entity, evaluationBones, transforms)
+				if applied and target == entity then
+					table.insert(appliedLockBones, { bone = bone })
+				end
+			end
+		end
+
+		for _, constraint in ipairs(linkedLockBones) do
+			local applied = constraint:EvaluatePose(entity, controlledBones, transforms)
+			if applied then
+				forEachIKAfterLock(constraint, function(dependent, outputEntity, outputBone)
+					local client = RagdollPoser.Entity.GetClientFromEntity(outputEntity)
+					if IsValid(client) then
+						local outputMatrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+						if outputMatrices then
+							dependent:EvaluatePose(outputEntity, { outputBone }, outputMatrices)
+						end
+					end
+				end)
+			end
 		end
 	end
 end
@@ -189,11 +313,19 @@ end
 function MGR:SetConstraints(constraints)
 	-- print("setting constraints")
 	-- PrintTable(constraints)
+	for _, serialized in pairs(constraints) do
+		for _, s in ipairs(serialized) do
+			if isnumber(s._id) then
+				MGR._nextConstraintID = math.max(MGR._nextConstraintID or 0, s._id)
+			end
+		end
+	end
+
 	for entity, serialized in pairs(constraints) do
 		local array = {}
 		local set = {}
 		for _, s in ipairs(serialized) do
-			local constraint = constructConstraint(entity, s.Type, s.State, s.Name)
+			local constraint = constructConstraint(entity, s.Type, s.State, s.Name, s._id)
 			if constraint then
 				local index = #array + 1
 				array[index] = constraint

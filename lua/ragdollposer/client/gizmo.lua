@@ -421,6 +421,21 @@ function MGR:PreTransform()
 	self._accumulations = {}
 	self._pivots = {}
 
+	local function addTransformedBones(client, bones)
+		if not bones then
+			return
+		end
+
+		self._transformedBones[client] = self._transformedBones[client] or {}
+		self._transformedBoneSet[client] = self._transformedBoneSet[client] or {}
+		for _, bone in ipairs(bones) do
+			if not self._transformedBoneSet[client][bone] then
+				self._transformedBoneSet[client][bone] = true
+				table.insert(self._transformedBones[client], bone)
+			end
+		end
+	end
+
 	local function collectBones(selection)
 		-- Collection of bones per entity, starting from the selected root bone index to the selected descendant bone index
 		local entityBones = {}
@@ -466,6 +481,7 @@ function MGR:PreTransform()
 			for bone, count in SortedPairsByValue(bones) do
 				table.insert(entityBones[client], bone)
 			end
+
 			self._pivots[client] = self._pivots[client] or { gizmo:GetDirection(props) }
 		end
 
@@ -593,11 +609,12 @@ function MGR:PreTransform()
 			---@cast client ClientEntity
 			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 			if not evaluatedEntities[entity] then
-				local bones = RagdollPoser.Constraints:PreEvaluate(entity)
+				local bonesByEntity = RagdollPoser.Constraints:PreEvaluate(entity)
 				evaluatedEntities[entity] = true
-				for _, bone in ipairs(bones) do
-					if not self._transformedBoneSet[client][bone] then
-						self._transformedBoneSet[client][bone] = table.insert(self._transformedBones, bones)
+				for affectedEntity, bones in pairs(bonesByEntity) do
+					local affectedClient = RagdollPoser.Entity.GetClientFromEntity(affectedEntity)
+					if IsValid(affectedClient) then
+						addTransformedBones(affectedClient, bones)
 					end
 				end
 			end
@@ -642,6 +659,8 @@ function MGR:Transform()
 				local bone, client = selection[i], selection[i + 1]
 				---@cast client ClientEntity
 				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+				RagdollPoser.Entity.ExposeBones(client)
+				RagdollPoser.Entity.ExposeBones(entity)
 				-- print(i, client:GetBoneName(bone))
 				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
@@ -710,30 +729,31 @@ function MGR:Transform()
 			end
 		end
 
-		local controlledBones = {}
-		-- more gpt slop
-		local function collectControlledBones(selectionToCollect)
-			for i = 1, #selectionToCollect - 1, 2 do
-				local bone, client = selectionToCollect[i], selectionToCollect[i + 1]
-				---@cast client ClientEntity
-				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-				controlledBones[entity] = controlledBones[entity] or {}
-				controlledBones[entity][#controlledBones[entity] + 1] = bone
-			end
-		end
-		collectControlledBones(selection)
-		collectControlledBones(self._mirroredSelection)
-
 		transformSelected(selection, self._pivots, false)
 		if self._mirroredSelection[1] then
 			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
 		end
 
-		for entity, bones in pairs(controlledBones) do
-			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-			local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
+		for client, transformedBones in pairs(self._transformedBones) do
+			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			if not IsValid(entity) or not self._transformed[client] then
+				continue
+			end
+
+			local outputClient = RagdollPoser.Entity.GetClientFromEntity(entity)
+			if not IsValid(outputClient) then
+				continue
+			end
+			RagdollPoser.Entity.ExposeBones(outputClient)
+			RagdollPoser.Entity.ExposeBones(entity)
+			local matrices = RagdollPoser.Entity.GetMatricesFromClient(outputClient)
 			if matrices then
-				RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
+				RagdollPoser.Constraints:EvaluatePose(
+					entity,
+					transformedBones,
+					matrices,
+					self._transformed
+				)
 			end
 		end
 	end
@@ -846,6 +866,9 @@ local function sendSubPose(selection)
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
+		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity.ExposeBones(client)
 		net.WriteEntity(entity)
 		local matrices = RagdollPoser.Entity.GetMatrices(entity)
 		local bs = bones[entity]
@@ -855,6 +878,8 @@ local function sendSubPose(selection)
 		for _, b in ipairs(bs) do
 			net.WriteUInt(b, 8)
 			local matrix = matrices[b + 1] * IDENTITY_MATRIX
+			-- print(entity:GetBoneName(b))
+			-- print(matrix)
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 			if physbone >= 0 or isStaticProp(entity) then
@@ -880,11 +905,7 @@ local function sendSubPose(selection)
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
-				RagdollPoser.Helpers.GetNonPhysicalBonePose(
-					RagdollPoser.Entity.GetClientFromEntity(entity),
-					b,
-					boneMatrix
-				)
+				RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
 				boneMatrix:SetScale(matrix:GetScale())
 				net.WriteMatrix(boneMatrix)
 			end

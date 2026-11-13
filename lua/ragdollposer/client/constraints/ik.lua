@@ -42,6 +42,28 @@ local function isFiniteMatrix(matrix)
 	return true
 end
 
+local function matrixTransformChanged(matrix, baseline)
+	if not isFiniteMatrix(matrix) or not isFiniteMatrix(baseline) then
+		return false
+	end
+
+	if (matrix:GetTranslation() - baseline:GetTranslation()):LengthSqr() > 1e-6 then
+		return true
+	end
+
+	local angles = matrix:GetAngles()
+	local baselineAngles = baseline:GetAngles()
+	if
+		math.abs(math.AngleDifference(angles.p, baselineAngles.p)) > 0.01
+		or math.abs(math.AngleDifference(angles.y, baselineAngles.y)) > 0.01
+		or math.abs(math.AngleDifference(angles.r, baselineAngles.r)) > 0.01
+	then
+		return true
+	end
+
+	return (matrix:GetScale() - baseline:GetScale()):LengthSqr() > 1e-8
+end
+
 ik.Properties = {
 	type = "ik",
 	category = "#tool.ragdollposer.constraint.category.tracking",
@@ -540,7 +562,7 @@ function ik:PreEvaluate(entity, transforms, indices, locals, parents)
 	return affectedBones
 end
 
-function ik:EvaluatePose(entity, controlledBones, transforms)
+function ik:EvaluatePose(entity, selectedBoneMatrices, transforms, forceCurrentGoal)
 	if
 		self.State.enabled == false
 		or self.State.weightPosition == false
@@ -604,12 +626,18 @@ function ik:EvaluatePose(entity, controlledBones, transforms)
 		return
 	end
 
-	local selectedEffector = false
-	for _, bone in ipairs(controlledBones) do
-		if bone == effector then
-			selectedEffector = true
-			break
+	local parent = client:GetBoneParent(effector)
+	local selectedEffector = forceCurrentGoal == true
+		or (selectedBoneMatrices and selectedBoneMatrices[effector] ~= nil)
+	if not selectedEffector then
+		local currentEffectorLocal = effectorMatrix
+		if parent >= 0 then
+			local parentMatrix = transforms[parent + 1]
+			if isFiniteMatrix(parentMatrix) then
+				currentEffectorLocal = parentMatrix:GetInverse() * effectorMatrix
+			end
 		end
+		selectedEffector = matrixTransformChanged(currentEffectorLocal, self._effectorLocal)
 	end
 
 	local offset = self.State.offset or vector_origin
@@ -645,7 +673,6 @@ function ik:EvaluatePose(entity, controlledBones, transforms)
 		return
 	end
 
-	local parent = client:GetBoneParent(effector)
 	local effectorAngles = selectedEffector and effectorMatrix:GetAngles() or self._effectorAngles
 	if not isFiniteAngle(effectorAngles) then
 		abortSolve("non-finite effector angles", effector)

@@ -752,7 +752,8 @@ function MGR:Transform()
 					entity,
 					transformedBones,
 					matrices,
-					self._transformed
+					self._transformed,
+					self._matrices[client]
 				)
 			end
 		end

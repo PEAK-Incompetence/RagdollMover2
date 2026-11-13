@@ -172,6 +172,7 @@ function PANEL:DoRightClick(node)
 	return false
 end
 
+---@param node DTree_Node
 function PANEL:SetSelectedItem(node)
 	if IsValid(self.m_pSelectedItem) then
 		self.m_pSelectedItem:SetSelected(false)
@@ -181,6 +182,7 @@ function PANEL:SetSelectedItem(node)
 
 	if node then
 		node:SetSelected(true)
+		---@diagnostic disable-next-line
 		node:OnNodeSelected(node)
 	end
 end

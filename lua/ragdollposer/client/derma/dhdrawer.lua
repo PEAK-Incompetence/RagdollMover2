@@ -9,6 +9,7 @@ function PANEL:Init()
 
 	self:SetOpenSize(100)
 	self:SetOpenTime(0.3)
+	---@diagnostic disable-next-line
 	self:SetPaintBackground(false)
 	self:SetSize(0, 0)
 

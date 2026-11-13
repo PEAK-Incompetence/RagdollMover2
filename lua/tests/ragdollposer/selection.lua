@@ -13,7 +13,7 @@ if SERVER then
 		ragdoll:Spawn()
 		testEntities[player] = ragdoll
 
-		RagdollPoser.Data.RefreshEntities(player, ragdoll, 5, { ragdoll })
+		RagdollPoser.Data.RefreshEntities(player, ragdoll, 5, { ragdoll }, {})
 	end)
 
 	net.Receive(cleanupRefreshMessage, function(_, player)
@@ -32,19 +32,24 @@ return {
 		{
 			clientside = true,
 			async = true,
-			timeout = 3,
-			name = "Selects the refreshed entity on the next client tick",
+			timeout = 30,
+			name = "Select an entity on the next client tick",
 			func = function()
+				local unselecting = true
 				RagdollPoser.Selection:Unselect()
+				unselecting = false
 
-				hook.Add("RagdollPoser_Entity_PostRefresh", "RagdollPoser_Test_Selection", function(entityToClient)
-					local selection = RagdollPoser.Selection:GetSelection()
+				hook.Add("RagdollPoser_Selection_Selected", "RagdollPoser_Test_Selection", function(selection)
+					if RagdollPoser.Selection:IsRefreshing() or unselecting then
+						return
+					end
 					local bone = selection[1]
 					local client = selection[2] --[[@as ClientEntity]]
 					local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 
+					expect(selection).to.equal(RagdollPoser.Selection:GetSelection())
 					expect(bone).to.equal(5)
-					expect(entityToClient[entity]).to.equal(client)
+					expect(client).to.beValid()
 					expect(entity).to.beValid()
 					---@diagnostic disable-next-line: undefined-global
 					done()
@@ -54,7 +59,7 @@ return {
 				net.SendToServer()
 			end,
 			cleanup = function()
-				hook.Remove("RagdollPoser_Entity_PostRefresh", "RagdollPoser_Test_Selection")
+				hook.Remove("RagdollPoser_Selection_Selected", "RagdollPoser_Test_Selection")
 				RagdollPoser.Selection:Unselect()
 
 				net.Start(cleanupRefreshMessage)

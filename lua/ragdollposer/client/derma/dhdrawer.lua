@@ -1,3 +1,4 @@
+---@class rgp_dhdrawer: DDrawer
 local PANEL = {}
 
 AccessorFunc(PANEL, "m_iOpenSize", "OpenSize")

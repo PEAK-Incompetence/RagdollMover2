@@ -2,19 +2,22 @@
 
 local RGPFontSize = math.max(math.Round(14 * ScrH() / 1080), 10)
 
-surface.CreateFont("RagdollPoserFont", {
-	font = "Verdana",
-	size = RGPFontSize,
-	weight = 700,
-	antialias = true,
-})
+if not RagdollPoser.Fonts then
+	RagdollPoser.Fonts = true
+	surface.CreateFont("RagdollPoserFont", {
+		font = "Verdana",
+		size = RGPFontSize,
+		weight = 700,
+		antialias = true,
+	})
 
-surface.CreateFont("RagdollPoserHeaderFont", {
-	font = "Verdana",
-	size = RGPFontSize + 4,
-	weight = 700,
-	antialias = true,
-})
+	surface.CreateFont("RagdollPoserHeaderFont", {
+		font = "Verdana",
+		size = RGPFontSize + 4,
+		weight = 700,
+		antialias = true,
+	})
+end
 
 local gizmos = {
 	---@module "disc"
@@ -70,8 +73,6 @@ local MGR = {
 	_directions = {},
 	---@type GizmoMode
 	_mode = 0,
-	---@type GizmoPivot
-	_pivot = 0,
 
 	_mirror = false,
 	---@type integer
@@ -156,14 +157,6 @@ end
 MGR.Orientation = {
 	World = 0, -- no orientation
 	Local = 1, -- oriented to bone
-}
-
----The point relative to where transforms occur; useful for multiple bones
----@alias GizmoPivot integer
-MGR.Pivot = {
-	Median = 0,
-	Bounding = 1,
-	Individual = 2,
 }
 
 ---@alias GizmoMode integer
@@ -367,6 +360,8 @@ IDENTITY_MATRIX:Identity()
 
 ---Do some setup (caching) before we start transforming
 function MGR:PreTransform()
+	self._transformOk = false
+
 	-- Get an initial copy of the entity matrices
 
 	local selection = RagdollPoser.Selection:GetSelection()
@@ -398,9 +393,16 @@ function MGR:PreTransform()
 		end
 	end
 
-	-- TODO: SIMPLIFY THE BS BELOW.
+	-- TODO: SIMPLIFY THE BS BELOW. Read the below new method for what I'm thinking
 	-- New method:
 	-- PreTransform -> Transform -> Post Transform (resolve parent bone hierarchies) -> Constraints -> IK
+	---1. set baseline and get transform. also get local matrices and parent bones for good measure
+	---2. update transform using baseline or previous transform state.
+	---3. send transform to constraints and IK
+	---4. evaluate
+
+	--- If relative rotate is enabled. If it is, rotate with respect to the current offsetted gizmo. Otherwise, rotate with respect to each bones own pivot
+	--- Also need to update local matrices. Say we rotate a parent bone and we have also selected a child bone: we wnat to rotate that one after the parent bone has been rotated. so that the child bone is in the right spot
 
 	-- TODO: Maybe simplify the tables used below for doing transforms?
 	-- There could be a simpler, possibly more performant way to doing things
@@ -507,18 +509,6 @@ function MGR:PreTransform()
 		-- 2. Iterate over each clients' pivots using root bone data structure
 		-- 3. With root bone known, flip direction of pivots using mirror axis
 
-		-- Check gizmo pivot
-		if self._pivot == self.Pivot.Individual then
-			if props.orientation == self.Orientation.Local then
-				-- We need to get a bunch of direction vectors, using the direction we passed to move bones individually on their own axes
-				-- or to rotate them on their own axes
-				-- So iterate over all selected bones to get their local, individual directions
-			end
-		else
-			if props.orientation == self.Orientation.World then
-			end
-		end
-
 		for client, pivots in pairs(self._pivots) do
 			self._accumulations[client] = self._accumulations[client] or {}
 			for i, pivot in ipairs(pivots) do
@@ -536,7 +526,6 @@ function MGR:PreTransform()
 	-- The desired mirror plane might not be the same for all models, so we'll give the option to change the mirror plane so we get proper
 	-- mirroring for every model
 	if self._mirror then
-		-- TODO: add mirror operations
 		local mirroredSelection = RagdollPoser.Mirror:GetMirrored(selection)
 		self._mirrorAxis = GetConVar("ragdollposer_mirror_axis"):GetInt()
 		collectBones(mirroredSelection)
@@ -602,10 +591,16 @@ function MGR:PreTransform()
 	end
 	preEvaluateConstraints(selection)
 	preEvaluateConstraints(self._mirroredSelection)
+
+	self._transformOk = true
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
 function MGR:Transform()
+	if not self._transformOk then
+		return
+	end
+
 	local x, y = input.GetCursorPos()
 	local newPos = RagdollPoser.View:GetView()
 	local newPoint = gui.ScreenToVector(x, y)
@@ -1260,12 +1255,13 @@ local function selected(selection)
 end
 hook.Add("RagdollPoser_Selection_Selected", "Gizmo", selected)
 
+hook.Remove("RagdollPoser_Entity_PostRefresh", "Gizmo")
 hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	-- FIXME: I would like to have this run after I get the new client entities. Just doing things these way is really hacky
 	-- unless we have hook priorities
-	timer.Simple(0, function()
-		MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
-	end)
+	-- timer.Simple(0, function()
+	-- 	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
+	-- end)
 end)
 
 local function onKeyPress(actions)
@@ -1333,21 +1329,26 @@ local function initializeGizmo(gizmo)
 	MGR:StopRefreshing()
 	MGR:UpdateInitializers()
 
-	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
-	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
-	MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
-	MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
-	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
-		or MGR.Orientation.World
-	MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
-	MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
-	MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
+	-- Tool might not initialize the client convars atp so guard against this error
+	if GetConVar("ragdollposer_scale") then
+		MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
+		MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
+		MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
+		MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
+		MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
+			or MGR.Orientation.World
+		MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
+		MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
+		MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
+	end
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
-	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
-hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", initializeGizmo)
+hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", function()
+	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
+	initializeGizmo()
+end)
 
 hook.Remove("RagdollPoser_Gizmo_Refresh", "Gizmo")
 hook.Add("RagdollPoser_Gizmo_Refresh", "Gizmo", initializeGizmo)

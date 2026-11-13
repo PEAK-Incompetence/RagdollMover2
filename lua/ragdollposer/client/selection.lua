@@ -36,6 +36,7 @@ local MGR = {
 	_dragY = -1,
 
 	_busy = false,
+	_refreshing = false,
 
 	-- Set the filter to a BoneType to ignore certain bones from selection
 	---@type BoneType|boolean
@@ -60,8 +61,8 @@ function MGR:SelectOne(bone, entity, accumulate)
 	-- Accumulate selections if we want to manipulate them all at once
 
 	entitySelectedBones[entity] = entitySelectedBones[entity] or {}
-	local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
-	if self._filter and self._filter ~= boneType then
+	local boneType = self._filter and RagdollPoser.Bones:GetBoneType(entity, bone)
+	if boneType and self._filter ~= boneType then
 		return
 	end
 
@@ -108,9 +109,10 @@ function MGR:SelectGroup(selection, accumulate)
 	local j = 0
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
-
-		local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
-		if self._filter and self._filter ~= boneType then
+		---@cast bone integer
+		---@cast entity ClientEntity
+		local boneType = self._filter and RagdollPoser.Bones:GetBoneType(entity, bone)
+		if boneType and self._filter ~= boneType then
 			continue
 		end
 
@@ -149,6 +151,7 @@ hook.Add("RagdollPoser_Entity_PreRefresh", "Selection", function(clientToEntity)
 		table.insert(entityIndices, entity)
 		table.insert(entityIndices, i)
 	end
+	MGR:SetRefreshing(true)
 end)
 
 hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient)
@@ -164,7 +167,16 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 	end
 	entityIndices = {}
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
+	MGR:SetRefreshing(false)
 end)
+
+function MGR:SetRefreshing(state)
+	self._refreshing = state
+end
+
+function MGR:IsRefreshing()
+	return self._refreshing
+end
 
 function MGR:GetEnabled()
 	return self._enabled

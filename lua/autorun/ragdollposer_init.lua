@@ -3,6 +3,11 @@ RagdollPoser.Mode = "ragdollposer"
 
 local root = "ragdollposer/"
 
+local folderFilter = {
+	["constraints"] = true,
+	["gizmos"] = true,
+}
+
 ---Recursive include from https://github.com/2048khz-gachi-rmx/ImprovedAdminPhysgun/blob/7774d0f4ca70818adebe2718c37238784f25efae/lua/autorun/pgun_impr.lua#L6
 ---@param sub string
 ---@param cl boolean?
@@ -16,7 +21,9 @@ local function recInc(sub, cl, sv)
 
 	local files, folders = file.Find(path .. "*", "LUA")
 	for _, folder in ipairs(folders) do
-		recInc(sub .. "/" .. folder, cl, sv)
+		if not folderFilter[folder] then
+			recInc(sub .. "/" .. folder, cl, sv)
+		end
 	end
 
 	for k, v in ipairs(files) do

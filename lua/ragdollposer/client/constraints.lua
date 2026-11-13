@@ -108,19 +108,19 @@ end
 -- Check for cycles on the stack.
 function MGR:ValidateStack() end
 
-function MGR:PreEvaluate(entity, transforms, indices, locals, parents)
+function MGR:PreEvaluate(entity, transform, locals, parents)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:PreEvaluate(entity, transforms, indices, locals, parents)
+			constraint:PreEvaluate(entity, transform, locals, parents)
 		end
 	end
 end
-function MGR:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
+function MGR:Evaluate(entity, controlledBone, transform, locals, parents)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		for _, constraint in ipairs(stack.array) do
-			constraint:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
+			constraint:Evaluate(entity, controlledBone, transform, locals, parents)
 		end
 	end
 end

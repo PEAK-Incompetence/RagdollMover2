@@ -58,16 +58,17 @@ function Base:PreTransform(direction, initials) end
 
 ---@param directions Vector[] The directions of transformation--either a vector or an axis of rotation. This is an array because we might want to transform multiple bones in different directions
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[] The initial state to mutate
+---@param transform VMatrix The initial state to mutate
 ---@param accumulations table Accumulation of translation or rotation, which we can use for snapping behaviors
 ---@param initials table Accumulation of translation or rotation, which we can use for snapping behaviors
 ---@param gizmoProps GizmoProps
-function Base:Transform(directions, deltaProps, transforms, accumulations, initials, gizmoProps) end
+---@return VMatrix
+function Base:Transform(directions, deltaProps, transform, accumulations, initials, gizmoProps) end
 
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param locals VMatrix[] Matrices where the key is the child bone and the value is the child bone matrix relative to its parent
----@param indices integer[]
 ---@param parents integer[] Dictionary where a child bones are keys and their parent bone is the value
-function Base:PostTransform(transforms, locals, indices, parents) end
+---@param output VMatrix[]
+function Base:PostTransform(transform, locals, parents, output) end
 
 return Base

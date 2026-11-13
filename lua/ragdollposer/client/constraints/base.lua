@@ -231,19 +231,17 @@ end
 
 -- Save some bone info here
 ---@param entity Entity
----@param transforms VMatrix[]
----@param indices integer[]
+---@param transform VMatrix
 ---@param locals VMatrix[]
 ---@param parents integer[]
-function Base:PreEvaluate(entity, transforms, indices, locals, parents) end
+function Base:PreEvaluate(entity, transform, locals, parents) end
 
 ---@param entity Entity
 ---@param controlledBone integer
----@param transforms VMatrix[]
----@param indices integer[]
+---@param transform VMatrix
 ---@param locals VMatrix[]
 ---@param parents integer[]
-function Base:Evaluate(entity, controlledBone, transforms, indices, locals, parents) end
+function Base:Evaluate(entity, controlledBone, transform, locals, parents) end
 
 ---@param entity Entity
 ---@param controlledBones integer[]

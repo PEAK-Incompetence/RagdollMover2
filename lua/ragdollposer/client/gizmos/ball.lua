@@ -87,8 +87,8 @@ local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 
 ---@param directions Quaternion[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
-function ball:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+---@param transform VMatrix
+function ball:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 	local left = -eyeAng:Right()
 	local up = eyeAng:Up()
@@ -109,39 +109,44 @@ function ball:Transform(directions, deltaProps, transforms, accumulations, initi
 
 	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
-	for i, matrix in ipairs(transforms) do
-		local quat = initials[i]
+	local quat = initials[1]
 
-		if not quat then
-			local qi = quaternion.fromAngle(matrix:GetAngles())
-			local w, x, y, z = qi:Unpack()
-			quat = quaternion.new(w, x, y, z)
-			initials[i] = quat
-		end
-
-		local accumulationIndex = accumulations[i] and i or 1
-
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
-
-		rotationQuaternion:Mul(quat)
-
-		matrix:SetAngles(rotationQuaternion:Angle())
+	if not quat then
+		local qi = quaternion.fromAngle(transform:GetAngles())
+		local w, x, y, z = qi:Unpack()
+		quat = quaternion.new(w, x, y, z)
+		initials[1] = quat
 	end
+
+	local accumulationIndex = 1
+
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
+
+	rotationQuaternion:Mul(quat)
+
+	transform:SetAngles(rotationQuaternion:Angle())
+	return transform
 end
 
-function ball:PostTransform(transforms, locals, indices, parents)
+function ball:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newMatrix = worldMatrix[parents[b]] * localChildMatrix
-			transforms[i] = newMatrix
-			worldMatrix[b] = newMatrix
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
 		end
 	end
 end

@@ -139,26 +139,49 @@ end
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
-function sidemove:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function sidemove:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
 	local right = self.right
 	local up = self.up
 	local forward = self.forward
 
 	local vector = (right + up + forward):GetNormalized()
-	for i, matrix in ipairs(transforms) do
-		local accumulationIndex = accumulations[i] and i or 1
+	local accumulationIndex = 1
 
-		local movement = right * right:Dot(delta) + forward * forward:Dot(delta) + up * up:Dot(delta)
-		movement:Rotate(matrix:GetInverse():GetAngles())
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + delta:Length()
-		matrix:Translate(movement)
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + vector * 10, 0.5)
+	local movement = right * right:Dot(delta) + forward * forward:Dot(delta) + up * up:Dot(delta)
+	movement:Rotate(transform:GetInverse():GetAngles())
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + delta:Length()
+	transform:Translate(movement)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+	return transform
+end
+
+function sidemove:PostTransform(transform, locals, parents, output)
+	local worldMatrix = {}
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
+		end
+
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
+		end
 	end
 end
+
 ---@param direction Vector Vector(1, 0, 0) = XY, Vector(0, 1, 0) = YZ, Vector(0, 0, 1) = ZX
 ---@return GizmoSideMove sidemove
 local function initialize(direction)

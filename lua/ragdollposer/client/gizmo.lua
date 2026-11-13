@@ -84,14 +84,14 @@ local MGR = {
 	---and then we go down the bone hierarchy and get all matrices to transform.
 	---If we also have selected bone matrices as our descendants from the root bone, first transform
 	---the root bone, then transform the descendant bones
-	---@type VMatrix[]
+	---@type table<ClientEntity, table<integer, VMatrix>>
 	_matrices = {},
-	---@type table<ClientEntity, table<integer, VMatrix[]>>
+	---@type table<ClientEntity, table<integer, VMatrix>>
 	_constraintMatrices = {},
 	---@type table<ClientEntity, VMatrix[]>
 	_transformBaseline = {},
 	---Matrices local to parent matrices. Useful for transforms
-	---@type {[integer]: VMatrix}
+	---@type {[integer]: {[1]: integer, [2]: VMatrix}}
 	_localMatrices = {},
 	---@type {[Entity]: Vector[]}
 	_pivots = {},
@@ -368,28 +368,25 @@ function MGR:PreTransform()
 	if not selection[1] then
 		return
 	end
-	-- print("pretransform")
 
-	---@param entity Entity
-	---@param matrices VMatrix[]
+	---Go through a client and copy its matrices for local matrices (wrt to parent bone) and its parent bone relationships
+	---@param client ClientEntity
+	---@param boneMatrices VMatrix[]
 	---@param bone integer
-	---@param store VMatrix[]
 	---@param storeLocal {[integer]: VMatrix}
-	---@param indexer integer[]
 	---@param parents {[integer]: integer}
-	local function recursiveMatrixCopy(entity, matrices, bone, store, storeLocal, indexer, parents)
-		local m = matrices[bone + 1]
-		if m then
-			-- copy the matrix
-			indexer[bone] = table.insert(store, m * IDENTITY_MATRIX)
+	local function recursiveMatrixCopy(client, boneMatrices, bone, storeLocal, parents)
+		local m = boneMatrices[bone + 1]
+		if not self._transformedBoneSet[client][bone] then
+			self._transformedBoneSet[client][bone] = table.insert(self._transformedBones[client], bone)
 		end
-		for _, childBone in ipairs(entity:GetChildBones(bone)) do
-			recursiveMatrixCopy(entity, matrices, childBone, store, storeLocal, indexer, parents)
-			local childMatrix = matrices[childBone + 1]
+		for _, childBone in ipairs(client:GetChildBones(bone)) do
+			local childMatrix = boneMatrices[childBone + 1]
 			if childMatrix and m then
-				storeLocal[childBone] = m:GetInverse() * childMatrix
+				table.insert(storeLocal, { childBone, m:GetInverse() * childMatrix })
 				parents[childBone] = bone
 			end
+			recursiveMatrixCopy(client, boneMatrices, childBone, storeLocal, parents)
 		end
 	end
 
@@ -409,8 +406,12 @@ function MGR:PreTransform()
 	self._matrices = {}
 	self._constraintMatrices = {}
 	self._transformBaseline = {}
-	self._matrixIndex = {}
 	self._localMatrices = {}
+	-- Including the selected bone and its descendants, these are the bones that have been moved (includes bones affected by IK chains and bones locked to each other)
+	-- Array set: Don't want to work with the same bones
+	self._transformedBones = {}
+	self._transformedBoneSet = {}
+	self._transformed = {}
 	self._initials = {}
 	self._parents = {}
 	self._accumulations = {}
@@ -435,6 +436,8 @@ function MGR:PreTransform()
 			entityBoneSet[client][bone] = 0
 		end
 
+		-- What are we doing here? We're sorting selected bones based on their depth from the root bone
+		-- We work with the bones with less depth first (parent bones) and then bones with more depth last (child bones)
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
 			local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
@@ -477,29 +480,26 @@ function MGR:PreTransform()
 
 				self._matrices[client] = self._matrices[client] or {}
 				self._constraintMatrices[client] = self._constraintMatrices[client] or {}
-				self._matrixIndex[client] = self._matrixIndex[client] or {}
 				self._localMatrices[client] = self._localMatrices[client] or {}
 				self._parents[client] = self._parents[client] or {}
 				self._initials[client] = self._initials[client] or {}
-				for _, bone in ipairs(bones) do
-					self._matrices[client][bone] = self._matrices[client][bone] or {}
+				self._transformedBoneSet[client] = self._transformedBoneSet[client] or {}
+				self._transformedBones[client] = self._transformedBones[client] or {}
+				self._transformed[client] = self._transformed[client] or {}
+				for i, bone in ipairs(bones) do
+					local boneMatrix = client:GetBoneMatrix(bone)
+					self._matrices[client][bone] = boneMatrix
 					self._constraintMatrices[client][bone] = {}
-					self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
 					self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
 					self._initials[client][bone] = self._initials[client][bone] or {}
 					recursiveMatrixCopy(
 						client,
 						matrices,
 						bone,
-						self._matrices[client][bone],
 						self._localMatrices[client][bone],
-						self._matrixIndex[client][bone],
 						self._parents[client]
 					)
-					self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
-					for index, matrix in ipairs(self._matrices[client][bone]) do
-						self._constraintMatrices[client][bone][index] = matrix * IDENTITY_MATRIX
-					end
+					self._constraintMatrices[client][bone] = boneMatrix * IDENTITY_MATRIX
 				end
 			end
 		end
@@ -647,7 +647,7 @@ function MGR:Transform()
 				)
 
 				-- Move the selected bone
-				gizmo:Transform(
+				self._transformed[client][bone] = gizmo:Transform(
 					pivots[client],
 					deltaProps,
 					self._matrices[client][bone],
@@ -658,35 +658,30 @@ function MGR:Transform()
 
 				-- Resolve parent bone hierarchies (if I moved an arm, all the child bones of that should move along with it)
 				gizmo:PostTransform(
-					self._matrices[client][bone],
+					self._transformed[client][bone],
 					self._localMatrices[client][bone],
-					self._matrixIndex[client][bone],
-					self._parents[client]
+					self._parents[client],
+					self._transformed[client]
 				)
 
-				local constrainedMatrices = self._constraintMatrices[client][bone]
-				for index, matrix in ipairs(self._matrices[client][bone]) do
-					constrainedMatrices[index]:Set(matrix)
-				end
+				-- local constrainedMatrix = self._constraintMatrices[client][bone]
+				-- constrainedMatrix:Set(self._matrices[client][bone])
 
-				RagdollPoser.Constraints:Evaluate(
-					entity,
-					bone,
-					constrainedMatrices,
-					self._matrixIndex[client][bone],
-					self._localMatrices[client][bone],
-					self._parents[client]
-				)
+				-- RagdollPoser.Constraints:Evaluate(
+				-- 	entity,
+				-- 	bone,
+				-- 	constrainedMatrix,
+				-- 	self._localMatrices[client][bone],
+				-- 	self._parents[client]
+				-- )
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 
 				if matrices then
-					for b, indices in pairs(self._matrixIndex[client]) do
-						for index, bb in ipairs(indices) do
-							local targetMatrix = matrices[bb + 1]
-							if targetMatrix then
-								targetMatrix:Set(self._constraintMatrices[client][b][index])
-							end
+					for _, b in ipairs(self._transformedBones[client]) do
+						local targetMatrix = matrices[b + 1]
+						if targetMatrix and self._transformed[client][b] then
+							targetMatrix:Set(self._transformed[client][b])
 						end
 					end
 				end
@@ -712,13 +707,13 @@ function MGR:Transform()
 			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
 		end
 
-		for entity, bones in pairs(controlledBones) do
-			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-			local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
-			if matrices then
-				RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
-			end
-		end
+		-- for entity, bones in pairs(controlledBones) do
+		-- 	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		-- 	local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
+		-- 	if matrices then
+		-- 		RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
+		-- 	end
+		-- end
 	end
 
 	-- After caching our directions,

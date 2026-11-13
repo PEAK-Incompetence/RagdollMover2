@@ -161,53 +161,56 @@ end
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
 ---@param props GizmoProps
-function disc:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function disc:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local startHit, endHit = deltaProps[2], deltaProps[3]
 
-	for i, matrix in ipairs(transforms) do
-		local direction = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
+	local direction = directions[1]
+	local accumulationIndex = 1
 
-		local qi = quaternion.fromAngle(matrix:GetAngles())
-		local axis = direction
-		local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
-		local degrees = math.deg(angle)
-		local newRot = accumulations[accumulationIndex] + degrees
-		accumulations[accumulationIndex] = newRot
-		rotationQuaternion:SetAngleAxis(degrees, axis)
-		rotationQuaternion:Mul(qi)
-		debugoverlay.Line(
-			matrix:GetTranslation(),
-			matrix:GetTranslation() + rotationQuaternion.__axis * 10,
-			0.2,
-			nil,
-			true
-		)
-		if i == 1 then
-			debugoverlay.Axis(matrix:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
-		end
+	local qi = quaternion.fromAngle(transform:GetAngles())
+	local axis = direction
+	local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
+	local degrees = math.deg(angle)
+	local newRot = accumulations[accumulationIndex] + degrees
+	accumulations[accumulationIndex] = newRot
+	rotationQuaternion:SetAngleAxis(degrees, axis)
+	rotationQuaternion:Mul(qi)
+	debugoverlay.Line(
+		transform:GetTranslation(),
+		transform:GetTranslation() + rotationQuaternion.__axis * 10,
+		0.2,
+		nil,
+		true
+	)
+	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
 
-		matrix:SetAngles(rotationQuaternion:Angle())
-	end
+	transform:SetAngles(rotationQuaternion:Angle())
+	return transform
 end
 
 ---Do all the child bones offset
-function disc:PostTransform(transforms, locals, indices, parents)
+function disc:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newMatrix = worldMatrix[parents[b]] * localChildMatrix
-			transforms[i] = newMatrix
-			worldMatrix[b] = newMatrix
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
 		end
 	end
 end

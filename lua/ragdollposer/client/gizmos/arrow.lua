@@ -132,21 +132,43 @@ end
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
-function arrow:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function arrow:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
-	for i, matrix in ipairs(transforms) do
-		local vector = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
+	local vector = directions[1]
+	local accumulationIndex = 1
 
-		local length = vector:Dot(delta)
-		local movement = vector * length
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
-		movement:Rotate(matrix:GetInverse():GetAngles())
-		matrix:Translate(movement)
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + vector * 10, 0.5)
+	local length = vector:Dot(delta)
+	local movement = vector * length
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+	movement:Rotate(transform:GetInverse():GetAngles())
+	transform:Translate(movement)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+	return transform
+end
+
+function arrow:PostTransform(transform, locals, parents, output)
+	local worldMatrix = {}
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
+		end
+
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
+		end
 	end
 end
 

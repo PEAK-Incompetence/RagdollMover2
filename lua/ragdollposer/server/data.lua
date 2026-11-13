@@ -26,6 +26,59 @@ MGR.Players = MGR.Players or {}
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
 RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSender("SendSubPoseResponse")
 
+local entityReferenceFields = { "target", "otherTarget" }
+
+local function prepareConstraintsForDuplication(constraints)
+	local copiedConstraints = table.Copy(constraints or {})
+	for _, constraint in ipairs(copiedConstraints) do
+		local state = constraint.State
+		if not istable(state) then
+			continue
+		end
+
+		local references = {}
+		for _, field in ipairs(entityReferenceFields) do
+			local target = state[field]
+			if IsValid(target) then
+				references[field] = target:EntIndex()
+			end
+			state[field] = nil
+		end
+
+		if next(references) then
+			constraint.__RagdollPoserEntityRefs = references
+		end
+	end
+
+	return copiedConstraints
+end
+
+local function restoreDuplicatedConstraintReferences(constraints, entity, createdEntities)
+	for _, constraint in ipairs(constraints) do
+		local references = constraint.__RagdollPoserEntityRefs
+		local state = constraint.State
+		if references and istable(state) then
+			for field, originalIndex in pairs(references) do
+				local target = createdEntities[originalIndex]
+				if IsValid(target) then
+					state[field] = target
+				else
+					state[field] = NULL
+					RagdollPoser.Log(
+						"Could not remap RagdollPoser constraint ",
+						field,
+						" reference ",
+						originalIndex,
+						" for ",
+						entity
+					)
+				end
+			end
+			constraint.__RagdollPoserEntityRefs = nil
+		end
+	end
+end
+
 local function sendSubPose(len, ply)
 	local entityCount = net.ReadUInt(13)
 
@@ -79,13 +132,13 @@ local function trackEntityDuplicators(entity)
 			if IsValid(data.rgp_player) then
 				RagdollPoser.Log("Do tool duplication for ", entity)
 				local d = MGR.Players[self.rgp_player]
-				data.EntityMods["RagdollPoser"] = d.Constraints[entity]
+				data.EntityMods["RagdollPoser"] = prepareConstraintsForDuplication(d.Constraints[entity])
 				data.rgp_player = nil
 				self.rgp_player = nil
 			elseif game.SinglePlayer() then
 				RagdollPoser.Log("Do GMod save duplication for ", entity)
 				local d = MGR.Players[Entity(1)]
-				data.EntityMods["RagdollPoser"] = d.Constraints[entity]
+				data.EntityMods["RagdollPoser"] = prepareConstraintsForDuplication(d.Constraints[entity])
 			end
 		end
 
@@ -174,6 +227,16 @@ local function entityModifier(ply, ent, data)
 		d = initializePlayer(ply)
 	end
 	d.Constraints[ent] = data
+
+	local previousPostEntityPaste = ent.PostEntityPaste
+	ent.PostEntityPaste = function(self, pastePlayer, pastedEntity, createdEntities)
+		restoreDuplicatedConstraintReferences(data, self, createdEntities)
+		d.Constraints[self] = data
+		if previousPostEntityPaste then
+			previousPostEntityPaste(self, pastePlayer, pastedEntity, createdEntities)
+		end
+		self.PostEntityPaste = previousPostEntityPaste
+	end
 end
 duplicator.RegisterEntityModifier("RagdollPoser", entityModifier)
 

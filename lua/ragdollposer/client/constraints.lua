@@ -213,14 +213,24 @@ function MGR:Evaluate(entity, controlledBone, transform, locals, parents, output
 	end
 end
 
-function MGR:EvaluatePose(entity, transformedBones, transforms, transformedByClient, selectedBoneMatrices)
+local dependentPoseContext = {
+	transformedBones = {},
+	transforms = {},
+	transformedByClient = {},
+	selectedBoneMatrices = {},
+	forceCurrentGoal = true,
+}
+
+---@param entity Entity
+---@param context PoseEvaluationContext
+function MGR:EvaluatePose(entity, context)
 	local stack = EntityConstraintStacks[entity]
 	if stack then
 		local appliedLockBones = {}
 		local linkedLockBones = {}
 		for _, constraint in ipairs(stack.array) do
 			local target, bone = getLockBoneOutput(constraint)
-			local outputSelected = target and wasBoneTransformed(target, bone, transformedByClient)
+			local outputSelected = target and wasBoneTransformed(target, bone, context.transformedByClient)
 			if target and target ~= entity then
 				if not outputSelected then
 					table.insert(linkedLockBones, constraint)
@@ -239,8 +249,8 @@ function MGR:EvaluatePose(entity, transformedBones, transforms, transformedByCli
 					end
 				end
 
-				local applied =
-					constraint:EvaluatePose(entity, selectedBoneMatrices or {}, transforms, forceCurrentGoal)
+				context.forceCurrentGoal = forceCurrentGoal
+				local applied = constraint:EvaluatePose(entity, context)
 				if applied and target == entity then
 					table.insert(appliedLockBones, { bone = bone })
 				end
@@ -248,14 +258,16 @@ function MGR:EvaluatePose(entity, transformedBones, transforms, transformedByCli
 		end
 
 		for _, constraint in ipairs(linkedLockBones) do
-			local applied = constraint:EvaluatePose(entity, selectedBoneMatrices or {}, transforms)
+			context.forceCurrentGoal = false
+			local applied = constraint:EvaluatePose(entity, context)
 			if applied then
 				forEachIKAfterLock(constraint, function(dependent, outputEntity, outputBone)
 					local client = RagdollPoser.Entity.GetClientFromEntity(outputEntity)
 					if IsValid(client) then
 						local outputMatrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 						if outputMatrices then
-							dependent:EvaluatePose(outputEntity, {}, outputMatrices, true)
+							dependentPoseContext.transforms = outputMatrices
+							dependent:EvaluatePose(outputEntity, dependentPoseContext)
 						end
 					end
 				end)

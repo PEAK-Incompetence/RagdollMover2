@@ -221,7 +221,8 @@ function lock:PreEvaluate(entity)
 end
 
 ---@return boolean
-function lock:EvaluatePose(entity, controlledBones, transforms)
+function lock:EvaluatePose(entity, context)
+	local transforms = context and context.transforms
 	local snapshot = self._snapshot
 	local parentTarget = self.State.target
 	local childTarget = self.State.otherTarget
@@ -232,6 +233,7 @@ function lock:EvaluatePose(entity, controlledBones, transforms)
 		or parentTarget ~= entity
 		or not IsValid(childTarget)
 		or not snapshot
+		or not context
 		or not transforms
 	then
 		return false

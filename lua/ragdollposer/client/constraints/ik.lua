@@ -562,12 +562,16 @@ function ik:PreEvaluate(entity, transforms, indices, locals, parents)
 	return affectedBones
 end
 
-function ik:EvaluatePose(entity, selectedBoneMatrices, transforms, forceCurrentGoal)
+function ik:EvaluatePose(entity, context)
+	local transforms = context and context.transforms
+	local selectedBoneMatrices = context and context.selectedBoneMatrices
+	local forceCurrentGoal = context and context.forceCurrentGoal
 	if
 		self.State.enabled == false
 		or self.State.weightPosition == false
 		or entity ~= self.Owner
 		or self.State.target ~= self.Owner
+		or not context
 		or not self._goal
 		or not self._poseLocals
 		or not self._effectorLocal

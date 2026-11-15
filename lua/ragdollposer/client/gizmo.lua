@@ -90,6 +90,14 @@ local MGR = {
 	---the root bone, then transform the descendant bones
 	---@type table<ClientEntity, table<integer, VMatrix>>
 	_matrices = {},
+	---@type PoseEvaluationContext
+	_poseContext = {
+		transformedBones = {},
+		transforms = {},
+		transformedByClient = {},
+		selectedBoneMatrices = {},
+		forceCurrentGoal = false,
+	},
 	---@type table<ClientEntity, table<integer, VMatrix>>
 	_constraintMatrices = {},
 	---@type table<ClientEntity, VMatrix[]>
@@ -588,8 +596,6 @@ function MGR:PreTransform()
 				self._mirrorPivots[entity][i] = rootMatrix * localDirection
 			end
 		end
-		-- PrintTable(self._pivots)
-		-- PrintTable(self._mirrorPivots or {})
 		self._mirroredSelection = mirroredSelection
 	end
 
@@ -661,7 +667,6 @@ function MGR:Transform()
 				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 				RagdollPoser.Entity.ExposeBones(client)
 				RagdollPoser.Entity.ExposeBones(entity)
-				-- print(i, client:GetBoneName(bone))
 				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
 				-- We'll build the transform step by step
@@ -748,13 +753,13 @@ function MGR:Transform()
 			RagdollPoser.Entity.ExposeBones(entity)
 			local matrices = RagdollPoser.Entity.GetMatricesFromClient(outputClient)
 			if matrices then
-				RagdollPoser.Constraints:EvaluatePose(
-					entity,
-					transformedBones,
-					matrices,
-					self._transformed,
-					self._matrices[client]
-				)
+				local poseContext = self._poseContext
+				poseContext.transformedBones = transformedBones
+				poseContext.transforms = matrices
+				poseContext.transformedByClient = self._transformed
+				poseContext.selectedBoneMatrices = self._matrices[client]
+				poseContext.forceCurrentGoal = false
+				RagdollPoser.Constraints:EvaluatePose(entity, poseContext)
 			end
 		end
 	end
@@ -780,6 +785,25 @@ hook.Remove("Think", "RagdollPoser_Gizmo_Transform")
 hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
 hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
+
+---Bone matrices and entity's angles aren't consistent with each other
+---so we need to correct this
+---@param entity Entity
+---@param bone integer
+---@param matrix VMatrix
+local function fixAngleOffset(entity, bone, matrix)
+	local m1 = Matrix()
+	m1:Rotate(entity:GetAngles())
+	local m2 = Matrix()
+	m2:Rotate(entity:GetBoneMatrix(bone):GetAngles())
+	local offset = m2:GetTransposed() * m1
+	local trace = offset:GetField(1, 1) + offset:GetField(2, 2) + offset:GetField(3, 3)
+	local difference = math.acos(math.Clamp((trace - 1) * 0.5, -1, 1))
+	if difference >= 1e-6 then
+		local rotation = matrix * offset
+		matrix:SetAngles(rotation:GetAngles())
+	end
+end
 
 ---Send update bone transforms of the selected bone hierarchy
 ---@param selection Selection
@@ -890,17 +914,7 @@ local function sendSubPose(selection)
 				-- TODO: Add parented entity layer so that matrices sent there is correct
 				-- All bonemerged entities use manipulates, while parented use setpos/setang
 				if physCount == 1 then
-					local m1 = Matrix()
-					m1:Rotate(entity:GetAngles())
-					local m2 = Matrix()
-					m2:Rotate(entity:GetBoneMatrix(b):GetAngles())
-					local offset = m2:GetTransposed() * m1
-					local trace = offset:GetField(1, 1) + offset:GetField(2, 2) + offset:GetField(3, 3)
-					local difference = math.acos(math.Clamp((trace - 1) * 0.5, -1, 1))
-					if difference >= 1e-6 then
-						local rotation = matrix * offset
-						matrix:SetAngles(rotation:GetAngles())
-					end
+					fixAngleOffset(entity, b, matrix)
 				end
 
 				-- Send world transforms and everything

@@ -246,11 +246,17 @@ function Base:PreEvaluate(entity, transform, locals, parents) end
 ---@param output VMatrix[]
 function Base:Evaluate(entity, controlledBone, transform, locals, parents, output) end
 
+---@class PoseEvaluationContext
+---@field transformedBones integer[]
+---@field transforms VMatrix[]
+---@field transformedByClient table<ClientEntity, table<integer, VMatrix>>
+---@field selectedBoneMatrices table<integer, VMatrix>
+---@field forceCurrentGoal boolean
+
 ---@param entity Entity
----@param controlledBones integer[]
----@param transforms VMatrix[]
+---@param context PoseEvaluationContext
 ---@return boolean?
-function Base:EvaluatePose(entity, controlledBones, transforms) end
+function Base:EvaluatePose(entity, context) end
 
 function Base:Draw() end
 

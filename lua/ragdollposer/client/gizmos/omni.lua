@@ -1,5 +1,7 @@
 --- "Omniposition" gizmo: move something relative to your view plane
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 ---@module "gizmo/base"
 ---@class GizmoOmni: GizmoBase
 ---@field _color Color
@@ -121,6 +123,10 @@ end
 
 function omni:UpdateOrientation(orientation, props) end
 
+-- Try to prevent some matrix creations to avoid gc cycles
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -132,9 +138,12 @@ function omni:Transform(directions, deltaProps, transform, accumulations, initia
 
 	local length = delta:Length()
 	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+	local scale = transform:GetScale()
 	local movement = delta * 1
-	movement:Rotate(transform:GetInverse():GetAngles())
-	transform:Translate(movement)
+	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+	transform:Translate(movement / scale)
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + delta * 10, 0.5)
 

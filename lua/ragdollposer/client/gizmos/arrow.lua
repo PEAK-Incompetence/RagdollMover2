@@ -2,6 +2,8 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 ---@module "gizmo/base"
 ---@class GizmoArrow: GizmoBase
 ---@field _direction Vector
@@ -130,6 +132,10 @@ function arrow:UpdateOrientation(orientation, props)
 	end
 end
 
+-- Try to prevent some matrix creations to avoid gc cycles
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -142,8 +148,11 @@ function arrow:Transform(directions, deltaProps, transform, accumulations, initi
 	local length = vector:Dot(delta)
 	local movement = vector * length
 	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
-	movement:Rotate(transform:GetInverse():GetAngles())
-	transform:Translate(movement)
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+	local scale = transform:GetScale()
+	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+	transform:Translate(movement / scale)
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
 	return transform

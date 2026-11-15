@@ -8,6 +8,8 @@ local disc = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
 local dx12 = dxLevel >= 120
@@ -159,6 +161,9 @@ function disc:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -187,7 +192,18 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 	)
 	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
 
-	transform:SetAngles(rotationQuaternion:Angle())
+	local initialScale = initials[1]
+	if not initialScale then
+		initialScale = transform:GetScale()
+		initials[1] = initialScale
+	end
+
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+
+	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	transform:Set(scaleFreeTransform)
+	transform:SetScale(initialScale)
 	return transform
 end
 

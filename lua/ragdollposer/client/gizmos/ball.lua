@@ -8,6 +8,8 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 local scaleMultiplier = 1.5
 local BALL_SCALE = 0.6
 
@@ -90,6 +92,9 @@ local rotationQuaternion = quaternion.new(1)
 
 local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Quaternion[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -114,13 +119,17 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
-	local quat = initials[1]
+	local quatInfo = initials[1]
+	local quat = quatInfo and quatInfo[1]
 
 	if not quat then
-		local qi = quaternion.fromAngle(transform:GetAngles())
+		scaleFreeTransform:Set(transform)
+		scaleFreeTransform:SetScale(VECTOR_ONE)
+		local qi = quaternion.fromAngle(scaleFreeTransform:GetAngles())
 		local w, x, y, z = qi:Unpack()
 		quat = quaternion.new(w, x, y, z)
-		initials[1] = quat
+		quatInfo = { quat, transform:GetScale() }
+		initials[1] = quatInfo
 	end
 
 	local accumulationIndex = 1
@@ -129,7 +138,9 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	rotationQuaternion:Mul(quat)
 
-	transform:SetAngles(rotationQuaternion:Angle())
+	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	transform:Set(scaleFreeTransform)
+	transform:SetScale(quatInfo[2])
 	return transform
 end
 

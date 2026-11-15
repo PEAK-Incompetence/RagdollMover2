@@ -2,6 +2,8 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 ---@module "gizmo/base"
 ---@class GizmoSideMove: GizmoBase
 ---@field _axis Vector
@@ -137,6 +139,10 @@ function sidemove:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+-- Try to prevent some matrix creations to avoid gc cycles
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -150,10 +156,13 @@ function sidemove:Transform(directions, deltaProps, transform, accumulations, in
 	local vector = (right + up + forward):GetNormalized()
 	local accumulationIndex = 1
 
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
 	local movement = right * right:Dot(delta) + forward * forward:Dot(delta) + up * up:Dot(delta)
-	movement:Rotate(transform:GetInverse():GetAngles())
+	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+	local scale = transform:GetScale()
 	accumulations[accumulationIndex] = accumulations[accumulationIndex] + delta:Length()
-	transform:Translate(movement)
+	transform:Translate(movement / scale)
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
 	return transform

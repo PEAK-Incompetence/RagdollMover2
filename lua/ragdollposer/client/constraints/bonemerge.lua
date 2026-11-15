@@ -49,8 +49,15 @@ local function captureOffset(constraint, parentTarget, childTarget, parentMatric
 		return false
 	end
 
+	local parentInverse = parentRoot:GetInverse()
+	if not parentInverse then
+		constraint._offset = nil
+		RagdollPoser.Log("Cannot capture bonemerge offset: parent root matrix is singular for ", parentTarget)
+		return false
+	end
+
 	-- Keep the child's new placement relative to the parent root.
-	constraint._offset = parentRoot:GetInverse() * childRoot
+	constraint._offset = parentInverse * childRoot
 	return true
 end
 
@@ -139,6 +146,11 @@ function lock:PreEvaluate(entity)
 	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
 	local parentMatrix = parentMatrices and parentMatrices[parentBone + 1]
 	if not parentMatrix or not childMatrices then
+		return
+	end
+
+	-- Refresh the drag-start offset so re-enabling the constraint cannot reuse a stale scale.
+	if not captureOffset(self, parentTarget, childTarget, parentMatrices, childMatrices) then
 		return
 	end
 
@@ -232,19 +244,9 @@ function lock:EvaluatePose(entity, context)
 		if parentMatrix and childMatrix then
 			childMatrix:Set(worldOffset and worldOffset * parentMatrix or parentMatrix)
 			if not self._offset or childBone ~= childRootBone then
-				-- Setting the matrix directly above undoes all bone manips, so re-apply them.
-				if childTarget.AdvBone_BoneManips and childTarget.AdvBone_BoneManips[childBone] then
-					-- AdvBonemerge has no limits
-					local advboneManip = childTarget.AdvBone_BoneManips[childBone]
-					childMatrix:Translate(advboneManip.p or vector_origin)
-					childMatrix:Rotate(advboneManip.a or angle_zero)
-					childMatrix:SetScale(advboneManip.s or VECTOR_ONE)
-				else
-					-- These have a limit (TODO: what is it?)
-					childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
-					childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
-					childMatrix:SetScale(childTarget:GetManipulateBoneScale(childBone))
-				end
+				childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
+				childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
+				childMatrix:Scale(childTarget:GetManipulateBoneScale(childBone))
 			end
 		end
 	end

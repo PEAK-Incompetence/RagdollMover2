@@ -226,7 +226,7 @@ function sidescale:Transform(directions, deltaProps, transform, accumulations, i
 	setAxisScale(axisB, 1 + lengthB, bonePos, AXIS_SCALE_MATRIX)
 	SCALE_MATRIX:Set(AXIS_SCALE_MATRIX * SCALE_MATRIX)
 
-	transform:Set(SCALE_MATRIX * initialTransformTable[1])
+	sidescale.SetShearFreeScale(transform, initialTransformTable[1], SCALE_MATRIX)
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + axisA * 10, 0.5)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + axisB * 10, 0.5, COLOR, true)
@@ -250,23 +250,8 @@ function sidescale:PostTransform(transform, locals, parents, output)
 
 		if localChildMatrix then
 			local newChildMatrix = worldMatrix[parentBone] * localChildMatrix
-			local currentWorldPos = newChildMatrix:GetTranslation()
-
-			local forward = newChildMatrix:GetForward()
-			local up = newChildMatrix:GetUp()
-
-			forward:Normalize()
-			local right = forward:Cross(up):GetNormalized()
-			up = right:Cross(forward):GetNormalized()
-
-			local newWorldPos = SCALE_MATRIX * currentWorldPos
-
 			local cleanChildMatrix = Matrix()
-			cleanChildMatrix:SetTranslation(newWorldPos)
-			cleanChildMatrix:SetForward(forward)
-			cleanChildMatrix:SetRight(right)
-			cleanChildMatrix:SetUp(up)
-			cleanChildMatrix:SetScale(newChildMatrix:GetScale())
+			sidescale.SetShearFreeScale(cleanChildMatrix, newChildMatrix, SCALE_MATRIX)
 
 			output[childBone] = cleanChildMatrix
 			worldMatrix[childBone] = newChildMatrix

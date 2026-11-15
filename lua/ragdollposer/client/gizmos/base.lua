@@ -2,6 +2,52 @@
 local Base = {}
 Base.__index = Base
 
+local scaledMatrix = Matrix()
+local forward = Vector()
+local right = Vector()
+local up = Vector()
+local outputScale = Vector()
+
+-- Project an affine scale onto the source bone's orthogonal axes, discarding shear.
+function Base.SetShearFreeScale(output, source, scaleMatrix)
+	scaledMatrix:Set(scaleMatrix)
+	scaledMatrix:Mul(source)
+
+	local angles = source:GetAngles()
+	forward:Set(source:GetForward())
+	if forward:LengthSqr() < 1e-12 then
+		forward:Set(angles:Forward())
+	end
+	forward:Normalize()
+
+	up:Set(source:GetUp())
+	up:Sub(forward * up:Dot(forward))
+	if up:LengthSqr() < 1e-12 then
+		right:Set(angles:Right())
+		right:Sub(forward * right:Dot(forward))
+		right:Normalize()
+		up:Set(right:Cross(forward))
+	else
+		up:Normalize()
+		right:Set(forward:Cross(up))
+		right:Normalize()
+	end
+
+	up:Set(right:Cross(forward))
+	up:Normalize()
+
+	outputScale.x = scaledMatrix:GetForward():Dot(forward)
+	outputScale.y = scaledMatrix:GetRight():Dot(right)
+	outputScale.z = scaledMatrix:GetUp():Dot(up)
+
+	output:Set(source)
+	output:SetTranslation(scaledMatrix:GetTranslation())
+	output:SetForward(forward)
+	output:SetRight(right)
+	output:SetUp(up)
+	output:SetScale(outputScale)
+end
+
 function Base:Init()
 	local base = setmetatable({}, Base)
 	return base

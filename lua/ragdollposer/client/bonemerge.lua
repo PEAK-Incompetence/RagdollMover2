@@ -114,7 +114,52 @@ function MGR:AddParentConstraints(entity)
 	end
 end
 
-local VECTOR_ONE = Vector(1, 1, 1)
+local parentRigidMatrix = Matrix()
+local childRigidMatrix = Matrix()
+local relativeRigidMatrix = Matrix()
+local localScale = Vector()
+local rigidForward = Vector()
+local rigidRight = Vector()
+local rigidUp = Vector()
+
+local function scaleAlongAxis(scale, axis)
+	return (scale * axis):Length()
+end
+
+local function setRigidMatrix(output, source)
+	rigidForward:Set(source:GetForward())
+	rigidRight:Set(source:GetRight())
+	rigidUp:Set(source:GetUp())
+	if
+		rigidForward:LengthSqr() < 1e-12
+		or rigidRight:LengthSqr() < 1e-12
+		or rigidUp:LengthSqr() < 1e-12
+	then
+		return false
+	end
+
+	rigidForward:Normalize()
+	rigidRight:Normalize()
+	rigidUp:Normalize()
+
+	output:Identity()
+	output:SetTranslation(source:GetTranslation())
+	output:SetForward(rigidForward)
+	output:SetRight(rigidRight)
+	output:SetUp(rigidUp)
+	return true
+end
+
+local function getIndependentManipulationScale(worldScale, parentScale, relativeAngles)
+	local forwardScale = scaleAlongAxis(parentScale, relativeAngles:Forward())
+	local rightScale = scaleAlongAxis(parentScale, relativeAngles:Right())
+	local upScale = scaleAlongAxis(parentScale, relativeAngles:Up())
+
+	localScale.x = worldScale.x / forwardScale
+	localScale.y = worldScale.y / rightScale
+	localScale.z = worldScale.z / upScale
+	return localScale
+end
 
 ---@param bonemergeEntity Entity
 ---@param bone integer
@@ -123,23 +168,47 @@ function MGR:GetBonemergePose(bonemergeEntity, bone, output)
 	-- client entity bone matrices are represented in world space, but we're interested in their offset from the parent entity that they are representing
 	-- so let's just get current offsets from the bonemergeEntity and parentEntity
 
-	local childScaleMatrix = Matrix()
-	local parentScaleMatrix = Matrix()
-	local clientEntity = RagdollPoser.Entity.GetClientFromEntity(bonemergeEntity)
-	local clientParentEntity = RagdollPoser.Entity.GetClientFromEntity(bonemergeEntity:GetParent())
+	local parentEntity = bonemergeEntity:GetParent()
+	if not IsValid(parentEntity) then
+		output:Identity()
+		return
+	end
 
-	local boneName = clientEntity:GetBoneName(bone)
-	local parentBone = clientParentEntity:LookupBone(boneName)
+	local childMatrices = RagdollPoser.Entity.GetMatrices(bonemergeEntity)
+	local parentMatrices = RagdollPoser.Entity.GetMatrices(parentEntity)
+	local boneName = bonemergeEntity:GetBoneName(bone)
+	local parentBone = parentEntity:LookupBone(boneName)
 	if parentBone then
-		-- TODO: Make scale matrices for a bonemerged entity work independently of its
-		-- parent bone, regardless if bonemerge constraint is enabled or not
-		local parentMatrix = clientParentEntity:GetBoneMatrix(parentBone)
-		local childMatrix = clientEntity:GetBoneMatrix(bone)
-		parentScaleMatrix:Identity()
-		parentScaleMatrix:Rotate(parentMatrix:GetAngles())
-		parentScaleMatrix:Translate(parentMatrix:GetTranslation())
-		local localMatrix = parentMatrix:GetInverse() * childMatrix
-		output:Set(localMatrix)
+		local parentMatrix = parentMatrices and parentMatrices[parentBone + 1]
+		local childMatrix = childMatrices and childMatrices[bone + 1]
+		if not parentMatrix or not childMatrix then
+			output:Identity()
+			return
+		end
+
+		local parentInverse = parentMatrix:GetInverse()
+		if not parentInverse then
+			RagdollPoser.Log("Cannot build bonemerge pose for ", bonemergeEntity, ": parent bone matrix is singular")
+			output:Identity()
+			return
+		end
+
+		if not setRigidMatrix(parentRigidMatrix, parentMatrix) or not setRigidMatrix(childRigidMatrix, childMatrix) then
+			RagdollPoser.Log("Cannot build bonemerge pose for ", bonemergeEntity, ": bone rotation basis is degenerate")
+			output:Identity()
+			return
+		end
+
+		local relativeMatrix = parentInverse * childMatrix
+		relativeRigidMatrix:Set(parentRigidMatrix:GetInverseTR() * childRigidMatrix)
+		local relativeAngles = relativeRigidMatrix:GetAngles()
+
+		output:Identity()
+		output:SetTranslation(relativeMatrix:GetTranslation())
+		output:SetAngles(relativeAngles)
+		output:SetScale(
+			getIndependentManipulationScale(childMatrix:GetScale(), parentMatrix:GetScale(), relativeAngles)
+		)
 	else
 		-- Reset bone matrix back to identity.
 		output:Identity()

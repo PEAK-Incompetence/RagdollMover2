@@ -781,7 +781,6 @@ hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
 hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
-local boneMatrix = Matrix()
 ---Send update bone transforms of the selected bone hierarchy
 ---@param selection Selection
 local function sendSubPose(selection)
@@ -864,6 +863,9 @@ local function sendSubPose(selection)
 		entityIndex = entityIndex + 1
 	end
 
+	-- Shared matrix for copying into, to prevent garbage collection
+	local boneMatrix = Matrix()
+
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
@@ -879,8 +881,6 @@ local function sendSubPose(selection)
 		for _, b in ipairs(bs) do
 			net.WriteUInt(b, 8)
 			local matrix = matrices[b + 1] * IDENTITY_MATRIX
-			-- print(entity:GetBoneName(b))
-			-- print(matrix)
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 			if physbone >= 0 or isStaticProp(entity) then

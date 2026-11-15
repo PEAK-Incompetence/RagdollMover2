@@ -1259,10 +1259,42 @@ function MGR:DrawBoneNames(mouseHovered)
 	end
 end
 
+local scaleVector = Vector(1, 1, 1)
+local defaultScaleVector = Vector(1, 1, 1)
+function MGR:DrawScaling(mouseHovered)
+	local targetEntity = NULL
+
+	for i = 1, #mouseHovered do
+		local entry = mouseHovered[i]
+		local nextEntry = mouseHovered[i + 1]
+
+		if isentity(entry) then
+			---@cast entry Entity
+			targetEntity = entry
+		elseif IsValid(targetEntity) then
+			---@cast entry integer
+			local sin = 1 + 0.1 * math.sin(2.666 * math.pi * RealTime())
+			scaleVector:SetUnpacked(sin, sin, sin)
+			targetEntity:ManipulateBoneScale(entry, scaleVector)
+		end
+	end
+end
+
+function MGR:ResetHoverScale()
+	local entities = RagdollPoser.Entity.GetClientEntities()
+	for _, entity in ipairs(entities) do
+		for b = 0, entity:GetBoneCount() - 1 do
+			entity:ManipulateBoneScale(b, defaultScaleVector)
+		end
+	end
+end
+
 function MGR:Render()
 	cam.Start2D()
 	local mouseHovered = self:DrawBones()
+	self:ResetHoverScale()
 	self:DrawBoneNames(mouseHovered)
+	self:DrawScaling(mouseHovered)
 	self:DrawSelected()
 	self:DrawHovered()
 	cam.End2D()
@@ -1282,8 +1314,6 @@ function MGR:SetTransformFromSelection(selection)
 end
 
 local function selected(selection)
-	-- print("section")
-	-- PrintTable(selection)
 	MGR:SetTransformFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)

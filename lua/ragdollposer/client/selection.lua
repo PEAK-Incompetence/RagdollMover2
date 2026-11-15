@@ -82,6 +82,7 @@ function MGR:SelectOne(bone, entity, accumulate)
 		selectedEntities[entity] = true
 	end
 
+	RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
@@ -92,6 +93,7 @@ function MGR:SetSelection(selection)
 		if not selectedEntities[entity] then
 			selectedEntities[entity] = true
 		end
+		RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 	end
 	entityBonePairs = selection
 
@@ -123,6 +125,7 @@ function MGR:SelectGroup(selection, accumulate)
 			entityBonePairs[count + j] = bone
 			entityBonePairs[count + j + 1] = entity
 			j = j + 1
+			RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 			entitySelectedBones[entity][bone] = true
 		end
 	end

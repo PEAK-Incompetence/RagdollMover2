@@ -89,6 +89,15 @@ local function getLockBoneOutput(constraint)
 	end
 end
 
+local function getConstraintOutputEntity(constraint, entity)
+	local target = constraint.GetOutputEntity and constraint:GetOutputEntity()
+	local root = constraint.GetOutputRoot and constraint:GetOutputRoot()
+	if IsValid(target) and isnumber(root) and root >= 0 and root < target:GetBoneCount() then
+		return target
+	end
+	return entity
+end
+
 local function isBoneInSubtree(entity, bone, root)
 	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
 	if not IsValid(client) then
@@ -176,8 +185,7 @@ function MGR:PreEvaluate(entity, transform, locals, parents)
 	if stack then
 		local preparedConstraints = {}
 		for _, constraint in ipairs(stack.array) do
-			local target = getLockBoneOutput(constraint)
-			local outputEntity = target or entity
+			local outputEntity = getConstraintOutputEntity(constraint, entity)
 			local bones = constraint:PreEvaluate(entity, transform, locals, parents)
 			if bones then
 				transformedBones[outputEntity] = transformedBones[outputEntity] or {}
@@ -274,6 +282,21 @@ function MGR:EvaluatePose(entity, context)
 			end
 		end
 	end
+
+	local parent = entity:GetParent()
+	local parentStack = IsValid(parent) and EntityConstraintStacks[parent]
+	if parentStack then
+		for _, constraint in ipairs(parentStack.array) do
+			if constraint.Properties.type ~= "bonemerge" or constraint:GetOutputEntity() ~= entity then
+				continue
+			end
+
+			local root = constraint:GetOutputRoot()
+			if isnumber(root) and wasBoneTransformed(entity, root, context.transformedByClient) then
+				constraint:EvaluatePose(entity, context)
+			end
+		end
+	end
 end
 
 function MGR:Draw()
@@ -315,6 +338,39 @@ function MGR:Push(entity, type, state, name)
 		EntityConstraintStacks[entity] = stack
 		hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, { constraint })
 	end
+	EntityConstraintStacks[entity] = stack
+	self:UpdateConstraints()
+end
+
+---@class ConstraintBatch
+---@field type string
+---@field state ConstraintState?
+---@field name string?
+
+---@param entity Entity
+---@param batch ConstraintBatch[]
+---@return Constraint[]?
+function MGR:PushBatch(entity, batch)
+	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
+	EntityConstraintStacks[entity] = stack
+	refreshStack(entity)
+	local constraints = {}
+	print("pushing constraint batch")
+	for _, b in ipairs(batch) do
+		local type, state, name = b.type, b.state, b.name
+		local constraint = constructConstraint(entity, type, state, name)
+		if constraint then
+			local index = #stack.array + 1
+			stack.array[index] = constraint
+			stack.set[constraint._id] = index
+			constraints[#constraints + 1] = constraint
+			EntityConstraintStacks[entity] = stack
+		end
+	end
+	print("wow new constraints?")
+	PrintTable(stack)
+	print(debug.traceback())
+	hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, constraints)
 	EntityConstraintStacks[entity] = stack
 	self:UpdateConstraints()
 end

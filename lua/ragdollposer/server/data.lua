@@ -28,6 +28,8 @@ RagdollPoser.Networking.SendSubPoseResponse = RagdollPoser.Networking.DefineSend
 
 local entityReferenceFields = { "target", "otherTarget" }
 
+MGR.DuplicatorKey = "RagdollPoser"
+
 local function prepareConstraintsForDuplication(constraints)
 	local copiedConstraints = table.Copy(constraints or {})
 	for _, constraint in ipairs(copiedConstraints) do
@@ -94,11 +96,15 @@ local function sendSubPose(len, ply)
 			matrices[b] = net.ReadMatrix()
 		end
 
+		local isStaticProp = RagdollPoser.Helpers.IsStaticProp(entity)
+		local physicsCount = entity:GetPhysicsObjectCount()
 		for _, b in ipairs(bones) do
 			local matrix = matrices[b]
+			local boneName = entity:GetBoneName(b)
 			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 			local po = entity:GetPhysicsObjectNum(physBone)
-			if RagdollPoser.Helpers.IsStaticProp(entity) then
+			-- Some physics objects start their physics at index 1, not index 0
+			if isStaticProp or (physicsCount == 1 and not po) then
 				po = entity:GetPhysicsObject()
 			end
 			if matrix then
@@ -123,8 +129,8 @@ RagdollPoser.Networking.DefineReceiver("SendSubPose", sendSubPose)
 
 local copiedEntities = {}
 local function trackEntityDuplicators(entity)
-	duplicator.ClearEntityModifier(entity, "RagdollPoser")
-	duplicator.StoreEntityModifier(entity, "RagdollPoser", {})
+	duplicator.ClearEntityModifier(entity, MGR.DuplicatorKey)
+	duplicator.StoreEntityModifier(entity, MGR.DuplicatorKey, {})
 
 	if not copiedEntities[entity] then
 		entity.OnEntityCopyTableFinish = nil
@@ -132,13 +138,13 @@ local function trackEntityDuplicators(entity)
 			if IsValid(data.rgp_player) then
 				RagdollPoser.Log("Do tool duplication for ", entity)
 				local d = MGR.Players[self.rgp_player]
-				data.EntityMods["RagdollPoser"] = prepareConstraintsForDuplication(d.Constraints[entity])
+				data.EntityMods[MGR.DuplicatorKey] = prepareConstraintsForDuplication(d.Constraints[entity])
 				data.rgp_player = nil
 				self.rgp_player = nil
 			elseif game.SinglePlayer() then
 				RagdollPoser.Log("Do GMod save duplication for ", entity)
 				local d = MGR.Players[Entity(1)]
-				data.EntityMods["RagdollPoser"] = prepareConstraintsForDuplication(d.Constraints[entity])
+				data.EntityMods[MGR.DuplicatorKey] = prepareConstraintsForDuplication(d.Constraints[entity])
 			end
 		end
 
@@ -238,7 +244,7 @@ local function entityModifier(ply, ent, data)
 		self.PostEntityPaste = previousPostEntityPaste
 	end
 end
-duplicator.RegisterEntityModifier("RagdollPoser", entityModifier)
+duplicator.RegisterEntityModifier(MGR.DuplicatorKey, entityModifier)
 
 for _, pl in ipairs(player.GetAll()) do
 	initializePlayer(pl)
@@ -362,6 +368,16 @@ RagdollPoser.Networking.DefineReceiver("UpdateHovering", updateHover)
 local function sendPhysBoneCount(entity)
 	timer.Simple(0, function()
 		if IsValid(entity) and entity.GetModel and entity:GetModel() then
+			-- Suppose we spawn an entity from the spawnmenu or any other means and we do some bonemerging
+			-- These would be considered "firstSpawned"
+			-- If we spawned this entity and we had manipulated them in the past with RagdollPoser, do not set this to true
+			-- That way, constraints don't double up if we have a bonemerge constraint
+			entity:SetNWBool(
+				"rgp_firstSpawned",
+				not (entity.EntityMods and entity.EntityMods[MGR.DuplicatorKey] ~= nil)
+			)
+			-- print(entity:GetNWBool("rgp_firstSpawned"), "is first spawned?", entity)
+
 			local count = entity:GetPhysicsObjectCount()
 			MGR.UpdatePhysBoneCount(entity, count > 0 and count or 1)
 		end

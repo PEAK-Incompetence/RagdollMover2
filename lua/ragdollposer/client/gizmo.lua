@@ -862,6 +862,7 @@ local function sendSubPose(selection)
 
 	-- pyraMid of geez! uhh
 	-- FIXME: why did A.I. make this?
+	-- Oh, so that it will track entities from lock bones or bonemerge or IKs. bro
 	local entityIndex = 1
 	while entityIndex <= #entities do
 		local entity = entities[entityIndex]
@@ -893,6 +894,8 @@ local function sendSubPose(selection)
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
+		local isBonemerge = RagdollPoser.Bonemerge:IsBonemergeEntity(entity)
+
 		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
 		RagdollPoser.Entity.ExposeBones(entity)
 		RagdollPoser.Entity.ExposeBones(client)
@@ -907,7 +910,7 @@ local function sendSubPose(selection)
 			local matrix = matrices[b + 1] * IDENTITY_MATRIX
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			if physbone >= 0 or isStaticProp(entity) then
+			if not isBonemerge and (physbone >= 0 or isStaticProp(entity)) then
 				-- Compare if bone matrices and angles match up
 				-- if not, then we need to apply corrections
 				-- TODO: Does this happen with ragdolls too?
@@ -920,8 +923,13 @@ local function sendSubPose(selection)
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
-				RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
-				boneMatrix:SetScale(matrix:GetScale())
+				if isBonemerge then
+					RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
+					-- boneMatrix:SetScale(matrix:GetScale())
+				else
+					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
+					boneMatrix:SetScale(matrix:GetScale())
+				end
 				net.WriteMatrix(boneMatrix)
 			end
 		end
@@ -938,19 +946,14 @@ function MGR:PostTransform()
 
 	local selection = RagdollPoser.Selection:GetSelection()
 	local mirrorSelection = self._mirroredSelection or {}
-	-- PrintTable(selection)
-	-- PrintTable(mirrorSelection)
 	local complete = table.Copy(selection)
-	-- PrintTable(complete)
 	if selection[1] then
 		if mirrorSelection[1] then
 			for i = 1, #mirrorSelection do
 				complete[#complete + 1] = mirrorSelection[i]
 			end
 		end
-		-- PrintTable(complete)
 		sendSubPose(complete)
-		-- print("post transform!")
 	end
 end
 

@@ -9,7 +9,8 @@ lock.Properties = {
 	name = "#tool.ragdollposer.constraint.lockpos.name",
 	desc = "#tool.ragdollposer.constraint.lockpos.desc",
 	help = "#tool.ragdollposer.constraint.lockpos.help",
-	icon = "",
+	icon = "icon16/arrow_right.png",
+	short = "#tool.ragdollposer.constraint.lockpos.short",
 }
 
 function lock:ConstructUI(entry, props, state)
@@ -20,21 +21,28 @@ function lock:ConstructUI(entry, props, state)
 end
 
 function lock:PreEvaluate()
-	self:CaptureLockPose()
+	return self:CaptureLockPose()
 end
 
-function lock:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
-	self:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, "position")
+function lock:Evaluate(entity, controlledBone, transforms, locals, parents, output)
+	self._postEvaluateBone = self:ApplyLock(entity, controlledBone, "position", output) and self.State.bone
 end
 
-function lock:PostEvaluate()
-	self._snapshot = nil
+function lock:PostEvaluate(entity, controlledBone, locals, parents, output)
+	if self._postEvaluateBone then
+		self:PostApplyLock(self._postEvaluateBone, locals, parents, output)
+	end
+	self._postEvaluateBone = nil
 end
 
-local function createConstraint(state, name)
-	local base = lock:Init(state, name)
+local function createConstraint(entity, state, name)
+	local base = lock:Init(entity, state, name)
 	---@cast base PositionLockConstraint
 	return base
+end
+
+if RagdollPoser.Constraints and not RagdollPoser.Constraints:IsRefreshing() then
+	hook.Run("RagdollPoser_Constraints_Refresh", lock.Properties.type)
 end
 
 return createConstraint

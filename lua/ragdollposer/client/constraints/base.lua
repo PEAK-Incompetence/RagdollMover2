@@ -66,7 +66,7 @@ function Base:ConstructUITemplate(entry, props, state)
 			end
 		end
 
-		print("bruh")
+		-- print("bruh")
 		local function getEntityName(entity)
 			local model = RagdollPoser.Helpers.GetModelNameNice(entity)
 			return Format("%s: %s", model, tostring(entity))
@@ -206,6 +206,7 @@ function Base:Serialize()
 		Type = self.Properties.type,
 		Name = self.Properties.name,
 		State = self.State,
+		_id = self._id,
 	}
 end
 
@@ -231,28 +232,40 @@ end
 
 -- Save some bone info here
 ---@param entity Entity
----@param transforms VMatrix[]
----@param indices integer[]
+---@param transform VMatrix
 ---@param locals VMatrix[]
 ---@param parents integer[]
-function Base:PreEvaluate(entity, transforms, indices, locals, parents) end
+---@return integer[]
+function Base:PreEvaluate(entity, transform, locals, parents) end
 
 ---@param entity Entity
 ---@param controlledBone integer
----@param transforms VMatrix[]
----@param indices integer[]
----@param locals VMatrix[]
+---@param transform VMatrix
+---@param locals LocalMatrixInfo[]
 ---@param parents integer[]
-function Base:Evaluate(entity, controlledBone, transforms, indices, locals, parents) end
+---@param output VMatrix[]
+function Base:Evaluate(entity, controlledBone, transform, locals, parents, output) end
+
+---@class PoseEvaluationContext
+---@field transformedBones integer[]
+---@field transforms VMatrix[]
+---@field transformedByClient table<ClientEntity, table<integer, VMatrix>>
+---@field selectedBoneMatrices table<integer, VMatrix>
+---@field forceCurrentGoal boolean
 
 ---@param entity Entity
----@param controlledBones integer[]
----@param transforms VMatrix[]
-function Base:EvaluatePose(entity, controlledBones, transforms) end
+---@param context PoseEvaluationContext
+---@return boolean?
+function Base:EvaluatePose(entity, context) end
 
 function Base:Draw() end
 
-function Base:PostEvaluate() end
+---@param entity Entity
+---@param controlledBone integer
+---@param locals LocalMatrixInfo[]
+---@param parents integer[]
+---@param output VMatrix[]
+function Base:PostEvaluate(entity, controlledBone, locals, parents, output) end
 
 function Base:CaptureLockPose()
 	self._snapshot = {}
@@ -274,11 +287,13 @@ function Base:CaptureLockPose()
 	local matrices = RagdollPoser.Entity.GetMatrices(client)
 	local visited = {}
 
+	local transformedBones = {}
 	local function capture(bone)
 		if visited[bone] then
 			return
 		end
 		visited[bone] = true
+		table.insert(transformedBones, bone)
 
 		local matrix = matrices and matrices[bone + 1] or client:GetBoneMatrix(bone)
 		if matrix then
@@ -291,81 +306,69 @@ function Base:CaptureLockPose()
 	end
 
 	capture(lockedBone)
+	return transformedBones
 end
 
-function Base:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, component)
+function Base:ApplyLock(entity, controlledBone, component, output)
 	if self.State.enabled == false then
-		return
+		return false
 	end
 
 	local target = self.State.target
 	local lockedBone = self.State.bone
-	if not IsValid(target) or target ~= entity or not self._snapshot or not indices then
-		return
+	if not IsValid(target) or target ~= entity or not self._snapshot then
+		return false
 	end
 	local client = RagdollPoser.Entity.GetClientFromEntity(target)
 
 	local walk = controlledBone
 	while walk and walk >= 0 do
 		if walk == lockedBone then
-			return
+			return false
 		end
 		walk = client:GetBoneParent(walk)
 	end
 
 	local influence = math.Clamp(self.State.influence or 1, 0, 1)
 	if influence == 0 then
-		return
+		return false
 	end
 
-	if component == "rotation" then
-		local boneIndices = {}
-		for index, bone in ipairs(indices) do
-			boneIndices[bone] = index
-		end
+	local initial = self._snapshot[lockedBone]
+	local matrix = output[lockedBone]
+	if not initial or not matrix then
+		return false
+	end
 
-		local lockedIndex = boneIndices[lockedBone]
-		local initial = self._snapshot[lockedBone]
-		local matrix = lockedIndex and transforms[lockedIndex]
-		if not initial or not matrix then
-			return
-		end
-
+	if component == "position" then
+		matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))
+	elseif component == "rotation" then
 		matrix:SetAngles(LerpAngle(influence, matrix:GetAngles(), initial:GetAngles()))
+	elseif component == "scale" then
+		matrix:SetScale(LerpVector(influence, matrix:GetScale(), initial:GetScale()))
+	else
+		return false
+	end
 
-		for index, bone in ipairs(indices) do
-			local isLockedDescendant = false
-			local parentBone = parents and parents[bone]
-			while parentBone and parentBone >= 0 do
-				if parentBone == lockedBone then
-					isLockedDescendant = true
-					break
-				end
-				parentBone = parents and parents[parentBone]
-			end
+	return true
+end
 
-			if isLockedDescendant then
-				local directParent = parents and parents[bone]
-				local parentIndex = directParent and boneIndices[directParent]
-				local localMatrix = locals and locals[bone]
-				local parent = parentIndex and transforms[parentIndex]
-				if parent and localMatrix then
-					transforms[index] = parent * localMatrix
-				end
-			end
-		end
+function Base:PostApplyLock(lockedBone, locals, parents, output)
+	local matrix = output[lockedBone]
+	if not matrix then
 		return
 	end
 
-	for index, bone in ipairs(indices) do
-		local initial = self._snapshot[bone]
-		local matrix = transforms[index]
-		if initial and matrix then
-			if component == "position" then
-				matrix:SetTranslation(LerpVector(influence, matrix:GetTranslation(), initial:GetTranslation()))
-			elseif component == "scale" then
-				matrix:SetScale(LerpVector(influence, matrix:GetScale(), initial:GetScale()))
-			end
+	local worldMatrix = { [lockedBone] = matrix }
+	for _, localMatrixInfo in ipairs(locals) do
+		local bone = localMatrixInfo[1]
+		local localMatrix = localMatrixInfo[2]
+		local parentBone = parents[bone]
+		local parentMatrix = worldMatrix[parentBone]
+		if parentMatrix and localMatrix then
+			local childMatrix = parentMatrix * localMatrix
+			output[bone] = childMatrix
+			worldMatrix[bone] = childMatrix
 		end
 	end
 end

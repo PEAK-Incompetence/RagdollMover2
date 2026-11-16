@@ -1,19 +1,17 @@
 --- "Omniposition" gizmo: move something relative to your view plane
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 ---@module "gizmo/base"
 ---@class GizmoOmni: GizmoBase
 ---@field _color Color
 ---@field eyePos Vector
 ---@field eyeAng Angle
 ---@field eyeVec Vector
-local arrow = include("base.lua")
+local omni = include("base.lua")
 
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
-
-local arrowMaterial = Material(dx11 and "ragdollposer/arrow_dx11" or "ragdollposer/arrow")
-local texture = arrowMaterial:GetTexture("$basetexture")
-local width, height = texture:Width(), texture:Height()
 
 local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
 local centerPadding = 0.05
@@ -26,7 +24,7 @@ local scaleMultiplier = 0.05
 ---@param direction Vector
 ---@param props GizmoProps
 ---@return Vector? intersectionPoint
-function arrow:Intersect(eyepos, direction, props)
+function omni:Intersect(eyepos, direction, props)
 	render.SetColorMaterialIgnoreZ()
 	local scale = props.scale
 
@@ -52,7 +50,7 @@ local YELLOW = Color(255, 255, 0)
 
 ---@param props GizmoProps
 ---@param selected boolean
-function arrow:Draw(props, selected)
+function omni:Draw(props, selected)
 	local color = selected and YELLOW or self._color
 
 	render.SetColorMaterialIgnoreZ()
@@ -62,7 +60,7 @@ end
 
 ---@param props GizmoProps
 ---@return Vector axis
-function arrow:GetDirection(props)
+function omni:GetDirection(props)
 	return vector_origin
 end
 
@@ -75,7 +73,15 @@ local sharedDeltaProps = {
 local mirrorMatrix = Matrix()
 mirrorMatrix:Identity()
 
-function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
+---@param v Vector Vector to project
+---@param n Vector Normal vector of plane
+---@return Vector projection Projection of vector on the plane
+local function projectVectorToPlane(v, n)
+	local projection = v - v:Dot(n) / n:LengthSqr() * n
+	return projection
+end
+
+function omni:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local eyePos, eyeVec, eyeAng = self.eyePos, self.eyeVec, self.eyeAng
 	local forward = eyeAng:Forward()
 	local back = -forward
@@ -89,7 +95,7 @@ function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)
-	sharedDeltaProps[1]:Add(eyeDelta)
+	sharedDeltaProps[1]:Add(projectVectorToPlane(eyeDelta, back))
 
 	if mirrorAxis >= 0 then
 		local length = sharedDeltaProps[1]:Length()
@@ -105,7 +111,7 @@ function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
-function arrow:PreTransform(v)
+function omni:PreTransform(v)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 
 	self.eyePos = eyePos
@@ -115,37 +121,71 @@ function arrow:PreTransform(v)
 	return v
 end
 
-function arrow:UpdateOrientation(orientation, props) end
+function omni:UpdateOrientation(orientation, props) end
+
+-- Try to prevent some matrix creations to avoid gc cycles
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
-function arrow:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function omni:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
-	for i, matrix in ipairs(transforms) do
-		local vector = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
+	local vector = directions[1]
+	local accumulationIndex = 1
 
-		local length = delta:Length()
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
-		local movement = delta * 1
-		movement:Rotate(matrix:GetInverse():GetAngles())
-		matrix:Translate(movement)
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + delta * 10, 0.5)
+	local length = delta:Length()
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+	local scale = transform:GetScale()
+	local movement = delta * 1
+	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+	transform:Translate(movement / scale)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + delta * 10, 0.5)
+
+	return transform
+end
+
+function omni:PostTransform(transform, locals, parents, output)
+	local worldMatrix = {}
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
+		end
+
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
+		end
 	end
 end
 
 ---@return GizmoOmni arrow
 local function initialize()
-	local base = arrow:Init()
+	local base = omni:Init()
 	---@cast base GizmoOmni
 
 	-- TODO: Make the omni gizmo customizable by the player
 	base._color = Color(255, 165, 0, 255)
 
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "omni")
 end
 
 return initialize

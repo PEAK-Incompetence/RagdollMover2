@@ -2,34 +2,39 @@
 
 local RGPFontSize = math.max(math.Round(14 * ScrH() / 1080), 10)
 
-surface.CreateFont("RagdollPoserFont", {
-	font = "Verdana",
-	size = RGPFontSize,
-	weight = 700,
-	antialias = true,
-})
+if not RagdollPoser.Fonts then
+	RagdollPoser.Fonts = true
+	surface.CreateFont("RagdollPoserFont", {
+		font = "Verdana",
+		size = RGPFontSize,
+		weight = 700,
+		antialias = true,
+	})
 
-surface.CreateFont("RagdollPoserHeaderFont", {
-	font = "Verdana",
-	size = RGPFontSize + 4,
-	weight = 700,
-	antialias = true,
-})
+	surface.CreateFont("RagdollPoserHeaderFont", {
+		font = "Verdana",
+		size = RGPFontSize + 4,
+		weight = 700,
+		antialias = true,
+	})
+end
 
----@module "disc"
-local disc = include("gizmos/disc.lua")
----@module "arrow"
-local arrow = include("gizmos/arrow.lua")
----@module "scale"
-local scale = include("gizmos/scale.lua")
----@module "ball"
-local ball = include("gizmos/ball.lua")
----@module "sidemove"
-local sidemove = include("gizmos/sidemove.lua")
----@module "sidescale"
-local sidescale = include("gizmos/sidescale.lua")
----@module "omni"
-local omni = include("gizmos/omni.lua")
+local gizmos = {
+	---@module "disc"
+	disc = include("ragdollposer/client/gizmos/disc.lua"),
+	---@module "arrow"
+	arrow = include("ragdollposer/client/gizmos/arrow.lua"),
+	---@module "scale"
+	scale = include("ragdollposer/client/gizmos/scale.lua"),
+	---@module "ball"
+	ball = include("ragdollposer/client/gizmos/ball.lua"),
+	---@module "sidemove"
+	sidemove = include("ragdollposer/client/gizmos/sidemove.lua"),
+	---@module "sidescale"
+	sidescale = include("ragdollposer/client/gizmos/sidescale.lua"),
+	---@module "omni"
+	omni = include("ragdollposer/client/gizmos/omni.lua"),
+}
 
 local MAX_BONE_SIZE = RagdollPoser.Constants.MAX_BONE_SIZE
 local OUTLINE_WIDTH = 1
@@ -37,6 +42,10 @@ local BLACK = Color(0, 0, 0, 255)
 local FLOAT_1DIVIDE540 = 0.00185185185
 
 local isStaticProp = RagdollPoser.Helpers.IsStaticProp
+
+---@class LocalMatrixInfo
+---@field [1] integer
+---@field [2] VMatrix
 
 ---[CLIENT]
 ---
@@ -57,18 +66,18 @@ local MGR = {
 		orientation = 0,
 		localoffset = false,
 		relativerotate = false,
+		drawsphere = false,
 		finalPos = Vector(),
 	},
 
 	_moving = false,
 	_enabled = true,
+	_movingUI = false,
 
 	---@type GizmoBase[]
 	_directions = {},
 	---@type GizmoMode
 	_mode = 0,
-	---@type GizmoPivot
-	_pivot = 0,
 
 	_mirror = false,
 	---@type integer
@@ -80,14 +89,22 @@ local MGR = {
 	---and then we go down the bone hierarchy and get all matrices to transform.
 	---If we also have selected bone matrices as our descendants from the root bone, first transform
 	---the root bone, then transform the descendant bones
-	---@type VMatrix[]
+	---@type table<ClientEntity, table<integer, VMatrix>>
 	_matrices = {},
-	---@type table<ClientEntity, table<integer, VMatrix[]>>
+	---@type PoseEvaluationContext
+	_poseContext = {
+		transformedBones = {},
+		transforms = {},
+		transformedByClient = {},
+		selectedBoneMatrices = {},
+		forceCurrentGoal = false,
+	},
+	---@type table<ClientEntity, table<integer, VMatrix>>
 	_constraintMatrices = {},
 	---@type table<ClientEntity, VMatrix[]>
 	_transformBaseline = {},
 	---Matrices local to parent matrices. Useful for transforms
-	---@type {[integer]: VMatrix}
+	---@type table<ClientEntity, table<integer, LocalMatrixInfo[]>>
 	_localMatrices = {},
 	---@type {[Entity]: Vector[]}
 	_pivots = {},
@@ -107,7 +124,11 @@ function MGR:UpdateOffset()
 end
 
 function MGR:SetOffset(x, y, z)
-	self._gizmoProps.offset:SetUnpacked(x, y, z)
+	if isvector(x) then
+		self._gizmoProps.offset:Set(x)
+	else
+		self._gizmoProps.offset:SetUnpacked(x, y, z)
+	end
 	self:UpdateOffset()
 	hook.Run("RagdollPoser_Gizmo_OffsetChanged", self._gizmoProps.offset)
 end
@@ -155,14 +176,6 @@ MGR.Orientation = {
 	Local = 1, -- oriented to bone
 }
 
----The point relative to where transforms occur; useful for multiple bones
----@alias GizmoPivot integer
-MGR.Pivot = {
-	Median = 0,
-	Bounding = 1,
-	Individual = 2,
-}
-
 ---@alias GizmoMode integer
 MGR.Mode = {
 	Translation = 0,
@@ -174,16 +187,29 @@ local numModes = table.Count(MGR.Mode)
 
 ---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializer = {
-	[MGR.Mode.Translation] = arrow,
-	[MGR.Mode.Rotation] = disc,
-	[MGR.Mode.Scale] = scale,
+	[MGR.Mode.Translation] = gizmos.arrow,
+	[MGR.Mode.Rotation] = gizmos.disc,
+	[MGR.Mode.Scale] = gizmos.scale,
 }
 
 ---@type {[GizmoMode]: fun(...): GizmoBase}
 local modeToInitializerSide = {
-	[MGR.Mode.Translation] = sidemove,
-	[MGR.Mode.Scale] = sidescale,
+	[MGR.Mode.Translation] = gizmos.sidemove,
+	[MGR.Mode.Scale] = gizmos.sidescale,
 }
+
+function MGR:UpdateInitializers()
+	modeToInitializer = {
+		[MGR.Mode.Translation] = gizmos.arrow,
+		[MGR.Mode.Rotation] = gizmos.disc,
+		[MGR.Mode.Scale] = gizmos.scale,
+	}
+
+	modeToInitializerSide = {
+		[MGR.Mode.Translation] = gizmos.sidemove,
+		[MGR.Mode.Scale] = gizmos.sidescale,
+	}
+end
 
 function MGR:SetWidth(width)
 	self._gizmoProps.width = width
@@ -215,7 +241,7 @@ function MGR:OnModeChanged(mode)
 	if mode == self.Mode.Rotation then
 		-- Big disc
 
-		local disc, ball = disc(), ball()
+		local disc, ball = gizmos.disc(), gizmos.ball()
 		self._directions[4] = disc
 		self._directions[5] = ball
 	elseif mode == self.Mode.Scale or mode == self.Mode.Translation then
@@ -226,7 +252,7 @@ function MGR:OnModeChanged(mode)
 			self._directions[i] = gizmoType
 		end
 		if mode == self.Mode.Translation then
-			self._directions[7] = omni()
+			self._directions[7] = gizmos.omni()
 		end
 	end
 	self:UpdateOrientation()
@@ -248,9 +274,28 @@ function MGR:SetAngles(ang)
 	self:UpdateOrientation()
 end
 
+---@return Vector
+function MGR:GetPosition()
+	return self._gizmoProps.pos
+end
+
+---@return Angle
+function MGR:GetAngles()
+	return self._gizmoProps.ang
+end
+
 ---@param state boolean
 function MGR:SetMoving(state)
 	self._moving = state
+end
+
+---@param state boolean
+function MGR:SetMovingUI(state)
+	self._movingUI = state
+end
+
+function MGR:GetMoving()
+	return self._moving
 end
 
 function MGR:IsMoving()
@@ -277,7 +322,10 @@ local function sendSubPoseResponse()
 
 	-- TODO: Update the client entity if we don't have stretching enabled
 
-	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
+	local selection = RagdollPoser.Selection:GetSelection()
+	MGR:SetTransformFromSelection(selection)
+	MGR:SetTransformFromSelection(selection)
+	hook.Run("RagdollPoser_Gizmo_Transformed")
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
 
@@ -345,49 +393,87 @@ end
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()
 
+---@return GizmoOrientation
+function MGR:GetOrientation()
+	return self._gizmoProps.orientation
+end
+
+---@param newOrientation GizmoOrientation
+function MGR:SetOrientation(newOrientation)
+	self._gizmoProps.orientation = newOrientation
+end
+
+---@return GizmoMode
+function MGR:GetMode()
+	return self._mode
+end
+
 ---Do some setup (caching) before we start transforming
 function MGR:PreTransform()
+	self._transformOk = false
+
 	-- Get an initial copy of the entity matrices
 
 	local selection = RagdollPoser.Selection:GetSelection()
 	if not selection[1] then
 		return
 	end
-	print("pretransform")
 
-	---@param entity Entity
-	---@param matrices VMatrix[]
+	---Go through a client and copy its matrices for local matrices (wrt to parent bone) and its parent bone relationships
+	---@param client ClientEntity
+	---@param boneMatrices VMatrix[]
 	---@param bone integer
-	---@param store VMatrix[]
 	---@param storeLocal {[integer]: VMatrix}
-	---@param indexer integer[]
 	---@param parents {[integer]: integer}
-	local function recursiveMatrixCopy(entity, matrices, bone, store, storeLocal, indexer, parents)
-		local m = matrices[bone + 1]
-		if m then
-			-- copy the matrix
-			indexer[bone] = table.insert(store, m * IDENTITY_MATRIX)
+	local function recursiveMatrixCopy(client, boneMatrices, bone, storeLocal, parents)
+		local m = boneMatrices[bone + 1]
+		if not self._transformedBoneSet[client][bone] then
+			self._transformedBoneSet[client][bone] = table.insert(self._transformedBones[client], bone)
 		end
-		for _, childBone in ipairs(entity:GetChildBones(bone)) do
-			recursiveMatrixCopy(entity, matrices, childBone, store, storeLocal, indexer, parents)
-			local childMatrix = matrices[childBone + 1]
+		for _, childBone in ipairs(client:GetChildBones(bone)) do
+			local childMatrix = boneMatrices[childBone + 1]
 			if childMatrix and m then
-				storeLocal[childBone] = m:GetInverse() * childMatrix
+				table.insert(storeLocal, { childBone, m:GetInverse() * childMatrix })
 				parents[childBone] = bone
 			end
+			recursiveMatrixCopy(client, boneMatrices, childBone, storeLocal, parents)
 		end
 	end
+
+	--- If relative rotate is enabled. If it is, rotate with respect to the current offsetted gizmo. Otherwise, rotate with respect to each bones own pivot
+	--- Also need to update local matrices. Say we rotate a parent bone and we have also selected a child bone: we wnat to rotate that one after the parent bone has been rotated. so that the child bone is in the right spot
+
 	-- TODO: Maybe simplify the tables used below for doing transforms?
 	-- There could be a simpler, possibly more performant way to doing things
 	self._matrices = {}
 	self._constraintMatrices = {}
 	self._transformBaseline = {}
-	self._matrixIndex = {}
 	self._localMatrices = {}
+	-- Including the selected bone and its descendants, these are the bones that have been moved (includes bones affected by IK chains and bones locked to each other)
+	-- Array set: Don't want to work with the same bones
+	self._transformedBones = {}
+	self._transformedBoneSet = {}
+	self._transformed = {}
 	self._initials = {}
 	self._parents = {}
 	self._accumulations = {}
+	-- TODO: Track pivots for each bone, if I wanted to add the ability to rotate all bones by their individual axis
 	self._pivots = {}
+
+	local function addTransformedBones(client, bones)
+		if not bones then
+			return
+		end
+
+		self._transformedBones[client] = self._transformedBones[client] or {}
+		self._transformedBoneSet[client] = self._transformedBoneSet[client] or {}
+		for _, bone in ipairs(bones) do
+			if not self._transformedBoneSet[client][bone] then
+				self._transformedBoneSet[client][bone] = true
+				table.insert(self._transformedBones[client], bone)
+			end
+		end
+	end
 
 	local function collectBones(selection)
 		-- Collection of bones per entity, starting from the selected root bone index to the selected descendant bone index
@@ -408,6 +494,8 @@ function MGR:PreTransform()
 			entityBoneSet[client][bone] = 0
 		end
 
+		-- What are we doing here? We're sorting selected bones based on their depth from the root bone
+		-- We work with the bones with less depth first (parent bones) and then bones with more depth last (child bones)
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
 			local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
@@ -432,6 +520,7 @@ function MGR:PreTransform()
 			for bone, count in SortedPairsByValue(bones) do
 				table.insert(entityBones[client], bone)
 			end
+
 			self._pivots[client] = self._pivots[client] or { gizmo:GetDirection(props) }
 		end
 
@@ -450,29 +539,26 @@ function MGR:PreTransform()
 
 				self._matrices[client] = self._matrices[client] or {}
 				self._constraintMatrices[client] = self._constraintMatrices[client] or {}
-				self._matrixIndex[client] = self._matrixIndex[client] or {}
 				self._localMatrices[client] = self._localMatrices[client] or {}
 				self._parents[client] = self._parents[client] or {}
 				self._initials[client] = self._initials[client] or {}
-				for _, bone in ipairs(bones) do
-					self._matrices[client][bone] = self._matrices[client][bone] or {}
+				self._transformedBoneSet[client] = self._transformedBoneSet[client] or {}
+				self._transformedBones[client] = self._transformedBones[client] or {}
+				self._transformed[client] = self._transformed[client] or {}
+				for i, bone in ipairs(bones) do
+					local boneMatrix = client:GetBoneMatrix(bone)
+					self._matrices[client][bone] = boneMatrix
 					self._constraintMatrices[client][bone] = {}
-					self._matrixIndex[client][bone] = self._matrixIndex[client][bone] or {}
 					self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
 					self._initials[client][bone] = self._initials[client][bone] or {}
 					recursiveMatrixCopy(
 						client,
 						matrices,
 						bone,
-						self._matrices[client][bone],
 						self._localMatrices[client][bone],
-						self._matrixIndex[client][bone],
 						self._parents[client]
 					)
-					self._matrixIndex[client][bone] = table.Flip(self._matrixIndex[client][bone])
-					for index, matrix in ipairs(self._matrices[client][bone]) do
-						self._constraintMatrices[client][bone][index] = matrix * IDENTITY_MATRIX
-					end
+					self._constraintMatrices[client][bone] = boneMatrix * IDENTITY_MATRIX
 				end
 			end
 		end
@@ -481,18 +567,6 @@ function MGR:PreTransform()
 		-- 1. Store pivot per client
 		-- 2. Iterate over each clients' pivots using root bone data structure
 		-- 3. With root bone known, flip direction of pivots using mirror axis
-
-		-- Check gizmo pivot
-		if self._pivot == self.Pivot.Individual then
-			if props.orientation == self.Orientation.Local then
-				-- We need to get a bunch of direction vectors, using the direction we passed to move bones individually on their own axes
-				-- or to rotate them on their own axes
-				-- So iterate over all selected bones to get their local, individual directions
-			end
-		else
-			if props.orientation == self.Orientation.World then
-			end
-		end
 
 		for client, pivots in pairs(self._pivots) do
 			self._accumulations[client] = self._accumulations[client] or {}
@@ -511,14 +585,15 @@ function MGR:PreTransform()
 	-- The desired mirror plane might not be the same for all models, so we'll give the option to change the mirror plane so we get proper
 	-- mirroring for every model
 	if self._mirror then
-		-- TODO: add mirror operations
 		local mirroredSelection = RagdollPoser.Mirror:GetMirrored(selection)
 		self._mirrorAxis = GetConVar("ragdollposer_mirror_axis"):GetInt()
 		collectBones(mirroredSelection)
 
+		-- We use the root bone as our mirror plane
+		-- This assumes that the mirrored bone is truly symmetric to the bone with respect to the root mirror plane
 		---@type {[Entity]: VMatrix}
 		local rootBones = {}
-		local maxIter = 256
+		local maxBones = 256
 		for i = 1, #mirroredSelection - 1, 2 do
 			local bone, entity = mirroredSelection[i], mirroredSelection[i + 1]
 			---@cast bone integer
@@ -530,7 +605,7 @@ function MGR:PreTransform()
 			if self._parents[entity] then
 				local iter = 0
 				local walk = bone
-				while walk ~= -1 and iter < maxIter do
+				while walk ~= -1 and iter < maxBones do
 					local parent = entity:GetBoneParent(walk)
 					if parent == -1 then
 						entity:CopyBoneMatrix(walk, rootBones[entity])
@@ -552,8 +627,6 @@ function MGR:PreTransform()
 				self._mirrorPivots[entity][i] = rootMatrix * localDirection
 			end
 		end
-		-- PrintTable(self._pivots)
-		-- PrintTable(self._mirrorPivots or {})
 		self._mirroredSelection = mirroredSelection
 	end
 
@@ -562,24 +635,40 @@ function MGR:PreTransform()
 	self.start = gui.ScreenToVector(x, y)
 	self.startPos = newPos
 
+	-- After getting transformed bones for the selected bones, we have to consider constrained bones
+	-- Even if they're not within our initial transformed bone set, we'll have to add them anyway
+
 	local evaluatedEntities = {}
+	-- added by gpt for IK and lock constraints
 	local function preEvaluateConstraints(selectionToEvaluate)
 		for i = 1, #selectionToEvaluate - 1, 2 do
 			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
 			---@cast client ClientEntity
 			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 			if not evaluatedEntities[entity] then
-				RagdollPoser.Constraints:PreEvaluate(entity)
+				local bonesByEntity = RagdollPoser.Constraints:PreEvaluate(entity)
 				evaluatedEntities[entity] = true
+				for affectedEntity, bones in pairs(bonesByEntity) do
+					local affectedClient = RagdollPoser.Entity.GetClientFromEntity(affectedEntity)
+					if IsValid(affectedClient) then
+						addTransformedBones(affectedClient, bones)
+					end
+				end
 			end
 		end
 	end
 	preEvaluateConstraints(selection)
 	preEvaluateConstraints(self._mirroredSelection)
+
+	self._transformOk = true
 end
 
 ---Transform the selected bones of the selected entities, after triggering a move operation
 function MGR:Transform()
+	if not self._transformOk then
+		return
+	end
+
 	local x, y = input.GetCursorPos()
 	local newPos = RagdollPoser.View:GetView()
 	local newPoint = gui.ScreenToVector(x, y)
@@ -607,7 +696,8 @@ function MGR:Transform()
 				local bone, client = selection[i], selection[i + 1]
 				---@cast client ClientEntity
 				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-				-- print(i, client:GetBoneName(bone))
+				RagdollPoser.Entity.ExposeBones(client)
+				RagdollPoser.Entity.ExposeBones(entity)
 				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
 				-- We'll build the transform step by step
@@ -617,15 +707,27 @@ function MGR:Transform()
 				-- 4. Mirroring
 				-- 5. Constraints
 
-				local deltaProps = gizmo:ProcessDelta(
-					self.start,
-					newPoint,
-					self._gizmoProps,
-					doMirror and self._mirrorAxis or -1,
-					eyeDelta
-				)
+				local deltaProps
+				if self._movingUI then
+					deltaProps = gizmo:ProcessDeltaUI(
+						self.start,
+						newPoint,
+						self._gizmoProps,
+						doMirror and self._mirrorAxis or -1,
+						RagdollPoser.UI:GetDelta()
+					)
+				else
+					deltaProps = gizmo:ProcessDelta(
+						self.start,
+						newPoint,
+						self._gizmoProps,
+						doMirror and self._mirrorAxis or -1,
+						eyeDelta
+					)
+				end
 
-				gizmo:Transform(
+				-- Move the selected bone
+				self._transformed[client][bone] = gizmo:Transform(
 					pivots[client],
 					deltaProps,
 					self._matrices[client][bone],
@@ -634,36 +736,40 @@ function MGR:Transform()
 					self._gizmoProps
 				)
 
+				-- Resolve parent bone hierarchies (if I moved an arm, all the child bones of that should move along with it)
 				gizmo:PostTransform(
-					self._matrices[client][bone],
+					self._transformed[client][bone],
 					self._localMatrices[client][bone],
-					self._matrixIndex[client][bone],
-					self._parents[client]
+					self._parents[client],
+					self._transformed[client]
 				)
 
-				local constrainedMatrices = self._constraintMatrices[client][bone]
-				for index, matrix in ipairs(self._matrices[client][bone]) do
-					constrainedMatrices[index]:Set(matrix)
-				end
+				local constrainedMatrix = self._constraintMatrices[client][bone]
+				constrainedMatrix:Set(self._matrices[client][bone])
 
 				RagdollPoser.Constraints:Evaluate(
 					entity,
 					bone,
-					constrainedMatrices,
-					self._matrixIndex[client][bone],
+					constrainedMatrix,
 					self._localMatrices[client][bone],
-					self._parents[client]
+					self._parents[client],
+					self._transformed[client]
+				)
+				RagdollPoser.Constraints:PostEvaluate(
+					entity,
+					bone,
+					self._localMatrices[client][bone],
+					self._parents[client],
+					self._transformed[client]
 				)
 
 				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
 
 				if matrices then
-					for b, indices in pairs(self._matrixIndex[client]) do
-						for index, bb in ipairs(indices) do
-							local targetMatrix = matrices[bb + 1]
-							if targetMatrix then
-								targetMatrix:Set(self._constraintMatrices[client][b][index])
-							end
+					for _, b in ipairs(self._transformedBones[client]) do
+						local targetMatrix = matrices[b + 1]
+						if targetMatrix and self._transformed[client][b] then
+							targetMatrix:Set(self._transformed[client][b])
 						end
 					end
 				end
@@ -675,24 +781,27 @@ function MGR:Transform()
 			transformSelected(self._mirroredSelection, self._mirrorPivots, true)
 		end
 
-		local controlledBones = {}
-		local function collectControlledBones(selectionToCollect)
-			for i = 1, #selectionToCollect - 1, 2 do
-				local bone, client = selectionToCollect[i], selectionToCollect[i + 1]
-				---@cast client ClientEntity
-				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-				controlledBones[entity] = controlledBones[entity] or {}
-				controlledBones[entity][#controlledBones[entity] + 1] = bone
+		for client, transformedBones in pairs(self._transformedBones) do
+			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			if not IsValid(entity) or not self._transformed[client] then
+				continue
 			end
-		end
-		collectControlledBones(selection)
-		collectControlledBones(self._mirroredSelection)
 
-		for entity, bones in pairs(controlledBones) do
-			local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-			local matrices = IsValid(client) and RagdollPoser.Entity.GetMatricesFromClient(client)
+			local outputClient = RagdollPoser.Entity.GetClientFromEntity(entity)
+			if not IsValid(outputClient) then
+				continue
+			end
+			RagdollPoser.Entity.ExposeBones(outputClient)
+			RagdollPoser.Entity.ExposeBones(entity)
+			local matrices = RagdollPoser.Entity.GetMatricesFromClient(outputClient)
 			if matrices then
-				RagdollPoser.Constraints:EvaluatePose(entity, bones, matrices)
+				local poseContext = self._poseContext
+				poseContext.transformedBones = transformedBones
+				poseContext.transforms = matrices
+				poseContext.transformedByClient = self._transformed
+				poseContext.selectedBoneMatrices = self._matrices[client]
+				poseContext.forceCurrentGoal = false
+				RagdollPoser.Constraints:EvaluatePose(entity, poseContext)
 			end
 		end
 	end
@@ -719,7 +828,25 @@ hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
 hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
-local boneMatrix = Matrix()
+---Bone matrices and entity's angles aren't consistent with each other
+---so we need to correct this
+---@param entity Entity
+---@param bone integer
+---@param matrix VMatrix
+local function fixAngleOffset(entity, bone, matrix)
+	local m1 = Matrix()
+	m1:Rotate(entity:GetAngles())
+	local m2 = Matrix()
+	m2:Rotate(entity:GetBoneMatrix(bone):GetAngles())
+	local offset = m2:GetTransposed() * m1
+	local trace = offset:GetField(1, 1) + offset:GetField(2, 2) + offset:GetField(3, 3)
+	local difference = math.acos(math.Clamp((trace - 1) * 0.5, -1, 1))
+	if difference >= 1e-6 then
+		local rotation = matrix * offset
+		matrix:SetAngles(rotation:GetAngles())
+	end
+end
+
 ---Send update bone transforms of the selected bone hierarchy
 ---@param selection Selection
 local function sendSubPose(selection)
@@ -775,48 +902,208 @@ local function sendSubPose(selection)
 		end
 	end
 
-	for _, entity in ipairs(entities) do
-		local arr = bones[entity]
-		local set = boneSet[entity]
+	-- pyraMid of geez! uhh
+	-- FIXME: why did A.I. make this?
+	-- Oh, so that it will track entities from lock bones or bonemerge or IKs. bro
+	local entityIndex = 1
+	while entityIndex <= #entities do
+		local entity = entities[entityIndex]
 		for _, constraint in ipairs(RagdollPoser.Constraints:GetConstraintStack(entity)) do
-			if constraint.GetOutputRoot then
-				local root = constraint:GetOutputRoot()
-				if root and not set[root] then
-					addChildBones(entity, root, arr, set)
+			local outputEntity = constraint.GetOutputEntity and constraint:GetOutputEntity() or entity
+			local root = constraint.GetOutputRoot and constraint:GetOutputRoot()
+			if IsValid(outputEntity) and root then
+				RagdollPoser.Entity.ExposeBones(outputEntity)
+				local arr = bones[outputEntity]
+				local set = boneSet[outputEntity]
+				if not arr then
+					arr = {}
+					set = {}
+					bones[outputEntity] = arr
+					boneSet[outputEntity] = set
+					table.insert(entities, outputEntity)
+				end
+				if not set[root] then
+					addChildBones(outputEntity, root, arr, set)
 				end
 			end
 		end
+		entityIndex = entityIndex + 1
 	end
 
-	-- TODO: Add support for parented entities
+	-- Shared matrix for copying into, to prevent garbage collection
+	local boneMatrix = Matrix()
+
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
+		local isBonemerge = RagdollPoser.Bonemerge:IsBonemergeEntity(entity)
+
+		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity.ExposeBones(client)
 		net.WriteEntity(entity)
 		local matrices = RagdollPoser.Entity.GetMatrices(entity)
 		local bs = bones[entity]
 		local count = #bs
 		net.WriteUInt(count, 8)
+		local physCount = RagdollPoser.Entity.GetPhysBoneCount(entity)
 		for _, b in ipairs(bs) do
 			net.WriteUInt(b, 8)
-			local matrix = matrices[b + 1]
+			local matrix = matrices[b + 1] * IDENTITY_MATRIX
 
 			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			if physbone >= 0 or isStaticProp(entity) then
+			if not isBonemerge and (physbone >= 0 or isStaticProp(entity)) then
+				-- Compare if bone matrices and angles match up
+				-- if not, then we need to apply corrections
+				-- TODO: Does this happen with ragdolls too?
+				-- TODO: Add parented entity layer so that matrices sent there is correct
+				-- All bonemerged entities use manipulates, while parented use setpos/setang
+				if physCount == 1 then
+					fixAngleOffset(entity, b, matrix)
+				end
+
 				-- Send world transforms and everything
 				net.WriteMatrix(matrix)
 			else
-				RagdollPoser.Helpers.GetNonPhysicalBonePose(
-					RagdollPoser.Entity.GetClientFromEntity(entity),
-					b,
-					boneMatrix
-				)
-				boneMatrix:SetScale(matrix:GetScale())
+				if isBonemerge then
+					RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
+					-- boneMatrix:SetScale(matrix:GetScale())
+				else
+					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
+					boneMatrix:SetScale(matrix:GetScale())
+				end
 				net.WriteMatrix(boneMatrix)
 			end
 		end
 	end
 	net.SendToServer()
+end
+
+---@param transformType GizmoMode
+function MGR:ResetSelected(transformType, bone, entity)
+	local selection = RagdollPoser.Selection:GetSelection()
+	if not selection[1] then
+		return
+	end
+	local resetAll = transformType == 4
+
+	local function handleReset(bone, client)
+		local defaultPose = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
+		local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local selectedMatrix = matrices and matrices[bone + 1]
+		local pose = defaultPose[bone + 1]
+		if not selectedMatrix or not pose then
+			return
+		end
+
+		if resetAll or transformType == self.Mode.Scale then
+			-- TODO: Also reset translation and rotation back to local offsets
+			local function resetDescendantScales(parentBone)
+				local parentMatrix = matrices[parentBone + 1]
+				if not parentMatrix then
+					return
+				end
+
+				for _, childBone in ipairs(client:GetChildBones(parentBone)) do
+					local childMatrix = matrices[childBone + 1]
+					if childMatrix then
+						childMatrix:SetScale(Vector(1, 1, 1))
+						resetDescendantScales(childBone)
+					end
+				end
+			end
+
+			selectedMatrix:SetScale(Vector(1, 1, 1))
+			resetDescendantScales(bone)
+		end
+
+		if resetAll or transformType == self.Mode.Translation or transformType == self.Mode.Rotation then
+			-- Save each descendant's transform relative to its immediate parent so the
+			-- selected bone can be reset without changing the pose below it.
+			local descendantLocals = {}
+			local function saveDescendants(parentBone)
+				local parentMatrix = matrices[parentBone + 1]
+				if not parentMatrix then
+					return
+				end
+
+				for _, childBone in ipairs(client:GetChildBones(parentBone)) do
+					local childMatrix = matrices[childBone + 1]
+					if childMatrix then
+						local inverseParent = parentMatrix:GetInverse() or parentMatrix:GetInverseTR()
+						descendantLocals[childBone] = inverseParent * childMatrix
+						saveDescendants(childBone)
+					end
+				end
+			end
+
+			saveDescendants(bone)
+
+			local parentBone = client:GetBoneParent(bone)
+			local parentMatrix
+			if parentBone >= 0 then
+				parentMatrix = matrices[parentBone + 1]
+			else
+				parentMatrix = Matrix()
+				parentMatrix:SetTranslation(entity:GetPos())
+				parentMatrix:SetAngles(entity:GetAngles())
+			end
+
+			if parentMatrix then
+				local resetPos, resetAng = LocalToWorld(
+					parentBone >= 0 and pose[3] or pose[1],
+					parentBone >= 0 and pose[4] or pose[2],
+					parentMatrix:GetTranslation(),
+					parentMatrix:GetAngles()
+				)
+
+				if resetAll or transformType == self.Mode.Translation then
+					selectedMatrix:SetTranslation(resetPos)
+				end
+				if resetAll or transformType == self.Mode.Rotation then
+					local scale = selectedMatrix:GetScale()
+					if parentBone >= 0 then
+						selectedMatrix:SetAngles(resetAng)
+					end
+					selectedMatrix:SetScale(scale)
+				end
+
+				local function restoreDescendants(parentBoneToRestore)
+					local parent = matrices[parentBoneToRestore + 1]
+					if not parent then
+						return
+					end
+
+					for _, childBone in ipairs(client:GetChildBones(parentBoneToRestore)) do
+						local childMatrix = matrices[childBone + 1]
+						local localMatrix = descendantLocals[childBone]
+						if childMatrix and localMatrix then
+							childMatrix:Set(parent * localMatrix)
+							restoreDescendants(childBone)
+						end
+					end
+				end
+
+				restoreDescendants(bone)
+			end
+		end
+	end
+
+	if bone and entity then
+		handleReset(bone, entity)
+	else
+		for i = 1, #selection - 1, 2 do
+			local bone = selection[i]
+			local client = selection[i + 1]
+			---@cast bone integer
+			---@cast client ClientEntity
+			handleReset(bone, client)
+		end
+	end
+
+	local complete = table.Copy(selection)
+	sendSubPose(complete)
 end
 
 ---Send our results after the transformation
@@ -828,38 +1115,19 @@ function MGR:PostTransform()
 
 	local selection = RagdollPoser.Selection:GetSelection()
 	local mirrorSelection = self._mirroredSelection or {}
-	-- PrintTable(selection)
-	-- PrintTable(mirrorSelection)
 	local complete = table.Copy(selection)
-	-- PrintTable(complete)
 	if selection[1] then
 		if mirrorSelection[1] then
 			for i = 1, #mirrorSelection do
 				complete[#complete + 1] = mirrorSelection[i]
 			end
 		end
-		-- PrintTable(complete)
 		sendSubPose(complete)
-		print("post transform!")
 	end
-
-	local evaluatedEntities = {}
-	local function postEvaluateConstraints(selectionToEvaluate)
-		for i = 1, #selectionToEvaluate - 1, 2 do
-			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
-			---@cast client ClientEntity
-			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-			if not evaluatedEntities[entity] then
-				RagdollPoser.Constraints:PostEvaluate(entity)
-				evaluatedEntities[entity] = true
-			end
-		end
-	end
-	postEvaluateConstraints(selection)
-	postEvaluateConstraints(mirrorSelection)
 end
 
 local function onLeftClickDown(x, y, tr)
+	RagdollPoser.Input:ResetDelta()
 	-- If we're not accepting drag selections, then don't do anything
 	if RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and not MGR:IsMoving() and MGR:TestIntersect() then
 		-- Click on gizmo and do stuff
@@ -887,12 +1155,20 @@ local CYAN = Color(0, 128, 255, 255)
 local RED = Color(255, 0, 0, 255)
 local YELLOW = Color(255, 255, 0, 255)
 
--- TODO: Use theming
+-- TODO: Use themings
 local boneTypeToColor = {
 	[RagdollPoser.Bones.BoneType.Physics] = GREEN,
 	[RagdollPoser.Bones.BoneType.Manipulate] = CYAN,
 	[RagdollPoser.Bones.BoneType.Procedural] = RED,
 }
+
+---@param theme Theme
+local function updateTheme(theme)
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Physics] = theme.gizmoColors.physics
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Manipulate] = theme.gizmoColors.manipulate
+	boneTypeToColor[RagdollPoser.Bones.BoneType.Procedural] = theme.gizmoColors.procedural
+end
+hook.Add("RagdollPoser_Themes_Update", "Gizmo", updateTheme)
 
 -- Make sure you are in the 2D rendering context
 function MGR:DrawBones()
@@ -1155,10 +1431,42 @@ function MGR:DrawBoneNames(mouseHovered)
 	end
 end
 
+local scaleVector = Vector(1, 1, 1)
+local defaultScaleVector = Vector(1, 1, 1)
+function MGR:DrawScaling(mouseHovered)
+	local targetEntity = NULL
+
+	for i = 1, #mouseHovered do
+		local entry = mouseHovered[i]
+		local nextEntry = mouseHovered[i + 1]
+
+		if isentity(entry) then
+			---@cast entry Entity
+			targetEntity = entry
+		elseif IsValid(targetEntity) then
+			---@cast entry integer
+			local sin = 1 + 0.1 * math.sin(2.666 * math.pi * RealTime())
+			scaleVector:SetUnpacked(sin, sin, sin)
+			targetEntity:ManipulateBoneScale(entry, scaleVector)
+		end
+	end
+end
+
+function MGR:ResetHoverScale()
+	local entities = RagdollPoser.Entity.GetClientEntities()
+	for _, entity in ipairs(entities) do
+		for b = 0, entity:GetBoneCount() - 1 do
+			entity:ManipulateBoneScale(b, defaultScaleVector)
+		end
+	end
+end
+
 function MGR:Render()
 	cam.Start2D()
 	local mouseHovered = self:DrawBones()
+	self:ResetHoverScale()
 	self:DrawBoneNames(mouseHovered)
+	self:DrawScaling(mouseHovered)
 	self:DrawSelected()
 	self:DrawHovered()
 	cam.End2D()
@@ -1178,8 +1486,6 @@ function MGR:SetTransformFromSelection(selection)
 end
 
 local function selected(selection)
-	print("section")
-	PrintTable(selection)
 	MGR:SetTransformFromSelection(selection)
 	MGR:SetEnabled(true)
 	RagdollPoser.Selection:SetEnabled(false)
@@ -1189,15 +1495,19 @@ local function selected(selection)
 end
 hook.Add("RagdollPoser_Selection_Selected", "Gizmo", selected)
 
+hook.Remove("RagdollPoser_Entity_PostRefresh", "Gizmo")
 hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 	-- FIXME: I would like to have this run after I get the new client entities. Just doing things these way is really hacky
 	-- unless we have hook priorities
-	timer.Simple(0, function()
-		MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
-	end)
+	-- timer.Simple(0, function()
+	-- 	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
+	-- end)
 end)
 
 local function onKeyPress(actions)
+	if MGR:GetMoving() then
+		return
+	end
 	if actions[RagdollPoser.Actions.CycleGizmo] then
 		MGR:OnModeChanged(MGR:CycleMode())
 	end
@@ -1229,30 +1539,59 @@ end
 hook.Add("RagdollPoser_Gizmo_Hovering", "UpdateServer", updateHover)
 RagdollPoser.Networking.UpdateHovering = RagdollPoser.Networking.DefineSender("UpdateHovering")
 
-local function initializeGizmo()
-	-- Refresh gizmos
-	disc = include("ragdollposer/client/gizmos/disc.lua")
-	arrow = include("ragdollposer/client/gizmos/arrow.lua")
-	scale = include("ragdollposer/client/gizmos/scale.lua")
-	ball = include("ragdollposer/client/gizmos/ball.lua")
-	sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
-	sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
-	omni = include("ragdollposer/client/gizmos/omni.lua")
+function MGR:StartRefreshing()
+	self._refreshing = true
+end
 
-	MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
-	MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
-	MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
-	MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
-	MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
-		or MGR.Orientation.World
-	MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
-	MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
+function MGR:StopRefreshing()
+	self._refreshing = false
+end
+
+function MGR:IsRefreshing()
+	return self._refreshing
+end
+
+---@param gizmo string?
+local function initializeGizmo(gizmo)
+	-- Refresh gizmos
+	MGR:StartRefreshing()
+	if isstring(gizmo) then
+		gizmos[gizmo] = include(Format("ragdollposer/client/gizmos/%s.lua", gizmo))
+	else
+		gizmos.disc = include("ragdollposer/client/gizmos/disc.lua")
+		gizmos.arrow = include("ragdollposer/client/gizmos/arrow.lua")
+		gizmos.scale = include("ragdollposer/client/gizmos/scale.lua")
+		gizmos.ball = include("ragdollposer/client/gizmos/ball.lua")
+		gizmos.sidemove = include("ragdollposer/client/gizmos/sidemove.lua")
+		gizmos.sidescale = include("ragdollposer/client/gizmos/sidescale.lua")
+		gizmos.omni = include("ragdollposer/client/gizmos/omni.lua")
+	end
+	MGR:StopRefreshing()
+	MGR:UpdateInitializers()
+
+	-- Tool might not initialize the client convars atp so guard against this error
+	if GetConVar("ragdollposer_scale") then
+		MGR._gizmoProps.scale = GetConVar("ragdollposer_scale"):GetFloat()
+		MGR._gizmoProps.width = GetConVar("ragdollposer_width"):GetFloat()
+		MGR._gizmoProps.partial = GetConVar("ragdollposer_partial"):GetBool()
+		MGR._mirror = GetConVar("ragdollposer_mirror"):GetBool()
+		MGR._gizmoProps.orientation = GetConVar("ragdollposer_local"):GetBool() and MGR.Orientation.Local
+			or MGR.Orientation.World
+		MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
+		MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
+		MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
+	end
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
-	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
 end
 hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
-hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", initializeGizmo)
+hook.Add("CreateMove", "RagdollPoser_InitializeGizmo", function()
+	hook.Remove("CreateMove", "RagdollPoser_InitializeGizmo")
+	initializeGizmo()
+end)
+
+hook.Remove("RagdollPoser_Gizmo_Refresh", "Gizmo")
+hook.Add("RagdollPoser_Gizmo_Refresh", "Gizmo", initializeGizmo)
 
 -- FIXME: Icky boilerplate below. How to improve this?
 local function updateWidth(_, old, new)
@@ -1272,19 +1611,21 @@ end
 cvars.RemoveChangeCallback("ragdollposer_scale", "ragdollposer_scale_callback")
 cvars.AddChangeCallback("ragdollposer_scale", updateScale, "ragdollposer_scale_callback")
 local function updateMirror(_, old, new)
-	MGR._mirror = tobool(new)
+	MGR._mirror = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
 cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
 
 local function updatePartial(_, old, new)
-	MGR._gizmoProps.partial = tobool(new)
+	MGR._gizmoProps.partial = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_partial", "ragdollposer_partial_callback")
 cvars.AddChangeCallback("ragdollposer_partial", updatePartial, "ragdollposer_partial_callback")
 
 local function updateOrientation(_, old, new)
-	local newOrientation = tobool(new) and MGR.Orientation.Local or MGR.Orientation.World
+	new = tonumber(new)
+	local newOrientation = Either(tobool(new), MGR.Orientation.Local, MGR.Orientation.World)
+
 	MGR._gizmoProps.orientation = newOrientation
 	MGR:UpdateOrientation()
 end
@@ -1292,17 +1633,24 @@ cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_local_callback")
 cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_local_callback")
 
 local function updateRelativeRotate(_, old, new)
-	MGR._gizmoProps.relativerotate = tobool(new)
+	MGR._gizmoProps.relativerotate = tobool(tonumber(new))
 end
 cvars.RemoveChangeCallback("ragdollposer_relativerotate", "ragdollposer_relativerotate_callback")
 cvars.AddChangeCallback("ragdollposer_relativerotate", updateRelativeRotate, "ragdollposer_relativerotate_callback")
 
 local function updateLocalOffset(_, old, new)
-	MGR._gizmoProps.localoffset = tobool(new)
+	MGR._gizmoProps.localoffset = tobool(tonumber(new))
 	MGR:UpdateOffset()
 end
 cvars.RemoveChangeCallback("ragdollposer_localoffset", "ragdollposer_localoffset_callback")
 cvars.AddChangeCallback("ragdollposer_localoffset", updateLocalOffset, "ragdollposer_localoffset_callback")
+
+local function updateDrawSphere(_, old, new)
+	MGR._gizmoProps.drawsphere = tobool(tonumber(new))
+	MGR:UpdateOffset()
+end
+cvars.RemoveChangeCallback("ragdollposer_drawsphere", "ragdollposer_drawsphere_callback")
+cvars.AddChangeCallback("ragdollposer_drawsphere", updateDrawSphere, "ragdollposer_localoffset_callback")
 
 concommand.Add("ragdollposer_resetgizmo", function()
 	initializeGizmo()

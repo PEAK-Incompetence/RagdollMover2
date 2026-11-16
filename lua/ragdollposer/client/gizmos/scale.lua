@@ -116,12 +116,53 @@ function scale:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function scale:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local forward = eyeAng:Forward()
+	local back = -forward
+	if not self.start then
+		self.start = props.finalPos
+	end
+	if not self.mirrorStart and mirrorAxis >= 0 then
+		self.mirrorStart = props.finalPos
+	end
+	if not self.deltaAccumulate then
+		self.deltaAccumulate = 0
+	end
+
+	self.deltaAccumulate = self.deltaAccumulate + delta
+	local startHit = mirrorAxis >= 0 and self.mirrorStart or self.start
+	local endHit = startHit + self._axis * self.deltaAccumulate
+
+	if mirrorAxis >= 0 then
+		self.mirrorStart = endHit
+	end
+	self.start = endHit
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(eyeAng:Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
 ---Scales are with respect to the bone. If we want to make this scale
 ---in different ways (i.e. wrt world, wrt view), we need to calculate
 ---directions with respect to the parent
 function scale:PreTransform(v)
 	self.start = nil
 	self.mirrorStart = nil
+	self.deltaAccumulate = nil
 	return v
 end
 
@@ -155,95 +196,85 @@ local COLOR = Color(255, 0, 0)
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
-function scale:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+---@param transform VMatrix
+function scale:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
-	for i, matrix in ipairs(transforms) do
-		---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix}
-		local initialTransformTable = initials[i]
+	---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix}
+	local initialTransformTable = initials[1]
 
-		if not initialTransformTable then
-			local rotationMatrix = matrix * IDENTITY_MATRIX
-			rotationMatrix:SetTranslation(vector_origin)
-			rotationMatrix:SetScale(VECTOR_ONE)
-			initialTransformTable = { matrix * IDENTITY_MATRIX, matrix:GetScale(), rotationMatrix }
-			initials[i] = initialTransformTable
-		end
-
-		local vector = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
-
-		local length = vector:Dot(delta)
-		local initialTransform = initialTransformTable[1]
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
-
-		local scaleAngles = vector:Angle()
-		local bonePos = initialTransform:GetTranslation()
-
-		T_INV:Set(ZERO_MATRIX)
-		R:Set(ZERO_MATRIX)
-		S:Set(ZERO_MATRIX)
-		T:Set(ZERO_MATRIX)
-		R_INV:Set(ZERO_MATRIX)
-
-		T_INV:SetTranslation(-bonePos)
-		R:SetAngles(scaleAngles)
-		SCALE_VECTOR.x = 1 + length
-		S:Scale(SCALE_VECTOR)
-		T:SetTranslation(bonePos)
-		R_INV:Set(R:GetInverseTR())
-
-		R_INV:Mul(T_INV)
-		S:Mul(R_INV)
-		R:Mul(S)
-		T:Mul(R)
-		SCALE_MATRIX:Set(T)
-
-		matrix:Set(SCALE_MATRIX * initialTransform)
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + vector * 10, 0.5)
-		debugoverlay.Line(
-			matrix:GetTranslation(),
-			matrix:GetTranslation() + SCALE_MATRIX:GetAngles():Forward() * 10,
-			0.5,
-			COLOR,
-			true
-		)
+	if not initialTransformTable then
+		local rotationMatrix = transform * IDENTITY_MATRIX
+		rotationMatrix:SetTranslation(vector_origin)
+		rotationMatrix:SetScale(VECTOR_ONE)
+		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix }
+		initials[1] = initialTransformTable
 	end
+
+	local vector = directions[1]
+	local accumulationIndex = 1
+
+	local length = vector:Dot(delta)
+	local initialTransform = initialTransformTable[1]
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+
+	local scaleAngles = vector:Angle()
+	local bonePos = initialTransform:GetTranslation()
+
+	T_INV:Set(ZERO_MATRIX)
+	R:Set(ZERO_MATRIX)
+	S:Set(ZERO_MATRIX)
+	T:Set(ZERO_MATRIX)
+	R_INV:Set(ZERO_MATRIX)
+
+	T_INV:SetTranslation(-bonePos)
+	R:SetAngles(scaleAngles)
+	SCALE_VECTOR.x = 1 + length
+	S:Scale(SCALE_VECTOR)
+	T:SetTranslation(bonePos)
+	R_INV:Set(R:GetInverseTR())
+
+	R_INV:Mul(T_INV)
+	S:Mul(R_INV)
+	R:Mul(S)
+	T:Mul(R)
+	SCALE_MATRIX:Set(T)
+
+	scale.SetShearFreeScale(transform, initialTransform, SCALE_MATRIX)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+	debugoverlay.Line(
+		transform:GetTranslation(),
+		transform:GetTranslation() + SCALE_MATRIX:GetAngles():Forward() * 10,
+		0.5,
+		COLOR,
+		true
+	)
+
+	return transform
 end
 
 ---Move children by default. Otherwise, we do scaling just like the inflator
-function scale:PostTransform(transforms, locals, indices, parents)
+function scale:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newChildMatrix = worldMatrix[parents[b]] * localChildMatrix
-			local currentWorldPos = newChildMatrix:GetTranslation()
-
-			local forward = newChildMatrix:GetForward()
-			local up = newChildMatrix:GetUp()
-
-			forward:Normalize()
-			local right = forward:Cross(up):GetNormalized()
-			up = right:Cross(forward):GetNormalized()
-
-			local newWorldPos = SCALE_MATRIX * currentWorldPos
-
+		if localChildMatrix then
+			local newChildMatrix = worldMatrix[parentBone] * localChildMatrix
 			local cleanChildMatrix = Matrix()
-			cleanChildMatrix:SetTranslation(newWorldPos)
-			cleanChildMatrix:SetForward(forward)
-			cleanChildMatrix:SetRight(right)
-			cleanChildMatrix:SetUp(up)
-			cleanChildMatrix:SetScale(newChildMatrix:GetScale())
+			scale.SetShearFreeScale(cleanChildMatrix, newChildMatrix, SCALE_MATRIX)
 
-			transforms[i] = cleanChildMatrix
-			worldMatrix[b] = newChildMatrix
+			output[childBone] = cleanChildMatrix
+			worldMatrix[childBone] = newChildMatrix
 		end
 	end
 end
@@ -263,6 +294,10 @@ local function initialize(direction)
 		RagdollPoser.Log("Set arrow direction to ", direction)
 	end
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "scale")
 end
 
 return initialize

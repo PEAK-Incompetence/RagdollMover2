@@ -196,10 +196,10 @@ end
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
 ---@param initials table
-function sidescale:Transform(directions, deltaProps, transforms, accumulations, initials)
+function sidescale:Transform(directions, deltaProps, transform, accumulations, initials)
 	local delta = deltaProps[1]
 	local axes = self:GetDirection()
 	local axisA, axisB = axes[1], axes[2]
@@ -207,64 +207,54 @@ function sidescale:Transform(directions, deltaProps, transforms, accumulations, 
 		return
 	end
 
-	for i, matrix in ipairs(transforms) do
-		local initialTransformTable = initials[i]
-		if not initialTransformTable then
-			local rotationMatrix = matrix * IDENTITY_MATRIX
-			rotationMatrix:SetTranslation(vector_origin)
-			rotationMatrix:SetScale(VECTOR_ONE)
-			initialTransformTable = { matrix * IDENTITY_MATRIX, matrix:GetScale(), rotationMatrix }
-			initials[i] = initialTransformTable
-		end
-
-		local bonePos = initialTransformTable[1]:GetTranslation()
-		local lengthA = axisA:Dot(delta)
-		local lengthB = axisB:Dot(delta)
-		local accumulationIndex = accumulations[i] and i or 1
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + lengthA + lengthB
-
-		setAxisScale(axisA, 1 + lengthA, bonePos, SCALE_MATRIX)
-		setAxisScale(axisB, 1 + lengthB, bonePos, AXIS_SCALE_MATRIX)
-		SCALE_MATRIX:Set(AXIS_SCALE_MATRIX * SCALE_MATRIX)
-
-		matrix:Set(SCALE_MATRIX * initialTransformTable[1])
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + axisA * 10, 0.5)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + axisB * 10, 0.5, COLOR, true)
+	local initialTransformTable = initials[1]
+	if not initialTransformTable then
+		local rotationMatrix = transform * IDENTITY_MATRIX
+		rotationMatrix:SetTranslation(vector_origin)
+		rotationMatrix:SetScale(VECTOR_ONE)
+		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix }
+		initials[1] = initialTransformTable
 	end
+
+	local bonePos = initialTransformTable[1]:GetTranslation()
+	local lengthA = axisA:Dot(delta)
+	local lengthB = axisB:Dot(delta)
+	local accumulationIndex = 1
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + lengthA + lengthB
+
+	setAxisScale(axisA, 1 + lengthA, bonePos, SCALE_MATRIX)
+	setAxisScale(axisB, 1 + lengthB, bonePos, AXIS_SCALE_MATRIX)
+	SCALE_MATRIX:Set(AXIS_SCALE_MATRIX * SCALE_MATRIX)
+
+	sidescale.SetShearFreeScale(transform, initialTransformTable[1], SCALE_MATRIX)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + axisA * 10, 0.5)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + axisB * 10, 0.5, COLOR, true)
+
+	return transform
 end
 
-function sidescale:PostTransform(transforms, locals, indices, parents)
+function sidescale:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newChildMatrix = worldMatrix[parents[b]] * localChildMatrix
-			local currentWorldPos = newChildMatrix:GetTranslation()
-
-			local forward = newChildMatrix:GetForward()
-			local up = newChildMatrix:GetUp()
-
-			forward:Normalize()
-			local right = forward:Cross(up):GetNormalized()
-			up = right:Cross(forward):GetNormalized()
-
-			local newWorldPos = SCALE_MATRIX * currentWorldPos
-
+		if localChildMatrix then
+			local newChildMatrix = worldMatrix[parentBone] * localChildMatrix
 			local cleanChildMatrix = Matrix()
-			cleanChildMatrix:SetTranslation(newWorldPos)
-			cleanChildMatrix:SetForward(forward)
-			cleanChildMatrix:SetRight(right)
-			cleanChildMatrix:SetUp(up)
-			cleanChildMatrix:SetScale(newChildMatrix:GetScale())
+			sidescale.SetShearFreeScale(cleanChildMatrix, newChildMatrix, SCALE_MATRIX)
 
-			transforms[i] = cleanChildMatrix
-			worldMatrix[b] = newChildMatrix
+			output[childBone] = cleanChildMatrix
+			worldMatrix[childBone] = newChildMatrix
 		end
 	end
 end
@@ -283,6 +273,10 @@ local function initialize(direction)
 		base._color = color
 	end
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "sidescale")
 end
 
 return initialize

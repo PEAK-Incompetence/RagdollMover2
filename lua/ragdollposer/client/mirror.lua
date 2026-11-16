@@ -72,7 +72,7 @@ function MGR:GetMirrored(selection)
 	local deleteMirror = {}
 	local count = #mirrored
 	for i = 1, count, 2 do
-		print("current count", count)
+		-- print("current count", count)
 		local bone, entity = mirrored[i], mirrored[i + 1]
 		local mirrorBone = entity and bone and mirrorSet[entity] and mirrorSet[entity][bone]
 		if mirrorBone then
@@ -80,13 +80,13 @@ function MGR:GetMirrored(selection)
 				table.remove(mirrored, i + 1)
 				table.remove(mirrored, i)
 				count = count - 2
-				print("removed. new count", count)
+				-- print("removed. new count", count)
 				deleteMirror[entity] = deleteMirror[entity] or {}
 				deleteMirror[entity][mirrorBone] = true
 			elseif deleteMirror[entity] and deleteMirror[mirrorBone] then
 				table.remove(mirrored, i + 1)
 				table.remove(mirrored, i)
-				print("removed. new count", count)
+				-- print("removed. new count", count)
 				count = count - 2
 			end
 		end

@@ -8,6 +8,8 @@ local disc = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
 local dx12 = dxLevel >= 120
@@ -159,55 +161,113 @@ function disc:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function disc:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local side = self._axis:Angle():Right()
+	local up = self._axis:Angle():Up()
+	local scale = props.scale
+	local startHit = props.finalPos + side * scale
+	local endHit = props.finalPos + (side + up * delta):GetNormalized() * scale
+
+	print(endHit:GetNormalized():Dot(startHit:GetNormalized()))
+
+	local mirrorNormal = vector_origin
+	if mirrorAxis == 0 then
+		mirrorNormal = eyeAng:Right()
+	elseif mirrorAxis == 1 then
+		mirrorNormal = eyeAng:Up()
+	end
+	if mirrorAxis >= 0 then
+		startHit = startHit - 2 * mirrorNormal:Dot(startHit) * mirrorNormal
+		endHit = endHit - 2 * mirrorNormal:Dot(endHit) * mirrorNormal
+	end
+
+	startHit:Normalize()
+	endHit:Normalize()
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
 ---@param props GizmoProps
-function disc:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function disc:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local startHit, endHit = deltaProps[2], deltaProps[3]
 
-	for i, matrix in ipairs(transforms) do
-		local direction = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
+	local direction = directions[1]
+	local accumulationIndex = 1
 
-		local qi = quaternion.fromAngle(matrix:GetAngles())
-		local axis = direction
-		local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
-		local degrees = math.deg(angle)
-		local newRot = accumulations[accumulationIndex] + degrees
-		accumulations[accumulationIndex] = newRot
-		rotationQuaternion:SetAngleAxis(degrees, axis)
-		rotationQuaternion:Mul(qi)
-		debugoverlay.Line(
-			matrix:GetTranslation(),
-			matrix:GetTranslation() + rotationQuaternion.__axis * 10,
-			0.2,
-			nil,
-			true
-		)
-		if i == 1 then
-			debugoverlay.Axis(matrix:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
-		end
+	local qi = quaternion.fromAngle(transform:GetAngles())
+	local axis = direction
+	local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
+	local degrees = math.deg(angle)
+	local newRot = accumulations[accumulationIndex] + degrees
+	accumulations[accumulationIndex] = newRot
+	rotationQuaternion:SetAngleAxis(degrees, axis)
+	rotationQuaternion:Mul(qi)
+	debugoverlay.Line(
+		transform:GetTranslation(),
+		transform:GetTranslation() + rotationQuaternion.__axis * 10,
+		0.2,
+		nil,
+		true
+	)
+	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
 
-		matrix:SetAngles(rotationQuaternion:Angle())
+	local initialScale = initials[1]
+	if not initialScale then
+		initialScale = transform:GetScale()
+		initials[1] = initialScale
 	end
+
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+
+	if props.relativerotate then
+		local ang = rotationQuaternion:Angle()
+		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
+		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
+		scaleFreeTransform:SetTranslation(pos)
+		scaleFreeTransform:SetAngles(ang)
+	else
+		scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	end
+
+	transform:Set(scaleFreeTransform)
+	transform:SetScale(initialScale)
+	return transform
 end
 
 ---Do all the child bones offset
-function disc:PostTransform(transforms, locals, indices, parents)
+function disc:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newMatrix = worldMatrix[parents[b]] * localChildMatrix
-			transforms[i] = newMatrix
-			worldMatrix[b] = newMatrix
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
 		end
 	end
 end
@@ -241,6 +301,10 @@ local function initialize(v)
 	end
 
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "disc")
 end
 
 return initialize

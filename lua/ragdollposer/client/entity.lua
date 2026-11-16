@@ -117,6 +117,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 			if staticProp then
 				self:SetPos(m:GetTranslation())
 				self:SetAngles(m:GetAngles())
+				self:EnableMatrix("EnableMatrix", m)
 			elseif name ~= "__INVALIDBONE__" then
 				self:SetBoneMatrix(b, m)
 			end
@@ -135,6 +136,7 @@ end
 ---@type ClientEntity[]
 local staticProps = {}
 local function updateStaticProps()
+	-- TODO: Support scaling static props (they don't scale at all)
 	for i = 1, #staticProps do
 		local clientProp = staticProps[i] --[[@as ClientEntity]]
 		MGR.ExposeBones(clientProp)
@@ -255,12 +257,15 @@ local function getDefaultPoseTree(ent)
 	local defaultPose = {}
 	local entPos = ent:GetPos()
 	local entAngles = ent:GetAngles()
+	local rootMatrix = ent:GetBoneMatrix(0)
+	local rootPos = rootMatrix and rootMatrix:GetTranslation() or entPos
+	local rootAngles = rootMatrix and rootMatrix:GetAngles() or entAngles
 	for b = 0, ent:GetBoneCount() - 1 do
 		local parent = ent:GetBoneParent(b)
 		local isPhysBone = RagdollPoser.Helpers.BoneToPhysBone(ent, b) >= 0
 		local bMatrix = ent:GetBoneMatrix(b)
 		if bMatrix then
-			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), entPos, entAngles)
+			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), rootPos, rootAngles)
 			local pos2, ang2 = pos1 * 1, ang1 * 1
 			if parent > -1 then
 				local pMatrix = ent:GetBoneMatrix(parent)
@@ -380,7 +385,7 @@ local function sendAssemblyInfo()
 	local count = net.ReadUInt(10)
 	---@type Entity[]
 	local entities = {}
-	print(ent, bone, count)
+	-- print(ent, bone, count)
 	local constraintCount = 0
 	---@type table<Entity, SerializedConstraint[]>
 	local entityConstraints = {}

@@ -2,6 +2,8 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 ---@module "gizmo/base"
 ---@class GizmoArrow: GizmoBase
 ---@field _direction Vector
@@ -118,6 +120,27 @@ function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function arrow:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local forward = eyeAng:Forward()
+	local back = -forward
+
+	sharedDeltaProps[1]:Set(self._axis * delta)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(eyeAng:Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(props.finalPos)
+	sharedDeltaProps[3]:Set(props.finalPos + sharedDeltaProps[1])
+
+	return sharedDeltaProps
+end
+
 function arrow:PreTransform(v)
 	return v
 end
@@ -130,23 +153,52 @@ function arrow:UpdateOrientation(orientation, props)
 	end
 end
 
+-- Try to prevent some matrix creations to avoid gc cycles
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
+---@param transform VMatrix
 ---@param accumulations number[]
-function arrow:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+function arrow:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
-	for i, matrix in ipairs(transforms) do
-		local vector = directions[i] or directions[1]
-		local accumulationIndex = accumulations[i] and i or 1
+	local vector = directions[1]
+	local accumulationIndex = 1
 
-		local length = vector:Dot(delta)
-		local movement = vector * length
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
-		movement:Rotate(matrix:GetInverse():GetAngles())
-		matrix:Translate(movement)
-		debugoverlay.Axis(matrix:GetTranslation(), matrix:GetAngles(), 1, 0.1, true)
-		debugoverlay.Line(matrix:GetTranslation(), matrix:GetTranslation() + vector * 10, 0.5)
+	local length = vector:Dot(delta)
+	local movement = vector * length
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
+	local scale = transform:GetScale()
+	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+	transform:Translate(movement / scale)
+	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+	return transform
+end
+
+function arrow:PostTransform(transform, locals, parents, output)
+	local worldMatrix = {}
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
+		end
+
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
+		end
 	end
 end
 
@@ -164,6 +216,10 @@ local function initialize(direction)
 	end
 
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "arrow")
 end
 
 return initialize

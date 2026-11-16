@@ -52,4 +52,4 @@ jobs:
       - name: Run check with generated annotations
         run: |
           # Use an absolute workspace path to prevent any folder resolution bugs
-          glua_check --gmod-annotations "$GITHUB_WORKSPACE/annotations-gmod-glua-ls/output" ./lua
+          glua_check --gmod-annotations "$GITHUB_WORKSPACE/annotations-gmod-glua-ls/output" --ignore "**/tests/**" ./lua 

@@ -36,6 +36,7 @@ local MGR = {
 	_dragY = -1,
 
 	_busy = false,
+	_refreshing = false,
 
 	-- Set the filter to a BoneType to ignore certain bones from selection
 	---@type BoneType|boolean
@@ -60,8 +61,8 @@ function MGR:SelectOne(bone, entity, accumulate)
 	-- Accumulate selections if we want to manipulate them all at once
 
 	entitySelectedBones[entity] = entitySelectedBones[entity] or {}
-	local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
-	if self._filter and self._filter ~= boneType then
+	local boneType = self._filter and RagdollPoser.Bones:GetBoneType(entity, bone)
+	if boneType and self._filter ~= boneType then
 		return
 	end
 
@@ -81,6 +82,7 @@ function MGR:SelectOne(bone, entity, accumulate)
 		selectedEntities[entity] = true
 	end
 
+	RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
@@ -91,6 +93,7 @@ function MGR:SetSelection(selection)
 		if not selectedEntities[entity] then
 			selectedEntities[entity] = true
 		end
+		RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 	end
 	entityBonePairs = selection
 
@@ -108,9 +111,10 @@ function MGR:SelectGroup(selection, accumulate)
 	local j = 0
 	for i = 1, #selection - 1, 2 do
 		local bone, entity = selection[i], selection[i + 1]
-
-		local boneType = RagdollPoser.Bones:GetBoneType(entity, bone)
-		if self._filter and self._filter ~= boneType then
+		---@cast bone integer
+		---@cast entity ClientEntity
+		local boneType = self._filter and RagdollPoser.Bones:GetBoneType(entity, bone)
+		if boneType and self._filter ~= boneType then
 			continue
 		end
 
@@ -121,6 +125,7 @@ function MGR:SelectGroup(selection, accumulate)
 			entityBonePairs[count + j] = bone
 			entityBonePairs[count + j + 1] = entity
 			j = j + 1
+			RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
 			entitySelectedBones[entity][bone] = true
 		end
 	end
@@ -149,6 +154,7 @@ hook.Add("RagdollPoser_Entity_PreRefresh", "Selection", function(clientToEntity)
 		table.insert(entityIndices, entity)
 		table.insert(entityIndices, i)
 	end
+	MGR:SetRefreshing(true)
 end)
 
 hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient)
@@ -156,7 +162,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 		local client = entityToClient[entityIndices[i]]
 		-- If the entity we're selecting is about to be removed, then stop refresh
 		if client and client:IsMarkedForDeletion() then
-			print("we're selecting it and removing it??")
+			-- print("we're selecting it and removing it??")
 			entityBonePairs = {}
 			break
 		end
@@ -164,7 +170,16 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Selection", function(entityToClient
 	end
 	entityIndices = {}
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
+	MGR:SetRefreshing(false)
 end)
+
+function MGR:SetRefreshing(state)
+	self._refreshing = state
+end
+
+function MGR:IsRefreshing()
+	return self._refreshing
+end
 
 function MGR:GetEnabled()
 	return self._enabled
@@ -289,7 +304,6 @@ end
 ---@param selection Selection
 ---@param callback fun(bone: integer, entity: Entity, multiselect: boolean)
 local function handleMultipleBones(selection, callback)
-	-- TODO: make a nicer menu
 	gui.EnableScreenClicker(true)
 	local entities = {}
 	for i = 1, #selection - 1, 2 do
@@ -320,12 +334,8 @@ local function handleMultipleBones(selection, callback)
 		gui.EnableScreenClicker(false)
 	end
 
-	local x = input.GetCursorPos()
-	-- Open it twice. Why? So that we can offset it when the internals performs all the positioning
-	menu:Open(x)
-	local w = menu:GetWide()
-	x = math.min(x, ScrW()) - w * 0.99
-	menu:Open(x)
+	menu:Open()
+	RagdollPoser.UI:OffsetMenu(menu)
 end
 
 local function onLeftClickDown(x, y, tr)
@@ -355,7 +365,7 @@ local function onLeftClickUp(x, y, tr)
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
 		if #selectionBuffer > 2 then
-			PrintTable(selectionBuffer)
+			-- PrintTable(selectionBuffer)
 			if not input.IsShiftDown() then
 				MGR:SetBusy(true)
 				handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
@@ -392,28 +402,29 @@ local function onRightClickDown(x, y, tr)
 
 	getBones(x, y)
 end
+
 local function onRightClickUp(x, y, tr)
 	if not MGR:GetEnabled() then
 		return
 	end
-	print("rightclick")
+	-- print("rightclick")
 	-- If we were on the gizmo on leftclickdown and we're now on it, then accept input
 	-- If our mouse was on a bone, and we're still on the same bone, select it
 	-- Otherwise, finish selection
 	if MGR:WasOnBone() and not MGR:IsBusy() then
 		getBones(x, y)
 		if #selectionBuffer > 2 then
-			PrintTable(selectionBuffer)
+			-- PrintTable(selectionBuffer)
 			MGR:SetBusy(true)
 			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
-				RagdollPoser.UI:ConstraintMenu(entity, bone, true)
+				RagdollPoser.UI:ContextMenu(entity, bone, true)
 			end)
 		else
 			local bone = selectionBuffer[1]
 			local entity = selectionBuffer[2]
 			---@cast bone SelectionOddIndex
 			---@cast entity SelectionEvenIndex
-			RagdollPoser.UI:ConstraintMenu(entity, bone, true)
+			RagdollPoser.UI:ContextMenu(entity, bone, true)
 		end
 		MGR:SetWasOnBone(false)
 	end

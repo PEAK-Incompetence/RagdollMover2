@@ -14,6 +14,8 @@ TOOL.ClientConVar["local"] = 0
 TOOL.ClientConVar["localoffset"] = 0
 TOOL.ClientConVar["relativerotate"] = 0
 TOOL.ClientConVar["xray"] = 0
+TOOL.ClientConVar["drawsphere"] = 1
+TOOL.ClientConVar["funsubtitles"] = 1
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
@@ -106,6 +108,7 @@ end
 -- Gizmo rendering entrypoint
 function TOOL:DrawHUD()
 	RagdollPoser.Gizmo:Render()
+	RagdollPoser.UI:Draw()
 end
 
 hook.Add("RagdollPoser_UI_Refresh", "ToolUI", function()
@@ -117,4 +120,6 @@ end)
 TOOL.Information = {
 	{ name = "left" },
 	{ name = "left_use", icon2 = "gui/e.png" },
+	{ name = "info_advselect" },
+	{ name = "info_c" },
 }

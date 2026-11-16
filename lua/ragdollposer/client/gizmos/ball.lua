@@ -8,10 +8,24 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
+local VECTOR_ONE = Vector(1, 1, 1)
+
 local scaleMultiplier = 1.5
 local BALL_SCALE = 0.6
 
+-- This modifies how much we want to rotate our rotation such that when our mouse
+-- reaches the end of the ball, we have rotated our bone by 90 degrees
+-- Higher means more precision
+local PRECISION_FACTOR = 120
+
+---@param eyepos Vector
+---@param direction Vector
+---@param props GizmoProps
 function ball:Intersect(eyepos, direction, props)
+	if not props.drawsphere then
+		return
+	end
+
 	local hit1, hit2 = util.IntersectRayWithSphere(
 		eyepos,
 		direction * 16384,
@@ -28,6 +42,10 @@ end
 ---@param props GizmoProps
 ---@param selected boolean
 function ball:Draw(props, selected)
+	if not props.drawsphere then
+		return
+	end
+
 	local color = selected and self._selectedColor or self._color
 
 	render.SetColorMaterialIgnoreZ()
@@ -49,7 +67,7 @@ end
 function ball:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local x, y = input.GetCursorPos()
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
-	local eyedist = eyePos:Distance(props.finalPos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
 	local forward = eyeAng:Forward()
 	local right = eyeAng:Right()
 
@@ -74,10 +92,13 @@ local rotationQuaternion = quaternion.new(1)
 
 local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 
+local scaleFreeTransform = Matrix()
+scaleFreeTransform:Identity()
+
 ---@param directions Quaternion[]
 ---@param deltaProps DeltaProps
----@param transforms VMatrix[]
-function ball:Transform(directions, deltaProps, transforms, accumulations, initials, props)
+---@param transform VMatrix
+function ball:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 	local left = -eyeAng:Right()
 	local up = eyeAng:Up()
@@ -85,7 +106,7 @@ function ball:Transform(directions, deltaProps, transforms, accumulations, initi
 	local dx, dy = self.dx, self.dy
 
 	-- The closer we are to the gizmo, the more precise the movement should be
-	local eyedist = eyePos:Distance(props.finalPos) / 60
+	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
 	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
 	local scale = props.scale
 	-- The smaller the ball, the more rotation we give
@@ -98,39 +119,59 @@ function ball:Transform(directions, deltaProps, transforms, accumulations, initi
 
 	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
-	for i, matrix in ipairs(transforms) do
-		local quat = initials[i]
+	local quatInfo = initials[1]
+	local quat = quatInfo and quatInfo[1]
 
-		if not quat then
-			local qi = quaternion.fromAngle(matrix:GetAngles())
-			local w, x, y, z = qi:Unpack()
-			quat = quaternion.new(w, x, y, z)
-			initials[i] = quat
-		end
-
-		local accumulationIndex = accumulations[i] and i or 1
-
-		accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
-
-		rotationQuaternion:Mul(quat)
-
-		matrix:SetAngles(rotationQuaternion:Angle())
+	if not quat then
+		scaleFreeTransform:Set(transform)
+		scaleFreeTransform:SetScale(VECTOR_ONE)
+		local qi = quaternion.fromAngle(scaleFreeTransform:GetAngles())
+		local w, x, y, z = qi:Unpack()
+		quat = quaternion.new(w, x, y, z)
+		quatInfo = { quat, transform:GetScale() }
+		initials[1] = quatInfo
 	end
+
+	local accumulationIndex = 1
+
+	accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
+
+	rotationQuaternion:Mul(quat)
+	if props.relativerotate then
+		local ang = rotationQuaternion:Angle()
+		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
+		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
+		scaleFreeTransform:SetTranslation(pos)
+		scaleFreeTransform:SetAngles(ang)
+	else
+		scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	end
+
+	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	transform:Set(scaleFreeTransform)
+	transform:SetScale(quatInfo[2])
+	return transform
 end
 
-function ball:PostTransform(transforms, locals, indices, parents)
+function ball:PostTransform(transform, locals, parents, output)
 	local worldMatrix = {}
-	for i, b in ipairs(indices) do
-		local matrix = transforms[i]
-		local localChildMatrix = locals[b]
-		if matrix and not localChildMatrix then
-			worldMatrix[b] = matrix
+	local worldMatrixCount = 0
+	for i, localMatrixInfo in ipairs(locals) do
+		local childBone = localMatrixInfo[1]
+		local localChildMatrix = localMatrixInfo[2]
+		local parentBone = parents[childBone]
+		if not worldMatrix[parentBone] then
+			if worldMatrixCount == 0 then
+				worldMatrix[parentBone] = transform
+				worldMatrixCount = 1
+			end
 		end
 
-		if matrix and localChildMatrix then
-			local newMatrix = worldMatrix[parents[b]] * localChildMatrix
-			transforms[i] = newMatrix
-			worldMatrix[b] = newMatrix
+		if localChildMatrix then
+			local newMatrix = worldMatrix[parentBone] * localChildMatrix
+			output[childBone] = newMatrix
+			worldMatrix[childBone] = newMatrix
+			worldMatrixCount = worldMatrixCount + 1
 		end
 	end
 end
@@ -155,6 +196,10 @@ local function initialize()
 	base.dy = 0
 	---@cast base GizmoBall
 	return base
+end
+
+if RagdollPoser.Gizmo and not RagdollPoser.Gizmo:IsRefreshing() then
+	hook.Run("RagdollPoser_Gizmo_Refresh", "ball")
 end
 
 return initialize

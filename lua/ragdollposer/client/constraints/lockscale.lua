@@ -9,7 +9,8 @@ lock.Properties = {
 	name = "#tool.ragdollposer.constraint.lockscale.name",
 	desc = "#tool.ragdollposer.constraint.lockscale.desc",
 	help = "#tool.ragdollposer.constraint.lockscale.help",
-	icon = "",
+	icon = "icon16/arrow_out.png",
+	short = "#tool.ragdollposer.constraint.lockscale.short",
 }
 
 function lock:ConstructUI(entry, props, state)
@@ -20,22 +21,29 @@ function lock:ConstructUI(entry, props, state)
 end
 
 function lock:PreEvaluate()
-	self:CaptureLockPose()
+	return self:CaptureLockPose()
 end
 
 -- FIXME: This doesn't lock scales!
-function lock:Evaluate(entity, controlledBone, transforms, indices, locals, parents)
-	self:ApplyLock(entity, controlledBone, transforms, indices, locals, parents, "scale")
+function lock:Evaluate(entity, controlledBone, transforms, locals, parents, output)
+	self._postEvaluateBone = self:ApplyLock(entity, controlledBone, "scale", output) and self.State.bone
 end
 
-function lock:PostEvaluate()
-	self._snapshot = nil
+function lock:PostEvaluate(entity, controlledBone, locals, parents, output)
+	if self._postEvaluateBone then
+		self:PostApplyLock(self._postEvaluateBone, locals, parents, output)
+	end
+	self._postEvaluateBone = nil
 end
 
-local function createConstraint(state, name)
-	local base = lock:Init(state, name)
+local function createConstraint(entity, state, name)
+	local base = lock:Init(entity, state, name)
 	---@cast base ScaleLockConstraint
 	return base
+end
+
+if RagdollPoser.Constraints and not RagdollPoser.Constraints:IsRefreshing() then
+	hook.Run("RagdollPoser_Constraints_Refresh", lock.Properties.type)
 end
 
 return createConstraint

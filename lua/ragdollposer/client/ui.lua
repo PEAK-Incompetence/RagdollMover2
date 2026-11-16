@@ -49,7 +49,7 @@ local function keyBinder(cpanel, leftProps, rightProps)
 	local oldClick1 = binder.NumPad1.DoClick
 	function binder.NumPad1:DoClick()
 		local oldKey = self:GetValue()
-		print(oldKey)
+		-- print(oldKey)
 		oldClick1(self)
 		RagdollPoser.Input:UnregisterKey(leftProps.action, oldKey)
 	end
@@ -65,7 +65,7 @@ local function keyBinder(cpanel, leftProps, rightProps)
 		local oldClick2 = binder.NumPad2.DoClick
 		function binder.NumPad2:DoClick()
 			local oldKey = self:GetValue()
-			print(oldKey)
+			-- print(oldKey)
 			oldClick2(self)
 			RagdollPoser.Input:UnregisterKey(rightProps.action, oldKey)
 		end
@@ -113,7 +113,7 @@ local function makeConstraintEntry(parent, entity, constraint)
 	function entry.Header:DoRightClick()
 		local menu = DermaMenu()
 
-		menu:AddOption("#tool.ragdollposer.constraint.delete", function()
+		menu:AddOption("#tool.ragdollposer.constraint.remove", function()
 			RagdollPoser.Constraints:Remove(entity, constraint._id)
 			entry:Remove()
 		end)
@@ -233,7 +233,7 @@ local function makeConstraintEntry(parent, entity, constraint)
 		cvar = "",
 		action = RagdollPoser.Actions.ToggleConstraint,
 		keyChangedCallback = function(newKey)
-			print("run this!")
+			-- print("run this!")
 			constraint.State.key = newKey
 			RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
 		end,
@@ -242,6 +242,8 @@ local function makeConstraintEntry(parent, entity, constraint)
 	if constraint.State.key > -1 then
 		entry.keybinder.NumPad1:SetValue(constraint.State.key)
 	end
+
+	entry:SetExpanded(false)
 
 	return entry
 end
@@ -293,6 +295,7 @@ local function populateEntities(entityTree, clients, selectedEntities)
 		if parentNode then
 			parentNode:CreateChildNodes()
 			childNode:SetParentNode(parentNode)
+			---@diagnostic disable-next-line: unchecked-nil-access, undefined-field
 			parentNode.ChildNodes:Add(childNode)
 			parentNode:InvalidateLayout()
 			parentNode:SetExpanded(true, true)
@@ -399,6 +402,10 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 		else
 			RagdollPoser.Selection:SelectOne(bone, entity, input.IsControlDown())
 		end
+	end
+
+	function child:DoRightClick()
+		MGR:ContextMenu()
 	end
 
 	return child
@@ -513,17 +520,91 @@ local function updateBoneTree(boneTree, selection, boneTypeRestriction)
 	end
 end
 
+---@param menu DMenu
+function MGR:OffsetMenu(menu)
+	local x = input.GetCursorPos()
+	menu:Open(x)
+	-- Open it twice. Why? So that we can offset it when the internals performs all the positioning
+	local w = menu:GetWide()
+	x = math.min(x, ScrW()) - w * 0.99
+	menu:Open(x)
+end
+
 --- @param client ClientEntity
 --- @param bone integer?
 --- @param keepOpen boolean?
-function MGR:ConstraintMenu(client, bone, keepOpen)
+--- @param parentMenu DMenu?
+function MGR:GizmoMenu(client, bone, keepOpen, parentMenu)
+	local menu
+	if parentMenu then
+		menu = parentMenu:AddSubMenu("#tool.ragdollposer.gizmo", function() end)
+	else
+		menu = DermaMenu(keepOpen)
+	end
+
+	menu:AddOption("#tool.ragdollposer.gizmo.offset.set", function()
+		local pos = RagdollPoser.Gizmo:GetPosition()
+		local ang = RagdollPoser.Gizmo:GetAngles()
+		local m = client:GetBoneMatrix(bone)
+		if m then
+			local offset = WorldToLocal(m:GetTranslation(), angle_zero, pos, ang)
+			RagdollPoser.Gizmo:SetOffset(offset[1], offset[2], offset[3])
+		end
+	end)
+	menu:AddOption("#tool.ragdollposer.gizmo.offset.reset", function()
+		RagdollPoser.Gizmo:SetOffset(0, 0, 0)
+	end)
+end
+
+--- Show options for resetting transforms
+--- @param client ClientEntity
+--- @param bone integer?
+--- @param keepOpen boolean?
+--- @param parentMenu DMenu?
+function MGR:ResetMenu(client, bone, keepOpen, parentMenu)
+	local menu
+	if parentMenu then
+		menu = parentMenu:AddSubMenu("#tool.ragdollposer.reset", function() end)
+	else
+		menu = DermaMenu(keepOpen)
+	end
+
+	menu:AddOption("#tool.ragdollposer.all", function()
+		-- TODO: Implement reset all
+		-- RagdollPoser.Gizmo:ResetSelected(4, bone, client)
+	end)
+	menu:AddOption("#tool.ragdollposer.pos", function()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Translation, bone, client)
+	end)
+	menu:AddOption("#tool.ragdollposer.ang", function()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Rotation, bone, client)
+	end)
+	menu:AddOption("#tool.ragdollposer.scale", function()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Scale, bone, client)
+	end)
+
+	if not parentMenu then
+		menu:Open()
+	end
+end
+
+--- @param client ClientEntity
+--- @param bone integer?
+--- @param keepOpen boolean?
+--- @param parentMenu DMenu?
+function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
 	local entity = RagdollPoser.Entity.GetEntityFromClient(client)
 
 	-- get list of constraints categories, then insert each constraint in a category
 	-- click on a constraint name. we add the constraint to the entity. also send it to the server
 	-- so that when we reselect entities, we also get constraint info
 	-- get the constraint info, and make constraint entry based off actual constraints that exist there
-	local menu = DermaMenu(keepOpen)
+	local menu
+	if parentMenu then
+		menu = parentMenu:AddSubMenu("#tool.ragdollposer.constraint")
+	else
+		menu = DermaMenu(keepOpen)
+	end
 
 	local constraints = RagdollPoser.Constraints:GetConstraints()
 	local categories = {}
@@ -553,15 +634,46 @@ function MGR:ConstraintMenu(client, bone, keepOpen)
 						enabled = true,
 						influence = 1,
 					}
+					name = Format("%s: %s", language.GetPhrase(constraint.Properties.short), entity:GetBoneName(bone))
 				end
-
-				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state)
+				---@diagnostic disable-next-line: param-type-mismatch
+				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state, name)
 			end)
 			option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
 		end
 	end
 
+	if not parentMenu then
+		menu:Open()
+	end
+end
+
+function MGR:ContextMenu(entity, bone, keepOpen)
+	gui.EnableScreenClicker(true)
+	local menu = DermaMenu(keepOpen)
+	RagdollPoser.UI:GizmoMenu(entity, bone, keepOpen, menu)
+	RagdollPoser.UI:ResetMenu(entity, bone, keepOpen, menu)
+	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
 	menu:Open()
+	self:OffsetMenu(menu)
+
+	function menu:OnRemove()
+		RagdollPoser.Gizmo:SetEnabled(true)
+		RagdollPoser.Selection:SetEnabled(false)
+		gui.EnableScreenClicker(false)
+	end
+end
+
+---These delta setter/getters are used by the precise bone manip
+---sliders to communicate slider deltas to the gizmos
+---@param delta number
+function MGR:SetDelta(delta)
+	self.delta = delta
+end
+
+---@return number
+function MGR:GetDelta()
+	return self.delta
 end
 
 local batch = false
@@ -583,12 +695,128 @@ local function gizmoOffsetHooks(slider, key, sliders)
 	end
 end
 
+---@param entity ClientEntity
+---@param bone integer
+---@param sliderType GizmoMode
+local function convertTransformToStr(entity, bone, sliderType)
+	local matrix = entity:GetBoneMatrix(bone)
+	local transform
+	if sliderType == RagdollPoser.Gizmo.Mode.Translation then
+		transform = matrix:GetTranslation()
+	elseif sliderType == RagdollPoser.Gizmo.Mode.Rotation then
+		transform = matrix:GetAngles()
+	elseif sliderType == RagdollPoser.Gizmo.Mode.Scale then
+		transform = matrix:GetScale()
+	end
+	return Format("%.3f %.3f %.3f", transform[1], transform[2], transform[3])
+end
+
+local directions = { "X", "Y", "Z" }
+---@alias DeltaCallback fun(x: number, y: number, z: number)
+
+---@param cPanel ControlPanel
+---@param sliderType GizmoMode
+---@param valueChanged DeltaCallback?
+local function transformSliders(cPanel, sliderType, valueChanged)
+	local sliders = {}
+	for i = 1, 3 do
+		local slider = cPanel:NumSlider(directions[i], "", -100, 100, 3)
+		slider:SetDefaultValue(0)
+		slider:SetValue(0)
+
+		function slider:OnValueChanged()
+			if self.resetDelta then
+				return
+			end
+
+			if valueChanged then
+				valueChanged(sliders[1]:GetValue(), sliders[2]:GetValue(), sliders[3]:GetValue())
+			end
+		end
+
+		local lastEdit
+		local lastMode
+		local lastOrientation
+		local oldValue = slider:GetValue()
+		function slider:Think()
+			local currentValue = slider:GetValue()
+			local editing = self:IsEditing()
+			if editing and not lastEdit then
+				oldValue = slider:GetValue()
+
+				lastMode = RagdollPoser.Gizmo:GetMode()
+				lastOrientation = RagdollPoser.Gizmo:GetOrientation()
+				RagdollPoser.Gizmo:SetOrientation(RagdollPoser.Gizmo.Orientation.Local)
+				RagdollPoser.Gizmo:OnModeChanged(sliderType)
+				RagdollPoser.Gizmo._gizmoIndex = i
+
+				-- Let's move shit
+				RagdollPoser.Gizmo:SetMovingUI(true)
+				RagdollPoser.Gizmo:SetMoving(true)
+				RagdollPoser.Gizmo:PreTransform()
+			elseif not editing and lastEdit then
+				-- We're done!
+				RagdollPoser.Gizmo:SetMoving(false)
+				RagdollPoser.Gizmo:SetMovingUI(false)
+				RagdollPoser.Gizmo:PostTransform()
+				self.resetDelta = true
+				self:SetValue(0)
+				self.resetDelta = false
+
+				RagdollPoser.Gizmo:SetOrientation(lastOrientation)
+				RagdollPoser.Gizmo:OnModeChanged(lastMode)
+			end
+			if editing then
+				MGR:SetDelta(currentValue - oldValue)
+			end
+			lastEdit = editing
+			oldValue = currentValue
+		end
+
+		sliders[i] = slider
+	end
+	return sliders
+end
+
+---@param cPanel ControlPanel
+---@param sliderType GizmoMode
+---@param valueChanged DeltaCallback?
+local function transformEntry(cPanel, sliderType, valueChanged)
+	local entry = vgui.Create("DTextEntry", cPanel)
+	entry:SetText("0 0 0")
+
+	---TODO: Implement transform setting here
+	local oldState = string.Split(entry:GetText(), " ")
+	function entry:OnValueChange()
+		if self.updating then
+			return
+		end
+
+		local state = string.Split(entry:GetText(), " ")
+		if valueChanged then
+			valueChanged(tonumber(state[1]), tonumber(state[2]), tonumber(state[3]))
+		end
+	end
+
+	function entry:SetTransform(text)
+		text = text or "* * *"
+		self.updating = true
+		self:SetValue(text)
+		self.updating = false
+	end
+
+	return entry
+end
+
 ---@param cpanel ControlPanel
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
 	gizmoCategory:CheckBox("#tool.ragdollposer.local", "ragdollposer_local")
+	gizmoCategory:CheckBox("#tool.ragdollposer.partial", "ragdollposer_partial")
+	local drawSphere = gizmoCategory:CheckBox("#tool.ragdollposer.gizmo.drawsphere", "ragdollposer_drawsphere")
 	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
+
 	local cycle = keyBinder(gizmoCategory, {
 		label = "#tool.ragdollposer.cycle",
 		cvar = "ragdollposer_cycle_key",
@@ -619,6 +847,7 @@ function MGR:BuildCPanel(cpanel)
 		batch = false
 		onGizmoChange(sliders)
 	end
+	gizmoOffsets:SetExpanded(false)
 
 	local function offsetChanged(offset)
 		batch = true
@@ -632,9 +861,52 @@ function MGR:BuildCPanel(cpanel)
 	local misc = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.misc"), "ControlPanel")
 	local xray = misc:CheckBox("#tool.ragdollposer.xray", "ragdollposer_xray")
 	xray:SetTooltip("#tool.ragdollposer.xray.tooltip")
-	xray:SetEnabled(RagdollPoser.Privileges:Check(LocalPlayer(), "ragdollposer_xray"))
+	local subtitle = misc:CheckBox("#tool.ragdollposer.misc.funsubtitles", "ragdollposer_funsubtitles")
+	subtitle:SetTooltip("#tool.ragdollposer.misc.funsubtitles.tooltip")
 
 	local boneManip = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.bone.manip"), "ControlPanel")
+
+	-- TODO: Compress this cheeseburger of a UI (maybe put related transforms in a function, keyed by Gizmo mode?)
+	local entryDock = 10
+	local preciseBoneManip =
+		makeCategory(boneManip, language.GetPhrase("tool.ragdollposer.bone.precise"), "ControlPanel")
+	-- These are displacements, not world position sliders. If exacts are needed, then the entry can be used
+	local positionReset = preciseBoneManip:Button("#tool.ragdollposer.bone.precise.pos.reset")
+	local positionEntry = transformEntry(preciseBoneManip, RagdollPoser.Gizmo.Mode.Translation)
+	preciseBoneManip:AddItem(positionEntry, positionReset)
+	positionEntry:Dock(FILL)
+	positionReset:Dock(RIGHT)
+	positionReset:DockMargin(entryDock, 0, 0, 0)
+	local positionSliders = transformSliders(preciseBoneManip, RagdollPoser.Gizmo.Mode.Translation)
+	function positionReset:DoClick()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Translation)
+	end
+
+	local rotationReset = preciseBoneManip:Button("#tool.ragdollposer.bone.precise.ang.reset")
+	local rotationEntry = transformEntry(preciseBoneManip, RagdollPoser.Gizmo.Mode.Rotation)
+	preciseBoneManip:AddItem(rotationEntry, rotationReset)
+	rotationEntry:Dock(FILL)
+	rotationReset:Dock(RIGHT)
+	rotationReset:DockMargin(entryDock, 0, 0, 0)
+	local rotationSliders = transformSliders(preciseBoneManip, RagdollPoser.Gizmo.Mode.Rotation)
+	function rotationReset:DoClick()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Rotation)
+	end
+
+	local scaleReset = preciseBoneManip:Button("#tool.ragdollposer.bone.precise.scale.reset")
+	local scaleEntry = transformEntry(preciseBoneManip, RagdollPoser.Gizmo.Mode.Scale)
+	preciseBoneManip:AddItem(scaleEntry, scaleReset)
+	scaleEntry:Dock(FILL)
+	scaleReset:Dock(RIGHT)
+	scaleReset:DockMargin(entryDock, 0, 0, 0)
+	function scaleReset:DoClick()
+		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Scale)
+	end
+
+	local scaleSliders = transformSliders(preciseBoneManip, RagdollPoser.Gizmo.Mode.Scale)
+
+	preciseBoneManip:SetExpanded(false)
+
 	boneManip:CheckBox("#tool.ragdollposer.mirror", "ragdollposer_mirror")
 	local mirrorCombo = boneManip:ComboBox("#tool.ragdollposer.mirror.axis", "ragdollposer_mirror_axis")
 	mirrorCombo:AddChoice("x", 0)
@@ -644,7 +916,7 @@ function MGR:BuildCPanel(cpanel)
 	mirrorCombo:ChooseOption(mirrorMapping[id - 1], id)
 
 	local selectBoneAndRoot = keyBinder(boneManip, {
-		label = "#tool.ragdollposer.select",
+		label = "#tool.ragdollposer.select.toggle",
 		cvar = "ragdollposer_select_key",
 		action = RagdollPoser.Actions.SelectBone,
 	}, {
@@ -682,6 +954,7 @@ function MGR:BuildCPanel(cpanel)
 	boneTreeCategory:AddItem(panelContainer)
 	local boneTreeContainer = vgui.Create("DPanel", panelContainer)
 	local drawer = vgui.Create("rgp_dhdrawer", panelContainer)
+	drawer.ToggleButton:SetTooltip("#tool.ragdollposer.entity.selector.toolip")
 	local entitySelectorContainer = vgui.Create("DPanel", drawer)
 	entitySelectorContainer:Dock(FILL)
 	boneTreeContainer:Dock(FILL)
@@ -720,8 +993,8 @@ function MGR:BuildCPanel(cpanel)
 	local constraintList = vgui.Create("DCategoryList", constraintListContainer)
 	constraintList:Dock(FILL)
 	constraintList.Items = {}
-	print("constraint list items!")
-	print(constraintList.Items)
+	-- print("constraint list items!")
+	-- print(constraintList.Items)
 
 	function addConstraint:DoClick()
 		MGR:ConstraintMenu(entitySelector.selected)
@@ -730,7 +1003,7 @@ function MGR:BuildCPanel(cpanel)
 	--- @param client ClientEntity
 	local function updateConstraintUI(client)
 		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		print("clear selected")
+		-- print("clear selected")
 		constraintList:Clear()
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
@@ -745,23 +1018,55 @@ function MGR:BuildCPanel(cpanel)
 		updateConstraintUI(client)
 	end
 
+	-- Listen to system hooks and have that impact UI
+
+	hook.Add("RagdollPoser_Gizmo_Transformed", "UI_UpdateTransform", function()
+		local selection = RagdollPoser.Selection:GetSelection()
+		-- If we've only selected one entity
+		if #selection == 2 then
+			local bone = selection[1]
+			local selectedEntity = selection[2]
+			---@cast bone integer
+			---@cast selectedEntity ClientEntity
+			positionEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Translation))
+			rotationEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Rotation))
+			scaleEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Scale))
+		else
+			positionEntry:SetTransform()
+			rotationEntry:SetTransform()
+			scaleEntry:SetTransform()
+		end
+	end)
+
 	---@type BoneType|boolean
 	local boneTypeRestriction = false
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
 		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
 		updateBoneTree(boneTree, selection, boneTypeRestriction)
-		print("selected check ui")
-		PrintTable(selection)
+		-- print("selected check ui")
+		-- PrintTable(selection)
 		local selectedEntity = selection[#selection]
 		entitySelector.selected = selectedEntity
 		updateConstraintUI(selectedEntity)
+
+		-- If we've only selected one entity
+		if #selection == 2 then
+			local bone = selection[1]
+			positionEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Translation))
+			rotationEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Rotation))
+			scaleEntry:SetTransform(convertTransformToStr(selectedEntity, bone, RagdollPoser.Gizmo.Mode.Scale))
+		else
+			positionEntry:SetTransform()
+			rotationEntry:SetTransform()
+			scaleEntry:SetTransform()
+		end
 	end)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities", function(entity, constraints)
 		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		print("update constraints")
-		print(entity, client, entitySelector.selected, constraints)
-		print("selected equals us?", entitySelector.selected == client)
+		-- print("update constraints")
+		-- print(entity, client, entitySelector.selected, constraints)
+		-- print("selected equals us?", entitySelector.selected == client)
 		if client == entitySelector.selected then
 			for _, constraint in ipairs(constraints) do
 				makeConstraintEntry(constraintList, entity, constraint)
@@ -771,7 +1076,7 @@ function MGR:BuildCPanel(cpanel)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities", function(entity)
 		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		print("no don't do it!")
+		-- print("no don't do it!")
 		-- if client == entitySelector.selected then
 		-- 	updateConstraintUI(client)
 		-- end
@@ -795,6 +1100,54 @@ function MGR:Initialize(cpanel)
 		ErrorNoHaltWithStack(msg)
 	end
 end
+
+local firstStart = true
+local base = "#tool.ragdollposer.desc"
+local phraseCount = 0
+local phrase = language.GetPhrase("#tool.ragdollposer.desc1")
+
+function MGR:SelectPhrase(index)
+	index = index or math.random(1, phraseCount)
+	return language.GetPhrase("#tool.ragdollposer.desc" .. index)
+end
+
+function MGR:DrawPhrase(phrase)
+	language.Add("tool.ragdollposer.desc", phrase)
+end
+
+-- Load all fun subtitles
+function MGR:InitializeDraw()
+	if firstStart then
+		firstStart = false
+		for i = 1, 50 do
+			local test = language.GetPhrase(base .. i)
+			if string.find(test, base) then
+				phraseCount = i - 1
+				return
+			end
+		end
+	end
+end
+
+local math_abs = math.abs
+local lastTime = SysTime()
+function MGR:Draw()
+	local now = SysTime()
+
+	if GetConVar("ragdollposer_funsubtitles"):GetBool() then
+		-- Have the phrases change on tool equips
+		if math_abs(now - lastTime - RealFrameTime()) > 0.5 then
+			phrase = self:SelectPhrase()
+		end
+		lastTime = now
+	else
+		phrase = self:SelectPhrase(1)
+		lastTime = -(0.5 + SysTime() + RealFrameTime())
+	end
+	self:DrawPhrase(phrase)
+end
+
+MGR:InitializeDraw()
 
 RagdollPoser.UI = MGR
 

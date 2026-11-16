@@ -233,7 +233,16 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
 
-	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	if props.relativerotate then
+		local ang = rotationQuaternion:Angle()
+		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
+		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
+		scaleFreeTransform:SetTranslation(pos)
+		scaleFreeTransform:SetAngles(ang)
+	else
+		scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	end
+
 	transform:Set(scaleFreeTransform)
 	transform:SetScale(initialScale)
 	return transform

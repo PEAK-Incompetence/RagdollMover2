@@ -308,7 +308,9 @@ local function sendSubPoseResponse()
 
 	-- TODO: Update the client entity if we don't have stretching enabled
 
-	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
+	local selection = RagdollPoser.Selection:GetSelection()
+	MGR:SetTransformFromSelection(selection)
+	MGR:SetTransformFromSelection(selection)
 	hook.Run("RagdollPoser_Gizmo_Transformed")
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)

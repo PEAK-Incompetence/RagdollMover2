@@ -137,6 +137,15 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 	accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
 
 	rotationQuaternion:Mul(quat)
+	if props.relativerotate then
+		local ang = rotationQuaternion:Angle()
+		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
+		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
+		scaleFreeTransform:SetTranslation(pos)
+		scaleFreeTransform:SetAngles(ang)
+	else
+		scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	end
 
 	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
 	transform:Set(scaleFreeTransform)

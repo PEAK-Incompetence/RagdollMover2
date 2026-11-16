@@ -992,6 +992,7 @@ function MGR:ResetSelected(transformType, bone, entity)
 	if not selection[1] then
 		return
 	end
+	local resetAll = transformType == 4
 
 	local function handleReset(bone, client)
 		local defaultPose = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
@@ -1003,7 +1004,7 @@ function MGR:ResetSelected(transformType, bone, entity)
 			return
 		end
 
-		if transformType == self.Mode.Scale then
+		if resetAll or transformType == self.Mode.Scale then
 			-- TODO: Also reset back to local offsets
 			local function resetDescendantScales(parentBone)
 				local parentMatrix = matrices[parentBone + 1]
@@ -1022,7 +1023,9 @@ function MGR:ResetSelected(transformType, bone, entity)
 
 			selectedMatrix:SetScale(Vector(1, 1, 1))
 			resetDescendantScales(bone)
-		elseif transformType == self.Mode.Translation or transformType == self.Mode.Rotation then
+		end
+
+		if resetAll or transformType == self.Mode.Translation or transformType == self.Mode.Rotation then
 			-- Save each descendant's transform relative to its immediate parent so the
 			-- selected bone can be reset without changing the pose below it.
 			local descendantLocals = {}
@@ -1062,9 +1065,10 @@ function MGR:ResetSelected(transformType, bone, entity)
 					parentMatrix:GetAngles()
 				)
 
-				if transformType == self.Mode.Translation then
+				if resetAll or transformType == self.Mode.Translation then
 					selectedMatrix:SetTranslation(resetPos)
-				else
+				end
+				if resetAll or transformType == self.Mode.Rotation then
 					local scale = selectedMatrix:GetScale()
 					selectedMatrix:SetAngles(resetAng)
 					selectedMatrix:SetScale(scale)

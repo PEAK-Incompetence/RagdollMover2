@@ -113,7 +113,7 @@ local function makeConstraintEntry(parent, entity, constraint)
 	function entry.Header:DoRightClick()
 		local menu = DermaMenu()
 
-		menu:AddOption("#tool.ragdollposer.constraint.delete", function()
+		menu:AddOption("#tool.ragdollposer.constraint.remove", function()
 			RagdollPoser.Constraints:Remove(entity, constraint._id)
 			entry:Remove()
 		end)
@@ -405,11 +405,7 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 	end
 
 	function child:DoRightClick()
-		local menu = DermaMenu()
-		MGR:ResetMenu(entity, bone, false, menu)
-		MGR:ConstraintMenu(entity, bone, false, menu)
-		menu:Open()
-		MGR:OffsetMenu(menu)
+		MGR:ContextMenu()
 	end
 
 	return child
@@ -573,6 +569,10 @@ function MGR:ResetMenu(client, bone, keepOpen, parentMenu)
 		menu = DermaMenu(keepOpen)
 	end
 
+	menu:AddOption("#tool.ragdollposer.all", function()
+		-- TODO: Implement reset all
+		-- RagdollPoser.Gizmo:ResetSelected(4, bone, client)
+	end)
 	menu:AddOption("#tool.ragdollposer.pos", function()
 		RagdollPoser.Gizmo:ResetSelected(RagdollPoser.Gizmo.Mode.Translation, bone, client)
 	end)
@@ -655,6 +655,7 @@ function MGR:ContextMenu(entity, bone, keepOpen)
 	RagdollPoser.UI:ResetMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
 	menu:Open()
+	self:OffsetMenu(menu)
 
 	function menu:OnRemove()
 		RagdollPoser.Gizmo:SetEnabled(true)

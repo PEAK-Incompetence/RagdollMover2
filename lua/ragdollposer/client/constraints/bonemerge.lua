@@ -78,7 +78,7 @@ function lock:ConstructUI(entry, props, state)
 	local function updateTarget(target)
 		choices = {}
 		if IsValid(target) then
-			RagdollPoser.Entity.ExposeBones(target)
+			RagdollPoser.Entity:ExposeBones(target)
 			for i = 0, target:GetBoneCount() - 1 do
 				table.insert(choices, target:GetBoneName(i))
 			end
@@ -102,7 +102,7 @@ function lock:ConstructUI(entry, props, state)
 		end
 
 		local menu = DermaMenu()
-		for _, target in ipairs(RagdollPoser.Entity.GetEntities()) do
+		for _, target in ipairs(RagdollPoser.Entity:GetEntities()) do
 			if IsValid(target) then
 				menu:AddOption(getEntityName(target), function()
 					constraint.State.otherTarget = target
@@ -135,16 +135,16 @@ function lock:PreEvaluate(entity)
 		return
 	end
 
-	local parentClient = RagdollPoser.Entity.GetClientFromEntity(parentTarget)
-	local childClient = RagdollPoser.Entity.GetClientFromEntity(childTarget)
+	local parentClient = RagdollPoser.Entity:GetClientFromEntity(parentTarget)
+	local childClient = RagdollPoser.Entity:GetClientFromEntity(childTarget)
 	if not IsValid(parentClient) or not IsValid(childClient) then
 		return
 	end
 
-	RagdollPoser.Entity.ExposeBones(parentClient)
-	RagdollPoser.Entity.ExposeBones(childClient)
-	local parentMatrices = RagdollPoser.Entity.GetMatrices(parentTarget)
-	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
+	RagdollPoser.Entity:ExposeBones(parentClient)
+	RagdollPoser.Entity:ExposeBones(childClient)
+	local parentMatrices = RagdollPoser.Entity:GetMatrices(parentTarget)
+	local childMatrices = RagdollPoser.Entity:GetMatrices(childTarget)
 	local parentMatrix = parentMatrices and parentMatrices[parentBone + 1]
 	if not parentMatrix or not childMatrices then
 		return
@@ -194,7 +194,7 @@ function lock:EvaluatePose(entity, context)
 	end
 
 	if entity == childTarget then
-		local client = RagdollPoser.Entity.GetClientFromEntity(childTarget)
+		local client = RagdollPoser.Entity:GetClientFromEntity(childTarget)
 		local transformed = context.transformedByClient and context.transformedByClient[client]
 		if not transformed then
 			return false
@@ -205,7 +205,7 @@ function lock:EvaluatePose(entity, context)
 			return false
 		end
 
-		local parentMatrices = RagdollPoser.Entity.GetMatrices(parentTarget)
+		local parentMatrices = RagdollPoser.Entity:GetMatrices(parentTarget)
 		local childMatrices = context.transforms
 		if not parentMatrices or not childMatrices then
 			return false
@@ -218,14 +218,14 @@ function lock:EvaluatePose(entity, context)
 		return false
 	end
 
-	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
+	local childMatrices = RagdollPoser.Entity:GetMatrices(childTarget)
 	if not childMatrices then
 		return false
 	end
 
 	local parentRootBone, childRootBone = getMergeRootBones(parentTarget, childTarget, self.State.bone)
 	local parentRoot = parentRootBone and transforms[parentRootBone + 1]
-	local childClient = RagdollPoser.Entity.GetClientFromEntity(childTarget)
+	local childClient = RagdollPoser.Entity:GetClientFromEntity(childTarget)
 	local transformed = context.transformedByClient and context.transformedByClient[childClient]
 	if childRootBone and transformed and transformed[childRootBone] ~= nil then
 		return captureOffset(self, parentTarget, childTarget, transforms, childMatrices)

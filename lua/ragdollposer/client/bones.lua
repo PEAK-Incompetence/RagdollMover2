@@ -3,7 +3,7 @@
 ---Tracks the bone type for all entities that have been spawned
 ---
 ---@class RagdollPoser.Bones
-local MGR = {}
+local MGR = RagdollPoser.Bones or {}
 
 ---@alias BoneType integer
 MGR.BoneType = {
@@ -14,14 +14,14 @@ MGR.BoneType = {
 }
 
 ---@type {[string]: BoneType[]}
-local modelBones = {}
+MGR.ModelBones = MGR.ModelBones or {}
 
 ---@param entity Entity
 ---@param bone integer
 ---@return BoneType
 function MGR:GetBoneType(entity, bone)
 	local model = entity:GetModel()
-	return modelBones[model][bone]
+	return self.ModelBones[model][bone]
 end
 
 ---@param ent Entity
@@ -35,10 +35,10 @@ end
 ---@param model string?
 function MGR:ReportModel(entity, model)
 	model = model or entity:GetModel()
-	if model and not modelBones[model] then
+	if model and not self.ModelBones[model] then
 		---@type BoneType[]
 		local boneTypes = {}
-		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity:ExposeBones(entity)
 
 		for b = 0, entity:GetBoneCount() - 1 do
 			local isPhys = isPhysBone(entity, b)
@@ -50,7 +50,7 @@ function MGR:ReportModel(entity, model)
 				boneTypes[b] = MGR.BoneType.Manipulate
 			end
 		end
-		modelBones[model] = boneTypes
+		self.ModelBones[model] = boneTypes
 	end
 end
 

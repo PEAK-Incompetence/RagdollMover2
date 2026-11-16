@@ -7,8 +7,8 @@ local MGR = RagdollPoser.Bonemerge or {}
 -- ---@param parentEntity Entity
 -- local function defaultMerge(bonemergeEntity, parentEntity)
 -- 	local bones = {}
--- 	RagdollPoser.Entity.ExposeBones(bonemergeEntity)
--- 	RagdollPoser.Entity.ExposeBones(parentEntity)
+-- 	RagdollPoser.Entity:ExposeBones(bonemergeEntity)
+-- 	RagdollPoser.Entity:ExposeBones(parentEntity)
 -- 	for i = 0, bonemergeEntity:GetBoneCount() - 1 do
 -- 		local boneName = bonemergeEntity:GetBoneName(i)
 -- 		if boneName ~= "__INVALIDBONE__" then
@@ -130,11 +130,7 @@ local function setRigidMatrix(output, source)
 	rigidForward:Set(source:GetForward())
 	rigidRight:Set(source:GetRight())
 	rigidUp:Set(source:GetUp())
-	if
-		rigidForward:LengthSqr() < 1e-12
-		or rigidRight:LengthSqr() < 1e-12
-		or rigidUp:LengthSqr() < 1e-12
-	then
+	if rigidForward:LengthSqr() < 1e-12 or rigidRight:LengthSqr() < 1e-12 or rigidUp:LengthSqr() < 1e-12 then
 		return false
 	end
 
@@ -174,8 +170,8 @@ function MGR:GetBonemergePose(bonemergeEntity, bone, output)
 		return
 	end
 
-	local childMatrices = RagdollPoser.Entity.GetMatrices(bonemergeEntity)
-	local parentMatrices = RagdollPoser.Entity.GetMatrices(parentEntity)
+	local childMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
+	local parentMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
 	local boneName = bonemergeEntity:GetBoneName(bone)
 	local parentBone = parentEntity:LookupBone(boneName)
 	if parentBone then

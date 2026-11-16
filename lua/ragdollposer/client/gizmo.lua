@@ -138,7 +138,8 @@ function MGR:GetOffset()
 end
 ---@param selection table
 local function setPositionFromSelection(selection)
-	local pos = Vector()
+	local selectedPos = Vector()
+	local averagePos = Vector()
 
 	local count = #selection * 0.5
 	for i = 1, #selection - 1, 2 do
@@ -149,11 +150,14 @@ local function setPositionFromSelection(selection)
 		local matrix = entity:GetBoneMatrix(bone)
 
 		if matrix then
-			pos:Add(matrix:GetTranslation())
+			averagePos:Add(matrix:GetTranslation())
+			selectedPos:Set(matrix:GetTranslation())
 		end
 	end
-	pos:Div(count)
-	MGR:SetPosition(pos)
+	averagePos:Div(count)
+	MGR:SetPosition(selectedPos)
+	local offset = WorldToLocal(averagePos, angle_zero, selectedPos, MGR:GetAngles())
+	MGR:SetOffset(offset)
 	MGR:UpdateOffset()
 end
 
@@ -316,14 +320,13 @@ local entityBuffer = {}
 
 local function sendSubPoseResponse()
 	for _, entity in ipairs(entityBuffer) do
-		RagdollPoser.Entity.UpdateRenderBounds(entity)
+		RagdollPoser.Entity:UpdateRenderBounds(entity)
 	end
 	entityBuffer = {}
 
 	-- TODO: Update the client entity if we don't have stretching enabled
 
 	local selection = RagdollPoser.Selection:GetSelection()
-	MGR:SetTransformFromSelection(selection)
 	MGR:SetTransformFromSelection(selection)
 	hook.Run("RagdollPoser_Gizmo_Transformed")
 end
@@ -498,7 +501,7 @@ function MGR:PreTransform()
 		-- We work with the bones with less depth first (parent bones) and then bones with more depth last (child bones)
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
-			local tree = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
+			local tree = RagdollPoser.Entity:GetDefaultPoseTreeFor(client)
 
 			local count = 0
 			local walk = bone
@@ -527,7 +530,7 @@ function MGR:PreTransform()
 		-- iterate over every selected bone in order from root bone to descendant bone
 		-- and get their matrices
 		for client, bones in pairs(entityBones) do
-			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+			local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 			if matrices then
 				self._transformBaseline[client] = {}
 				for bone = 0, client:GetBoneCount() - 1 do
@@ -599,7 +602,7 @@ function MGR:PreTransform()
 			---@cast bone integer
 			---@cast entity Entity
 
-			RagdollPoser.Entity.ExposeBones(entity)
+			RagdollPoser.Entity:ExposeBones(entity)
 
 			rootBones[entity] = rootBones[entity] or Matrix()
 			if self._parents[entity] then
@@ -644,12 +647,12 @@ function MGR:PreTransform()
 		for i = 1, #selectionToEvaluate - 1, 2 do
 			local _, client = selectionToEvaluate[i], selectionToEvaluate[i + 1]
 			---@cast client ClientEntity
-			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 			if not evaluatedEntities[entity] then
 				local bonesByEntity = RagdollPoser.Constraints:PreEvaluate(entity)
 				evaluatedEntities[entity] = true
 				for affectedEntity, bones in pairs(bonesByEntity) do
-					local affectedClient = RagdollPoser.Entity.GetClientFromEntity(affectedEntity)
+					local affectedClient = RagdollPoser.Entity:GetClientFromEntity(affectedEntity)
 					if IsValid(affectedClient) then
 						addTransformedBones(affectedClient, bones)
 					end
@@ -681,7 +684,7 @@ function MGR:Transform()
 		-- to our selected
 		local selection = RagdollPoser.Selection:GetSelection()
 		for client, baseline in pairs(self._transformBaseline) do
-			local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+			local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 			if matrices then
 				for index, matrix in pairs(baseline) do
 					if matrices[index] then
@@ -695,9 +698,9 @@ function MGR:Transform()
 			for i = 1, #selection - 1, 2 do
 				local bone, client = selection[i], selection[i + 1]
 				---@cast client ClientEntity
-				local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-				RagdollPoser.Entity.ExposeBones(client)
-				RagdollPoser.Entity.ExposeBones(entity)
+				local entity = RagdollPoser.Entity:GetEntityFromClient(client)
+				RagdollPoser.Entity:ExposeBones(client)
+				RagdollPoser.Entity:ExposeBones(entity)
 				-- TODO: Pass the gizmo object? This will greatly simplify the function header, possibly at cost of larger function body
 
 				-- We'll build the transform step by step
@@ -763,7 +766,7 @@ function MGR:Transform()
 					self._transformed[client]
 				)
 
-				local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+				local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 
 				if matrices then
 					for _, b in ipairs(self._transformedBones[client]) do
@@ -782,18 +785,18 @@ function MGR:Transform()
 		end
 
 		for client, transformedBones in pairs(self._transformedBones) do
-			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 			if not IsValid(entity) or not self._transformed[client] then
 				continue
 			end
 
-			local outputClient = RagdollPoser.Entity.GetClientFromEntity(entity)
+			local outputClient = RagdollPoser.Entity:GetClientFromEntity(entity)
 			if not IsValid(outputClient) then
 				continue
 			end
-			RagdollPoser.Entity.ExposeBones(outputClient)
-			RagdollPoser.Entity.ExposeBones(entity)
-			local matrices = RagdollPoser.Entity.GetMatricesFromClient(outputClient)
+			RagdollPoser.Entity:ExposeBones(outputClient)
+			RagdollPoser.Entity:ExposeBones(entity)
+			local matrices = RagdollPoser.Entity:GetMatricesFromClient(outputClient)
 			if matrices then
 				local poseContext = self._poseContext
 				poseContext.transformedBones = transformedBones
@@ -883,9 +886,9 @@ local function sendSubPose(selection)
 	for i = 1, #selection - 1, 2 do
 		local bone = selection[i] --[[@as integer]]
 		local client = selection[i + 1] --[[@as ClientEntity]]
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
-		RagdollPoser.Entity.ExposeBones(client)
-		RagdollPoser.Entity.ExposeBones(entity)
+		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
+		RagdollPoser.Entity:ExposeBones(client)
+		RagdollPoser.Entity:ExposeBones(entity)
 
 		local arr = bones[entity]
 		local set = boneSet[entity]
@@ -912,7 +915,7 @@ local function sendSubPose(selection)
 			local outputEntity = constraint.GetOutputEntity and constraint:GetOutputEntity() or entity
 			local root = constraint.GetOutputRoot and constraint:GetOutputRoot()
 			if IsValid(outputEntity) and root then
-				RagdollPoser.Entity.ExposeBones(outputEntity)
+				RagdollPoser.Entity:ExposeBones(outputEntity)
 				local arr = bones[outputEntity]
 				local set = boneSet[outputEntity]
 				if not arr then
@@ -938,15 +941,15 @@ local function sendSubPose(selection)
 	for _, entity in ipairs(entities) do
 		local isBonemerge = RagdollPoser.Bonemerge:IsBonemergeEntity(entity)
 
-		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
-		RagdollPoser.Entity.ExposeBones(entity)
-		RagdollPoser.Entity.ExposeBones(client)
+		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
+		RagdollPoser.Entity:ExposeBones(entity)
+		RagdollPoser.Entity:ExposeBones(client)
 		net.WriteEntity(entity)
-		local matrices = RagdollPoser.Entity.GetMatrices(entity)
+		local matrices = RagdollPoser.Entity:GetMatrices(entity)
 		local bs = bones[entity]
 		local count = #bs
 		net.WriteUInt(count, 8)
-		local physCount = RagdollPoser.Entity.GetPhysBoneCount(entity)
+		local physCount = RagdollPoser.Entity:GetPhysBoneCount(entity)
 		for _, b in ipairs(bs) do
 			net.WriteUInt(b, 8)
 			local matrix = matrices[b + 1] * IDENTITY_MATRIX
@@ -988,9 +991,9 @@ function MGR:ResetSelected(transformType, bone, entity)
 	local resetAll = transformType == 4
 
 	local function handleReset(bone, client)
-		local defaultPose = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
-		local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local defaultPose = RagdollPoser.Entity:GetDefaultPoseTreeFor(client)
+		local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
+		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		local selectedMatrix = matrices and matrices[bone + 1]
 		local pose = defaultPose[bone + 1]
 		if not selectedMatrix or not pose then
@@ -1180,13 +1183,13 @@ function MGR:DrawBones()
 	local boneTypes = bones.BoneType
 	local selection = RagdollPoser.Selection
 	if selection:GetEnabled() then
-		local ents = RagdollPoser.Entity.GetClientEntities()
+		local ents = RagdollPoser.Entity:GetClientEntities()
 		for _, ent in ipairs(ents) do
 			if not IsValid(ent) then
 				continue
 			end
 
-			RagdollPoser.Entity.ExposeBones(ent)
+			RagdollPoser.Entity:ExposeBones(ent)
 
 			table.insert(mouseHovered, ent)
 			for b = 0, ent:GetBoneCount() - 1 do
@@ -1332,7 +1335,7 @@ function MGR:DrawSelected()
 		if not IsValid(entity) then
 			continue
 		end
-		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity:ExposeBones(entity)
 		local matrix = entity:GetBoneMatrix(bone)
 		local data = matrix:GetTranslation():ToScreen()
 		if not data.visible then
@@ -1456,7 +1459,7 @@ function MGR:DrawScaling(mouseHovered)
 end
 
 function MGR:ResetHoverScale()
-	local entities = RagdollPoser.Entity.GetClientEntities()
+	local entities = RagdollPoser.Entity:GetClientEntities()
 	for _, entity in ipairs(entities) do
 		for b = 0, entity:GetBoneCount() - 1 do
 			entity:ManipulateBoneScale(b, defaultScaleVector)
@@ -1484,8 +1487,8 @@ end
 local rootResetBone = {}
 
 function MGR:SetTransformFromSelection(selection)
-	setPositionFromSelection(selection)
 	setAngleFromSelection(selection)
+	setPositionFromSelection(selection)
 end
 
 local function selected(selection)

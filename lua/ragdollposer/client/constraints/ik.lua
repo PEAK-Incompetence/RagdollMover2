@@ -509,13 +509,13 @@ function ik:PreEvaluate(entity, transforms, indices, locals, parents)
 	end
 
 	local effector = self.State.bone
-	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 	if not IsValid(client) or not isnumber(effector) or effector < 0 or effector >= client:GetBoneCount() then
 		return
 	end
 
-	RagdollPoser.Entity.ExposeBones(client)
-	local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+	RagdollPoser.Entity:ExposeBones(client)
+	local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 	local matrix = matrices and matrices[effector + 1]
 	if not matrix then
 		return
@@ -574,7 +574,7 @@ function ik:EvaluatePose(entity, context)
 
 	-- FIXME: Descendant bones of a bone that has IK are locked in position.
 	-- These should be movable
-	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 	if not IsValid(client) then
 		return
 	end
@@ -841,7 +841,7 @@ function ik:Draw()
 		return
 	end
 
-	local client = RagdollPoser.Entity.GetClientFromEntity(self.Owner)
+	local client = RagdollPoser.Entity:GetClientFromEntity(self.Owner)
 	if not IsValid(client) or effector >= client:GetBoneCount() then
 		return
 	end
@@ -851,7 +851,7 @@ function ik:Draw()
 		return
 	end
 
-	local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+	local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 	if not matrices then
 		return
 	end

@@ -102,7 +102,7 @@ local function getConstraintOutputEntity(constraint, entity)
 end
 
 local function isBoneInSubtree(entity, bone, root)
-	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 	if not IsValid(client) then
 		return false
 	end
@@ -118,7 +118,7 @@ local function isBoneInSubtree(entity, bone, root)
 end
 
 local function wasBoneTransformed(entity, bone, transformedByClient)
-	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+	local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 	local transformed = transformedByClient and transformedByClient[client]
 	return transformed and transformed[bone] ~= nil
 end
@@ -299,9 +299,9 @@ function MGR:EvaluatePose(entity, context)
 			local applied = constraint:EvaluatePose(entity, context)
 			if applied then
 				forEachIKAfterLock(constraint, function(dependent, outputEntity, outputBone)
-					local client = RagdollPoser.Entity.GetClientFromEntity(outputEntity)
+					local client = RagdollPoser.Entity:GetClientFromEntity(outputEntity)
 					if IsValid(client) then
-						local outputMatrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+						local outputMatrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 						if outputMatrices then
 							dependentPoseContext.transforms = outputMatrices
 							dependent:EvaluatePose(outputEntity, dependentPoseContext)
@@ -527,7 +527,7 @@ local function onKeyPress(actions, key)
 		local checked = false
 		local selected = RagdollPoser.Selection:GetSelectedEntities()
 		for client in pairs(selected) do
-			local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+			local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 			local stack = EntityConstraintStacks[entity]
 			if not stack then
 				continue

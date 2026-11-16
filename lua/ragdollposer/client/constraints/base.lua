@@ -57,7 +57,7 @@ function Base:ConstructUITemplate(entry, props, state)
 		local function updateTarget(target)
 			choices = {}
 			if IsValid(target) then
-				RagdollPoser.Entity.ExposeBones(target)
+				RagdollPoser.Entity:ExposeBones(target)
 				for i = 0, target:GetBoneCount() - 1 do
 					table.insert(choices, target:GetBoneName(i))
 				end
@@ -90,7 +90,7 @@ function Base:ConstructUITemplate(entry, props, state)
 			if mousecode == MOUSE_LEFT then
 				local menu = DermaMenu()
 
-				local entities = RagdollPoser.Entity.GetEntities()
+				local entities = RagdollPoser.Entity:GetEntities()
 				for _, entity in ipairs(entities) do
 					local name = getEntityName(entity)
 					menu:AddOption(name, function()
@@ -282,9 +282,9 @@ function Base:CaptureLockPose()
 		return
 	end
 
-	local client = RagdollPoser.Entity.GetClientFromEntity(target)
-	RagdollPoser.Entity.ExposeBones(client)
-	local matrices = RagdollPoser.Entity.GetMatrices(client)
+	local client = RagdollPoser.Entity:GetClientFromEntity(target)
+	RagdollPoser.Entity:ExposeBones(client)
+	local matrices = RagdollPoser.Entity:GetMatrices(client)
 	local visited = {}
 
 	local transformedBones = {}
@@ -319,7 +319,7 @@ function Base:ApplyLock(entity, controlledBone, component, output)
 	if not IsValid(target) or target ~= entity or not self._snapshot then
 		return false
 	end
-	local client = RagdollPoser.Entity.GetClientFromEntity(target)
+	local client = RagdollPoser.Entity:GetClientFromEntity(target)
 
 	local walk = controlledBone
 	while walk and walk >= 0 do

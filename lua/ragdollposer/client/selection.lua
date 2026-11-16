@@ -82,7 +82,7 @@ function MGR:SelectOne(bone, entity, accumulate)
 		selectedEntities[entity] = true
 	end
 
-	RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
+	RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity:GetEntityFromClient(entity))
 	hook.Run("RagdollPoser_Selection_Selected", entityBonePairs, selectedEntities)
 end
 
@@ -93,7 +93,7 @@ function MGR:SetSelection(selection)
 		if not selectedEntities[entity] then
 			selectedEntities[entity] = true
 		end
-		RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
+		RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity:GetEntityFromClient(entity))
 	end
 	entityBonePairs = selection
 
@@ -125,7 +125,7 @@ function MGR:SelectGroup(selection, accumulate)
 			entityBonePairs[count + j] = bone
 			entityBonePairs[count + j + 1] = entity
 			j = j + 1
-			RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity.GetEntityFromClient(entity))
+			RagdollPoser.Bonemerge:AddParentConstraints(RagdollPoser.Entity:GetEntityFromClient(entity))
 			entitySelectedBones[entity][bone] = true
 		end
 	end
@@ -257,11 +257,11 @@ local selectionBuffer = {}
 ---@param y integer
 local function getBones(x, y)
 	selectionBuffer = {}
-	local entities = RagdollPoser.Entity.GetClientEntities()
+	local entities = RagdollPoser.Entity:GetClientEntities()
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
 	for _, entity in ipairs(entities) do
-		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity:ExposeBones(entity)
 		for b = 0, entity:GetBoneCount() - 1 do
 			if entity:GetBoneName(b) == "__INVALIDBONE__" then
 				continue

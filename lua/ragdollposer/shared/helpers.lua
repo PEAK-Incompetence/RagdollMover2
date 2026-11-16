@@ -43,7 +43,7 @@ local boneToPhysMap = {}
 ---@param bone integer Bone
 ---@param outputMatrix VMatrix Matrix to write values to
 function MGR.GetNonPhysicalBonePose(entity, bone, outputMatrix)
-	local defaultBonePose = RagdollPoser.Entity.GetDefaultPoseTreeFor(entity)
+	local defaultBonePose = RagdollPoser.Entity:GetDefaultPoseTreeFor(entity)
 
 	if entity:GetBoneParent(bone) > -1 then
 		local dPos, dAng = getBoneOffsetsOf(entity, bone, defaultBonePose)
@@ -77,7 +77,7 @@ function MGR.BoneToPhysBone(ent, bone)
 		return boneToPhysMap[model][bone]
 	else
 		boneToPhysMap[model] = boneToPhysMap[model] or {}
-		local count = SERVER and ent:GetPhysicsObjectCount() or RagdollPoser.Entity.GetPhysBoneCount(ent)
+		local count = SERVER and ent:GetPhysicsObjectCount() or RagdollPoser.Entity:GetPhysBoneCount(ent)
 		if CLIENT then
 			-- On the frame that this is called, force the entity to
 			-- show all hidden bones, like `weapon_bone`

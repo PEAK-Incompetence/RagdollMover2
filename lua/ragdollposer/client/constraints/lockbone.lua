@@ -40,7 +40,7 @@ function lock:ConstructUI(entry, props, state)
 	local function updateTarget(target)
 		choices = {}
 		if IsValid(target) then
-			RagdollPoser.Entity.ExposeBones(target)
+			RagdollPoser.Entity:ExposeBones(target)
 			for i = 0, target:GetBoneCount() - 1 do
 				table.insert(choices, target:GetBoneName(i))
 			end
@@ -137,7 +137,7 @@ function lock:ConstructUI(entry, props, state)
 		end
 
 		local menu = DermaMenu()
-		for _, target in ipairs(RagdollPoser.Entity.GetEntities()) do
+		for _, target in ipairs(RagdollPoser.Entity:GetEntities()) do
 			if IsValid(target) then
 				menu:AddOption(getEntityName(target), function()
 					constraint.State.otherTarget = target
@@ -177,16 +177,16 @@ function lock:PreEvaluate(entity)
 		return
 	end
 
-	local parentClient = RagdollPoser.Entity.GetClientFromEntity(parentTarget)
-	local childClient = RagdollPoser.Entity.GetClientFromEntity(childTarget)
+	local parentClient = RagdollPoser.Entity:GetClientFromEntity(parentTarget)
+	local childClient = RagdollPoser.Entity:GetClientFromEntity(childTarget)
 	if not IsValid(parentClient) or not IsValid(childClient) then
 		return
 	end
 
-	RagdollPoser.Entity.ExposeBones(parentClient)
-	RagdollPoser.Entity.ExposeBones(childClient)
-	local parentMatrices = RagdollPoser.Entity.GetMatrices(parentTarget)
-	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
+	RagdollPoser.Entity:ExposeBones(parentClient)
+	RagdollPoser.Entity:ExposeBones(childClient)
+	local parentMatrices = RagdollPoser.Entity:GetMatrices(parentTarget)
+	local childMatrices = RagdollPoser.Entity:GetMatrices(childTarget)
 	local parentMatrix = parentMatrices and parentMatrices[parentBone + 1]
 	if not parentMatrix or not childMatrices then
 		return
@@ -241,7 +241,7 @@ function lock:EvaluatePose(entity, context)
 	end
 
 	local currentParent = transforms[parentBone + 1]
-	local childMatrices = RagdollPoser.Entity.GetMatrices(childTarget)
+	local childMatrices = RagdollPoser.Entity:GetMatrices(childTarget)
 	if not currentParent or not childMatrices then
 		return false
 	end

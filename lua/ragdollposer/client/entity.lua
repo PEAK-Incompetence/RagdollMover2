@@ -4,37 +4,6 @@
 ---@class ClientEntity: Entity
 ---@field rgp_isclient true
 
----@type Entity[]
-local Entities = {}
----@type ClientEntity[]
-local ClientEntities = {}
-
----@type {[ClientEntity]: Entity}
-local ClientToEntity = {}
----@type {[Entity]: ClientEntity}
-local EntityToClient = {}
----@type {[ClientEntity]: boolean}
-local ClientShouldUpdate = {}
----@type {[ClientEntity]: integer}
-local ClientBoneCallbacks = {}
----@type {[Entity]: integer}
-local EntityPhysBoneCount = {}
-
----@alias BonePoseInfo {[1]: Vector, [2]: Angle, [3]: Vector, [4]: Angle, [5]: integer, [6]: integer}
----@type {[string]: BonePoseInfo[]}
-local PoseTrees = {}
-
-local function refreshClientData()
-	ClientEntities = {}
-	ClientToEntity = {}
-	ClientShouldUpdate = {}
-	ClientBoneCallbacks = {}
-end
-
----@type {[Entity]: VMatrix[]}
-local EntityMatrices = {}
-local EntityRenderBounds = {}
-
 ---[CLIENT]
 ---
 ---Stores and displays client representations of server entities
@@ -43,7 +12,38 @@ local EntityRenderBounds = {}
 ---matrices of the modified result to the server
 ---
 ---@class RagdollPoser.Entity
-local MGR = {}
+local MGR = RagdollPoser.Entity or {}
+
+---@type Entity[]
+MGR.Entities = MGR.Entities
+---@type ClientEntity[]
+MGR.ClientEntities = MGR.ClientEntities or {}
+
+---@type {[ClientEntity]: Entity}
+MGR.ClientToEntity = MGR.ClientToEntity or {}
+---@type {[Entity]: ClientEntity}
+MGR.EntityToClient = MGR.EntityToClient or {}
+---@type {[ClientEntity]: boolean}
+MGR.ClientShouldUpdate = MGR.ClientShouldUpdate or {}
+---@type {[ClientEntity]: integer}
+MGR.ClientBoneCallbacks = MGR.ClientBoneCallbacks or {}
+---@type {[Entity]: integer}
+MGR.EntityPhysBoneCount = MGR.EntityPhysBoneCount or {}
+
+---@alias BonePoseInfo {[1]: Vector, [2]: Angle, [3]: Vector, [4]: Angle, [5]: integer, [6]: integer}
+---@type {[string]: BonePoseInfo[]}
+local PoseTrees = {}
+
+local function refreshClientData()
+	MGR.ClientEntities = {}
+	MGR.ClientToEntity = {}
+	MGR.ClientShouldUpdate = {}
+	MGR.ClientBoneCallbacks = {}
+end
+
+---@type {[Entity]: VMatrix[]}
+MGR.EntityMatrices = MGR.EntityMatrices or {}
+MGR.EntityRenderBounds = MGR.EntityRenderBounds or {}
 
 local static = CreateClientConVar(
 	"ragdollposer_static",
@@ -74,7 +74,7 @@ local function renderOverride(self, flags)
 	local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_DRAWTRANSLUCENTSUBMODELS)
 	if RagdollPoser.Helpers.Equipped() then
 		-- Draw the entity underneath the ghost
-		local entity = ClientToEntity[self]
+		local entity = MGR.ClientToEntity[self]
 		copyVisualsToClient(self, entity)
 
 		entity:DrawModel(flags)
@@ -93,10 +93,10 @@ end
 ---@param numbones integer
 ---@param staticProp boolean? Only called from explicitly
 local function clientBoneManipulator(self, numbones, staticProp)
-	local shouldUpdate = ClientShouldUpdate[self]
-	local entity = ClientToEntity[self]
-	local matrixSet = EntityMatrices[entity]
-	local renderBounds = EntityRenderBounds[entity]
+	local shouldUpdate = MGR.ClientShouldUpdate[self]
+	local entity = MGR.ClientToEntity[self]
+	local matrixSet = MGR.EntityMatrices[entity]
+	local renderBounds = MGR.EntityRenderBounds[entity]
 	local static = static:GetBool()
 	local isMoving = RagdollPoser.Gizmo:IsMoving()
 	for b = 0, numbones - 1 do
@@ -124,7 +124,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 	if not static and not isMoving then
 		RagdollPoser.Gizmo:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
 	end
-	ClientShouldUpdate[self] = false
+	MGR.ClientShouldUpdate[self] = false
 
 	local m = matrixSet[1]
 	if m then
@@ -135,38 +135,41 @@ local function clientBoneManipulator(self, numbones, staticProp)
 end
 
 ---@type ClientEntity[]
-local staticProps = {}
+MGR.StaticProps = MGR.StaticProps or {}
 local function updateStaticProps()
+	local staticProps = MGR.StaticProps
 	-- TODO: Support scaling static props (they don't scale at all)
 	for i = 1, #staticProps do
 		local clientProp = staticProps[i] --[[@as ClientEntity]]
-		MGR.ExposeBones(clientProp)
+		MGR:ExposeBones(clientProp)
 		clientBoneManipulator(clientProp, 1, true)
 	end
 end
 hook.Remove("PreDrawOpaqueRenderables", "RagdollPoser_Entity_StaticProps")
 hook.Add("PreDrawOpaqueRenderables", "RagdollPoser_Entity_StaticProps", updateStaticProps)
 
-function MGR.CreateEntities()
-	for _, client in ipairs(ClientEntities) do
-		client:RemoveCallback("BuildBonePositions", ClientBoneCallbacks[client])
-		client:Remove()
-		ClientToEntity[client] = nil
-		ClientShouldUpdate[client] = nil
+function MGR:CreateEntities()
+	for _, client in ipairs(self.ClientEntities) do
+		if IsValid(client) then
+			client:RemoveCallback("BuildBonePositions", self.ClientBoneCallbacks[client])
+			client:Remove()
+			self.ClientToEntity[client] = nil
+			self.ClientShouldUpdate[client] = nil
+		end
 	end
 	refreshClientData()
-	staticProps = {}
+	self.StaticProps = {}
 
 	local dirties = {}
-	for i, entity in ipairs(Entities) do
+	for i, entity in ipairs(self.Entities) do
 		---@cast entity RGPEntity
 		if not IsValid(entity) or entity:IsMarkedForDeletion() then
 			dirties[i] = entity
 			continue
 		end
-		EntityMatrices[entity] = {}
+		self.EntityMatrices[entity] = {}
 		local min, max = entity:GetRenderBounds()
-		EntityRenderBounds[entity] = { min, max }
+		self.EntityRenderBounds[entity] = { min, max }
 
 		local client = ents.CreateClientProp()
 		---@cast client ClientEntity
@@ -178,15 +181,15 @@ function MGR.CreateEntities()
 		client.RenderOverride = renderOverride
 		client:SetPos(entity:GetPos())
 
-		ClientToEntity[client] = entity
-		ClientShouldUpdate[client] = true
-		EntityToClient[entity] = client
-		ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
+		self.ClientToEntity[client] = entity
+		self.ClientShouldUpdate[client] = true
+		self.EntityToClient[entity] = client
+		self.ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
 		local modelInfo = util.GetModelInfo(entity:GetModel())
 		local isStaticProp = modelInfo.StaticProp
 		if isStaticProp then
 			-- Static props bone manipulators build bone positions, so we get hook to do that for us.
-			table.insert(staticProps, client)
+			table.insert(self.StaticProps, client)
 		end
 		clientBoneManipulator(client, client:GetBoneCount(), isStaticProp)
 
@@ -194,19 +197,19 @@ function MGR.CreateEntities()
 
 		client.rgp_isclient = true
 
-		table.insert(ClientEntities, client)
+		table.insert(self.ClientEntities, client)
 	end
 
 	if dirties[1] then
 		for dirty, _ in SortedPairs(dirties, true) do
-			table.remove(Entities, dirty)
+			table.remove(self.Entities, dirty)
 		end
 	end
 end
 
 ---Helper function which calls SetupBones and InvalidateBoneCache to show invisible bones
 ---@param entity Entity
-function MGR.ExposeBones(entity)
+function MGR:ExposeBones(entity)
 	if IsValid(entity) then
 		entity:SetupBones()
 		entity:InvalidateBoneCache()
@@ -220,32 +223,32 @@ hook.Add("EntityRemoved", "RagdollPoser_Entity_EntityRemoved", function(ent, ful
 	end
 
 	---@cast ent RGPEntity
-	if IsValid(EntityToClient[ent]) then
-		table.remove(Entities, ent.rgp_index)
-		EntityToClient[ent]:Remove()
-		EntityRenderBounds[ent] = nil
-		MGR.RefreshEntities(Entities)
-		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+	if IsValid(MGR.EntityToClient[ent]) then
+		table.remove(MGR.Entities, ent.rgp_index)
+		MGR.EntityToClient[ent]:Remove()
+		MGR.EntityRenderBounds[ent] = nil
+		MGR:RefreshEntities(MGR.Entities)
+		hook.Run("RagdollPoser_Entity_PostRefresh", MGR.EntityToClient)
 	end
 end)
 
 ---Bone indices for the matrices are offset by 1, i.e.
 ---
 ---```lua
----	local matrices = RagdollPoser.Entity.GetMatrices(entity)
+---	local matrices = RagdollPoser.Entity:GetMatrices(entity)
 ---	local matrix = matrices[b + 1]
 ---```
 ---@param entity Entity
 ---@return VMatrix[] entityMatrices
-function MGR.GetMatrices(entity)
-	return EntityMatrices[entity]
+function MGR:GetMatrices(entity)
+	return self.EntityMatrices[entity]
 end
 
 ---
 ---
 ---@param entity Entity
-function MGR.UpdateRenderBounds(entity)
-	local renderBounds = EntityRenderBounds[entity]
+function MGR:UpdateRenderBounds(entity)
+	local renderBounds = self.EntityRenderBounds[entity]
 	if renderBounds then
 		renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
 	end
@@ -296,7 +299,7 @@ end
 ---
 ---@param entity Entity
 ---@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
-function MGR.GetDefaultPoseTreeFor(entity)
+function MGR:GetDefaultPoseTreeFor(entity)
 	local model = entity:GetModel()
 	local tree = PoseTrees[model]
 	if tree then
@@ -320,57 +323,57 @@ end
 ---Bone indices for the matrices are offset by 1, i.e.
 ---
 ---```lua
----	local matrices = RagdollPoser.Entity.GetMatrices(client)
+---	local matrices = RagdollPoser.Entity:GetMatrices(client)
 ---	local matrix = matrices[b + 1]
 ---```
 ---@param client ClientEntity
 ---@return VMatrix[] clientMatrices
-function MGR.GetMatricesFromClient(client)
-	return EntityMatrices[ClientToEntity[client]]
+function MGR:GetMatricesFromClient(client)
+	return self.EntityMatrices[self.ClientToEntity[client]]
 end
 
 ---Get all entities of the selected assembly
 ---@param entities Entity[]
-function MGR.RefreshEntities(entities)
-	hook.Run("RagdollPoser_Entity_PreRefresh", ClientToEntity)
+function MGR:RefreshEntities(entities)
+	hook.Run("RagdollPoser_Entity_PreRefresh", self.ClientToEntity)
 
-	Entities = entities
-	MGR.CreateEntities()
+	self.Entities = entities
+	self:CreateEntities()
 
-	for entity, client in pairs(EntityToClient) do
+	for entity, client in pairs(self.EntityToClient) do
 		if not IsValid(client) then
-			EntityToClient[entity] = nil
+			self.EntityToClient[entity] = nil
 		end
 	end
 end
 
 ---@param client ClientEntity
 ---@return Entity entity
-function MGR.GetEntityFromClient(client)
-	return ClientToEntity[client]
+function MGR:GetEntityFromClient(client)
+	return self.ClientToEntity[client]
 end
 
 ---@param entity Entity
 ---@return ClientEntity client
-function MGR.GetClientFromEntity(entity)
-	return EntityToClient[entity]
+function MGR:GetClientFromEntity(entity)
+	return self.EntityToClient[entity]
 end
 
 ---@return Entity[] entities
-function MGR.GetEntities()
-	return Entities
+function MGR:GetEntities()
+	return self.Entities
 end
 
 ---@return Entity[] clients
-function MGR.GetClientEntities()
-	return ClientEntities
+function MGR:GetClientEntities()
+	return self.ClientEntities
 end
 
 ---@param entity Entity
-function MGR.UpdateEntity(entity)
-	local client = EntityToClient[entity]
+function MGR:UpdateEntity(entity)
+	local client = self.EntityToClient[entity]
 	if client and IsValid(client) then
-		ClientShouldUpdate[client] = true
+		self.ClientShouldUpdate[client] = true
 		clientBoneManipulator(client, client:GetBoneCount())
 	end
 end
@@ -405,16 +408,16 @@ local function sendAssemblyInfo()
 	end
 
 	if IsValid(ent) and bone then
-		MGR.RefreshEntities(entities)
-		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+		MGR:RefreshEntities(entities)
+		hook.Run("RagdollPoser_Entity_PostRefresh", MGR.EntityToClient)
 		local selection = RagdollPoser.Selection:GetSelection()
 		if selection[#selection] ~= ent then
 			RagdollPoser.Selection:ResetFilter()
-			RagdollPoser.Selection:SelectOne(bone, EntityToClient[ent], false)
+			RagdollPoser.Selection:SelectOne(bone, MGR.EntityToClient[ent], false)
 		end
 	else
-		MGR.RefreshEntities(entities)
-		hook.Run("RagdollPoser_Entity_PostRefresh", EntityToClient)
+		MGR:RefreshEntities(entities)
+		hook.Run("RagdollPoser_Entity_PostRefresh", MGR.EntityToClient)
 		RagdollPoser.Selection:Unselect()
 	end
 end
@@ -422,9 +425,9 @@ RagdollPoser.Networking.DefineReceiver("SendAssemblyInfo", sendAssemblyInfo)
 
 ---@param entity Entity
 ---@return integer physBoneCount
-function MGR.GetPhysBoneCount(entity)
+function MGR:GetPhysBoneCount(entity)
 	local model = entity:GetModel()
-	return EntityPhysBoneCount[model]
+	return self.EntityPhysBoneCount[model]
 end
 
 local function getPhysBoneCount(len, ply)
@@ -433,8 +436,8 @@ local function getPhysBoneCount(len, ply)
 	if IsValid(entity) then
 		local model = entity:GetModel()
 
-		if model and not EntityPhysBoneCount[model] then
-			EntityPhysBoneCount[model] = count
+		if model and not MGR.EntityPhysBoneCount[model] then
+			MGR.EntityPhysBoneCount[model] = count
 			RagdollPoser.Bones:ReportModel(entity, model)
 		end
 	end

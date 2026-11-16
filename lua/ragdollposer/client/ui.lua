@@ -288,9 +288,9 @@ local function populateEntities(entityTree, clients, selectedEntities)
 
 	-- Do check for parent entities
 	for _, client in ipairs(clients) do
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		local childNode = entityTree[client]
-		local parentClient = RagdollPoser.Entity.GetClientFromEntity(entity:GetParent())
+		local parentClient = RagdollPoser.Entity:GetClientFromEntity(entity:GetParent())
 		local parentNode = IsValid(parentClient) and entityTree[parentClient]
 		if parentNode then
 			parentNode:CreateChildNodes()
@@ -431,7 +431,7 @@ local function setupBoneNodesOf(entity, boneTree, boneTypeRestriction)
 			continue
 		end
 
-		RagdollPoser.Entity.ExposeBones(entity)
+		RagdollPoser.Entity:ExposeBones(entity)
 
 		local boneType = getBoneType(entity, b)
 		if boneTypeRestriction and boneType ~= boneTypeRestriction then
@@ -593,7 +593,7 @@ end
 --- @param keepOpen boolean?
 --- @param parentMenu DMenu?
 function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
-	local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+	local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 
 	-- get list of constraints categories, then insert each constraint in a category
 	-- click on a constraint name. we add the constraint to the entity. also send it to the server
@@ -979,7 +979,7 @@ function MGR:BuildCPanel(cpanel)
 
 	populateEntities(
 		entitySelector,
-		RagdollPoser.Entity.GetClientEntities(),
+		RagdollPoser.Entity:GetClientEntities(),
 		RagdollPoser.Selection:GetSelectedEntities()
 	)
 	populateBoneTree(boneTree, RagdollPoser.Selection:GetSelection(), false)
@@ -1006,7 +1006,7 @@ function MGR:BuildCPanel(cpanel)
 
 	--- @param client ClientEntity
 	local function updateConstraintUI(client)
-		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		-- print("clear selected")
 		constraintList:Clear()
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
@@ -1045,7 +1045,7 @@ function MGR:BuildCPanel(cpanel)
 	---@type BoneType|boolean
 	local boneTypeRestriction = false
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
-		populateEntities(entitySelector, RagdollPoser.Entity.GetClientEntities(), selectedEntities)
+		populateEntities(entitySelector, RagdollPoser.Entity:GetClientEntities(), selectedEntities)
 		updateBoneTree(boneTree, selection, boneTypeRestriction)
 		-- print("selected check ui")
 		-- PrintTable(selection)
@@ -1067,7 +1067,7 @@ function MGR:BuildCPanel(cpanel)
 	end)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities", function(entity, constraints)
-		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 		-- print("update constraints")
 		-- print(entity, client, entitySelector.selected, constraints)
 		-- print("selected equals us?", entitySelector.selected == client)
@@ -1079,7 +1079,7 @@ function MGR:BuildCPanel(cpanel)
 	end)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintOrderChanged", "UI_UpdateEntities", function(entity)
-		local client = RagdollPoser.Entity.GetClientFromEntity(entity)
+		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 		-- print("no don't do it!")
 		-- if client == entitySelector.selected then
 		-- 	updateConstraintUI(client)

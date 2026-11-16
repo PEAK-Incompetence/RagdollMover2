@@ -51,3 +51,8 @@ end
 
 initialize()
 initialize()
+
+concommand.Add("ragdollposer_initialize", function()
+	initialize()
+	initialize()
+end, nil, "Re-initialize the client systems")

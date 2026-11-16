@@ -63,7 +63,7 @@ return {
 					end
 					local bone = selection[1]
 					local client = selection[2] --[[@as ClientEntity]]
-					local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+					local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 
 					expect(selection).to.equal(RagdollPoser.Selection:GetSelection())
 					expect(bone).to.equal(5)
@@ -108,7 +108,7 @@ return {
 					end
 					local bone = selection[1]
 					local client = selection[2] --[[@as ClientEntity]]
-					local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+					local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 
 					expect(selection).to.equal(RagdollPoser.Selection:GetSelection())
 					expect(bone).to.equal(5)
@@ -153,7 +153,7 @@ return {
 					end
 					local bone = selection[1]
 					local client = selection[2] --[[@as ClientEntity]]
-					local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+					local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 
 					expect(selection).to.equal(RagdollPoser.Selection:GetSelection())
 					expect(bone).to.equal(5)

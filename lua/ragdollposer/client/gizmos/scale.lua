@@ -116,12 +116,53 @@ function scale:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function scale:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local forward = eyeAng:Forward()
+	local back = -forward
+	if not self.start then
+		self.start = props.finalPos
+	end
+	if not self.mirrorStart and mirrorAxis >= 0 then
+		self.mirrorStart = props.finalPos
+	end
+	if not self.deltaAccumulate then
+		self.deltaAccumulate = 0
+	end
+
+	self.deltaAccumulate = self.deltaAccumulate + delta
+	local startHit = mirrorAxis >= 0 and self.mirrorStart or self.start
+	local endHit = startHit + self._axis * self.deltaAccumulate
+
+	if mirrorAxis >= 0 then
+		self.mirrorStart = endHit
+	end
+	self.start = endHit
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(eyeAng:Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
 ---Scales are with respect to the bone. If we want to make this scale
 ---in different ways (i.e. wrt world, wrt view), we need to calculate
 ---directions with respect to the parent
 function scale:PreTransform(v)
 	self.start = nil
 	self.mirrorStart = nil
+	self.deltaAccumulate = nil
 	return v
 end
 

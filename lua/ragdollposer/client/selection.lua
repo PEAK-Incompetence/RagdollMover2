@@ -335,12 +335,8 @@ local function handleMultipleBones(selection, callback)
 		gui.EnableScreenClicker(false)
 	end
 
-	local x = input.GetCursorPos()
-	-- Open it twice. Why? So that we can offset it when the internals performs all the positioning
-	menu:Open(x)
-	local w = menu:GetWide()
-	x = math.min(x, ScrW()) - w * 0.99
-	menu:Open(x)
+	menu:Open()
+	RagdollPoser.UI:OffsetMenu(menu)
 end
 
 local function onLeftClickDown(x, y, tr)
@@ -407,6 +403,7 @@ local function onRightClickDown(x, y, tr)
 
 	getBones(x, y)
 end
+
 local function onRightClickUp(x, y, tr)
 	if not MGR:GetEnabled() then
 		return
@@ -421,14 +418,14 @@ local function onRightClickUp(x, y, tr)
 			-- PrintTable(selectionBuffer)
 			MGR:SetBusy(true)
 			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
-				RagdollPoser.UI:ConstraintMenu(entity, bone, true)
+				RagdollPoser.UI:ContextMenu(entity, bone, true)
 			end)
 		else
 			local bone = selectionBuffer[1]
 			local entity = selectionBuffer[2]
 			---@cast bone SelectionOddIndex
 			---@cast entity SelectionEvenIndex
-			RagdollPoser.UI:ConstraintMenu(entity, bone, true)
+			RagdollPoser.UI:ContextMenu(entity, bone, true)
 		end
 		MGR:SetWasOnBone(false)
 	end

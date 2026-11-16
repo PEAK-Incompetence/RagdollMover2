@@ -97,6 +97,16 @@ function Base:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return {}
 end
 
+---@param start Vector
+---@param endPos Vector
+---@param props GizmoProps
+---@param mirrorAxis integer
+---@param delta number
+---@return DeltaProps deltaProps
+function Base:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	return {}
+end
+
 ---Calculate and cache before performing the transform
 ---@param direction Vector
 ---@param initials table

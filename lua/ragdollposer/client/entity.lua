@@ -117,6 +117,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 			if staticProp then
 				self:SetPos(m:GetTranslation())
 				self:SetAngles(m:GetAngles())
+				self:EnableMatrix("EnableMatrix", m)
 			elseif name ~= "__INVALIDBONE__" then
 				self:SetBoneMatrix(b, m)
 			end
@@ -135,6 +136,7 @@ end
 ---@type ClientEntity[]
 local staticProps = {}
 local function updateStaticProps()
+	-- TODO: Support scaling static props (they don't scale at all)
 	for i = 1, #staticProps do
 		local clientProp = staticProps[i] --[[@as ClientEntity]]
 		MGR.ExposeBones(clientProp)

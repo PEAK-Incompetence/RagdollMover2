@@ -120,6 +120,27 @@ function arrow:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function arrow:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local forward = eyeAng:Forward()
+	local back = -forward
+
+	sharedDeltaProps[1]:Set(self._axis * delta)
+
+	if mirrorAxis >= 0 then
+		local length = sharedDeltaProps[1]:Length()
+		local vector = sharedDeltaProps[1]:Angle()
+		vector:RotateAroundAxis(eyeAng:Up(), 180)
+		sharedDeltaProps[1]:Set(vector:Forward())
+		sharedDeltaProps[1]:Mul(length)
+	end
+
+	sharedDeltaProps[2]:Set(props.finalPos)
+	sharedDeltaProps[3]:Set(props.finalPos + sharedDeltaProps[1])
+
+	return sharedDeltaProps
+end
+
 function arrow:PreTransform(v)
 	return v
 end

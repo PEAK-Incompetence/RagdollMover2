@@ -161,6 +161,38 @@ function disc:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	return sharedDeltaProps
 end
 
+function disc:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
+	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
+	local side = self._axis:Angle():Right()
+	local up = self._axis:Angle():Up()
+	local scale = props.scale
+	local startHit = props.finalPos + side * scale
+	local endHit = props.finalPos + (side + up * delta):GetNormalized() * scale
+
+	print(endHit:GetNormalized():Dot(startHit:GetNormalized()))
+
+	local mirrorNormal = vector_origin
+	if mirrorAxis == 0 then
+		mirrorNormal = eyeAng:Right()
+	elseif mirrorAxis == 1 then
+		mirrorNormal = eyeAng:Up()
+	end
+	if mirrorAxis >= 0 then
+		startHit = startHit - 2 * mirrorNormal:Dot(startHit) * mirrorNormal
+		endHit = endHit - 2 * mirrorNormal:Dot(endHit) * mirrorNormal
+	end
+
+	startHit:Normalize()
+	endHit:Normalize()
+
+	sharedDeltaProps[1]:Set(endHit)
+	sharedDeltaProps[1]:Sub(startHit)
+	sharedDeltaProps[2]:Set(startHit)
+	sharedDeltaProps[3]:Set(endHit)
+
+	return sharedDeltaProps
+end
+
 local scaleFreeTransform = Matrix()
 scaleFreeTransform:Identity()
 

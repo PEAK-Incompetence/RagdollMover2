@@ -72,6 +72,7 @@ local MGR = {
 
 	_moving = false,
 	_enabled = true,
+	_movingUI = false,
 
 	---@type GizmoBase[]
 	_directions = {},
@@ -274,6 +275,11 @@ function MGR:SetMoving(state)
 	self._moving = state
 end
 
+---@param state boolean
+function MGR:SetMovingUI(state)
+	self._movingUI = state
+end
+
 function MGR:GetMoving()
 	return self._moving
 end
@@ -303,6 +309,7 @@ local function sendSubPoseResponse()
 	-- TODO: Update the client entity if we don't have stretching enabled
 
 	MGR:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
+	hook.Run("RagdollPoser_Gizmo_Transformed")
 end
 RagdollPoser.Networking.DefineReceiver("SendSubPoseResponse", sendSubPoseResponse)
 
@@ -369,6 +376,21 @@ end
 
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()
+
+---@return GizmoOrientation
+function MGR:GetOrientation()
+	return self._gizmoProps.orientation
+end
+
+---@param newOrientation GizmoOrientation
+function MGR:SetOrientation(newOrientation)
+	self._gizmoProps.orientation = newOrientation
+end
+
+---@return GizmoMode
+function MGR:GetMode()
+	return self._mode
+end
 
 ---Do some setup (caching) before we start transforming
 function MGR:PreTransform()
@@ -676,13 +698,24 @@ function MGR:Transform()
 				-- 4. Mirroring
 				-- 5. Constraints
 
-				local deltaProps = gizmo:ProcessDelta(
-					self.start,
-					newPoint,
-					self._gizmoProps,
-					doMirror and self._mirrorAxis or -1,
-					eyeDelta
-				)
+				local deltaProps
+				if self._movingUI then
+					deltaProps = gizmo:ProcessDeltaUI(
+						self.start,
+						newPoint,
+						self._gizmoProps,
+						doMirror and self._mirrorAxis or -1,
+						RagdollPoser.UI:GetDelta()
+					)
+				else
+					deltaProps = gizmo:ProcessDelta(
+						self.start,
+						newPoint,
+						self._gizmoProps,
+						doMirror and self._mirrorAxis or -1,
+						eyeDelta
+					)
+				end
 
 				-- Move the selected bone
 				self._transformed[client][bone] = gizmo:Transform(
@@ -935,6 +968,127 @@ local function sendSubPose(selection)
 		end
 	end
 	net.SendToServer()
+end
+
+---@param transformType GizmoMode
+function MGR:ResetSelected(transformType, bone, entity)
+	local selection = RagdollPoser.Selection:GetSelection()
+	if not selection[1] then
+		return
+	end
+
+	local function handleReset(bone, client)
+		local defaultPose = RagdollPoser.Entity.GetDefaultPoseTreeFor(client)
+		local matrices = RagdollPoser.Entity.GetMatricesFromClient(client)
+		local entity = RagdollPoser.Entity.GetEntityFromClient(client)
+		local selectedMatrix = matrices and matrices[bone + 1]
+		local pose = defaultPose[bone + 1]
+		if not selectedMatrix or not pose then
+			return
+		end
+
+		if transformType == self.Mode.Scale then
+			-- TODO: Also reset back to local offsets
+			local function resetDescendantScales(parentBone)
+				local parentMatrix = matrices[parentBone + 1]
+				if not parentMatrix then
+					return
+				end
+
+				for _, childBone in ipairs(client:GetChildBones(parentBone)) do
+					local childMatrix = matrices[childBone + 1]
+					if childMatrix then
+						childMatrix:SetScale(Vector(1, 1, 1))
+						resetDescendantScales(childBone)
+					end
+				end
+			end
+
+			selectedMatrix:SetScale(Vector(1, 1, 1))
+			resetDescendantScales(bone)
+		elseif transformType == self.Mode.Translation or transformType == self.Mode.Rotation then
+			-- Save each descendant's transform relative to its immediate parent so the
+			-- selected bone can be reset without changing the pose below it.
+			local descendantLocals = {}
+			local function saveDescendants(parentBone)
+				local parentMatrix = matrices[parentBone + 1]
+				if not parentMatrix then
+					return
+				end
+
+				for _, childBone in ipairs(client:GetChildBones(parentBone)) do
+					local childMatrix = matrices[childBone + 1]
+					if childMatrix then
+						local inverseParent = parentMatrix:GetInverse() or parentMatrix:GetInverseTR()
+						descendantLocals[childBone] = inverseParent * childMatrix
+						saveDescendants(childBone)
+					end
+				end
+			end
+
+			saveDescendants(bone)
+
+			local parentBone = client:GetBoneParent(bone)
+			local parentMatrix
+			if parentBone >= 0 then
+				parentMatrix = matrices[parentBone + 1]
+			else
+				parentMatrix = Matrix()
+				parentMatrix:SetTranslation(entity:GetPos())
+				parentMatrix:SetAngles(entity:GetAngles())
+			end
+
+			if parentMatrix then
+				local resetPos, resetAng = LocalToWorld(
+					parentBone >= 0 and pose[3] or pose[1],
+					parentBone >= 0 and pose[4] or pose[2],
+					parentMatrix:GetTranslation(),
+					parentMatrix:GetAngles()
+				)
+
+				if transformType == self.Mode.Translation then
+					selectedMatrix:SetTranslation(resetPos)
+				else
+					local scale = selectedMatrix:GetScale()
+					selectedMatrix:SetAngles(resetAng)
+					selectedMatrix:SetScale(scale)
+				end
+
+				local function restoreDescendants(parentBoneToRestore)
+					local parent = matrices[parentBoneToRestore + 1]
+					if not parent then
+						return
+					end
+
+					for _, childBone in ipairs(client:GetChildBones(parentBoneToRestore)) do
+						local childMatrix = matrices[childBone + 1]
+						local localMatrix = descendantLocals[childBone]
+						if childMatrix and localMatrix then
+							childMatrix:Set(parent * localMatrix)
+							restoreDescendants(childBone)
+						end
+					end
+				end
+
+				restoreDescendants(bone)
+			end
+		end
+	end
+
+	if bone and entity then
+		handleReset(bone, entity)
+	else
+		for i = 1, #selection - 1, 2 do
+			local bone = selection[i]
+			local client = selection[i + 1]
+			---@cast bone integer
+			---@cast client ClientEntity
+			handleReset(bone, client)
+		end
+	end
+
+	local complete = table.Copy(selection)
+	sendSubPose(complete)
 end
 
 ---Send our results after the transformation

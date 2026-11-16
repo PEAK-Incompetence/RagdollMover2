@@ -1,0 +1,14 @@
+{
+    "ignore": [
+        "README.md",
+        ".git/*",
+        ".github/*",
+        ".gitignore"
+    ],
+    "tags": [
+        "scenic",
+        "build"
+    ],
+    "title": "Ragdoll Mover 2 Testing",
+    "type": "tool"
+}

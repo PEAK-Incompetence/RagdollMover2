@@ -440,14 +440,6 @@ function MGR:PreTransform()
 		end
 	end
 
-	-- TODO: SIMPLIFY THE BS BELOW. Read the below new method for what I'm thinking
-	-- New method:
-	-- PreTransform -> Transform -> Post Transform (resolve parent bone hierarchies) -> Constraints -> IK
-	---1. set baseline and get transform. also get local matrices and parent bones for good measure
-	---2. update transform using baseline or previous transform state.
-	---3. send transform to constraints and IK
-	---4. evaluate
-
 	--- If relative rotate is enabled. If it is, rotate with respect to the current offsetted gizmo. Otherwise, rotate with respect to each bones own pivot
 	--- Also need to update local matrices. Say we rotate a parent bone and we have also selected a child bone: we wnat to rotate that one after the parent bone has been rotated. so that the child bone is in the right spot
 
@@ -465,6 +457,7 @@ function MGR:PreTransform()
 	self._initials = {}
 	self._parents = {}
 	self._accumulations = {}
+	-- TODO: Track pivots for each bone, if I wanted to add the ability to rotate all bones by their individual axis
 	self._pivots = {}
 
 	local function addTransformedBones(client, bones)
@@ -1005,7 +998,7 @@ function MGR:ResetSelected(transformType, bone, entity)
 		end
 
 		if resetAll or transformType == self.Mode.Scale then
-			-- TODO: Also reset back to local offsets
+			-- TODO: Also reset translation and rotation back to local offsets
 			local function resetDescendantScales(parentBone)
 				local parentMatrix = matrices[parentBone + 1]
 				if not parentMatrix then

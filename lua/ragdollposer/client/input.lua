@@ -42,7 +42,6 @@ refreshKeyBinds()
 ---@param keycode BUTTON_CODE
 function MGR:UnregisterKey(action, keycode)
 	-- If we are reassigning an action to another key, we need to remove it from the keybinds
-	-- TODO: Allow multiple actions to run for a single key
 	local keybinds = MGR.BoundActions[action] or {}
 	keybinds[keycode] = nil
 	MGR.BoundActions[action] = keybinds
@@ -54,7 +53,6 @@ end
 ---@param keycode BUTTON_CODE
 function MGR:RegisterKey(action, keycode)
 	-- If we are reassigning an action to another key, we need to remove it from the keybinds
-	-- TODO: Allow multiple actions to run for a single key
 	local keybinds = MGR.BoundActions[action] or {}
 	keybinds[keycode] = true
 	MGR.BoundActions[action] = keybinds

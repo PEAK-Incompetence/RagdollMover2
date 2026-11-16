@@ -304,7 +304,6 @@ end
 ---@param selection Selection
 ---@param callback fun(bone: integer, entity: Entity, multiselect: boolean)
 local function handleMultipleBones(selection, callback)
-	-- TODO: make a nicer menu
 	gui.EnableScreenClicker(true)
 	local entities = {}
 	for i = 1, #selection - 1, 2 do

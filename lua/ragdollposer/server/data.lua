@@ -365,6 +365,7 @@ end
 RagdollPoser.Networking.DefineReceiver("UpdateHovering", updateHover)
 
 -- TODO: Account for edge cases where someone might advanced bonemerge a ragdoll onto another ragdoll or prop
+-- and loading them from a duplicator or GMod save after map reload
 local function sendPhysBoneCount(entity)
 	timer.Simple(0, function()
 		if IsValid(entity) and entity.GetModel and entity:GetModel() then

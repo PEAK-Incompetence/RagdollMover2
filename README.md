@@ -1,6 +1,6 @@
 # Ragdoll Mover 2
 
-[![CI](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml)
+[![CI](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/ci.yml) [![CD](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/workshop_deploy.yml/badge.svg)](https://github.com/PEAK-Incompetence/RagdollMover2/actions/workflows/workshop_deploy.yml)
 
 A lot of breaking changes here
 

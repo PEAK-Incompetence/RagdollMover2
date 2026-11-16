@@ -56,8 +56,8 @@ local function keyBinder(cpanel, leftProps, rightProps)
 
 	function binder.NumPad1:OnChange(newKey)
 		RagdollPoser.Input:RegisterKey(leftProps.action, newKey)
-		if keyChangedCallback then
-			keyChangedCallback(newKey)
+		if leftProps.keyChangedCallback then
+			leftProps.keyChangedCallback(newKey)
 		end
 	end
 
@@ -72,8 +72,8 @@ local function keyBinder(cpanel, leftProps, rightProps)
 
 		function binder.NumPad2:OnChange(newKey)
 			RagdollPoser.Input:RegisterKey(rightProps.action, newKey)
-			if keyChangedCallback then
-				keyChangedCallback(newKey)
+			if rightProps.keyChangedCallback then
+				rightProps.keyChangedCallback(newKey)
 			end
 		end
 	end
@@ -233,8 +233,8 @@ local function makeConstraintEntry(parent, entity, constraint)
 		cvar = "",
 		action = RagdollPoser.Actions.ToggleConstraint,
 		keyChangedCallback = function(newKey)
-			-- print("run this!")
 			constraint.State.key = newKey
+			-- print("run this!", constraint.State.key)
 			RagdollPoser.Constraints:UpdateConstraint(entity, constraint)
 		end,
 	})

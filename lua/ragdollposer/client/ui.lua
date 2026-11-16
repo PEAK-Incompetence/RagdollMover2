@@ -538,6 +538,33 @@ end
 --- @param bone integer?
 --- @param keepOpen boolean?
 --- @param parentMenu DMenu?
+function MGR:GizmoMenu(client, bone, keepOpen, parentMenu)
+	local menu
+	if parentMenu then
+		menu = parentMenu:AddSubMenu("#tool.ragdollposer.gizmo", function() end)
+	else
+		menu = DermaMenu(keepOpen)
+	end
+
+	menu:AddOption("#tool.ragdollposer.gizmo.offset.set", function()
+		local pos = RagdollPoser.Gizmo:GetPosition()
+		local ang = RagdollPoser.Gizmo:GetAngles()
+		local m = client:GetBoneMatrix(bone)
+		if m then
+			local offset = WorldToLocal(m:GetTranslation(), angle_zero, pos, ang)
+			RagdollPoser.Gizmo:SetOffset(offset[1], offset[2], offset[3])
+		end
+	end)
+	menu:AddOption("#tool.ragdollposer.gizmo.offset.reset", function()
+		RagdollPoser.Gizmo:SetOffset(0, 0, 0)
+	end)
+end
+
+--- Show options for resetting transforms
+--- @param client ClientEntity
+--- @param bone integer?
+--- @param keepOpen boolean?
+--- @param parentMenu DMenu?
 function MGR:ResetMenu(client, bone, keepOpen, parentMenu)
 	local menu
 	if parentMenu then
@@ -622,10 +649,18 @@ function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
 end
 
 function MGR:ContextMenu(entity, bone, keepOpen)
+	gui.EnableScreenClicker(true)
 	local menu = DermaMenu(keepOpen)
+	RagdollPoser.UI:GizmoMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ResetMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
 	menu:Open()
+
+	function menu:OnRemove()
+		RagdollPoser.Gizmo:SetEnabled(true)
+		RagdollPoser.Selection:SetEnabled(false)
+		gui.EnableScreenClicker(false)
+	end
 end
 
 ---These delta setter/getters are used by the precise bone manip
@@ -680,7 +715,7 @@ local directions = { "X", "Y", "Z" }
 
 ---@param cPanel ControlPanel
 ---@param sliderType GizmoMode
----@param valueChanged DeltaCallback
+---@param valueChanged DeltaCallback?
 local function transformSliders(cPanel, sliderType, valueChanged)
 	local sliders = {}
 	for i = 1, 3 do
@@ -744,7 +779,7 @@ end
 
 ---@param cPanel ControlPanel
 ---@param sliderType GizmoMode
----@param valueChanged DeltaCallback
+---@param valueChanged DeltaCallback?
 local function transformEntry(cPanel, sliderType, valueChanged)
 	local entry = vgui.Create("DTextEntry", cPanel)
 	entry:SetText("0 0 0")

@@ -124,7 +124,11 @@ function MGR:UpdateOffset()
 end
 
 function MGR:SetOffset(x, y, z)
-	self._gizmoProps.offset:SetUnpacked(x, y, z)
+	if isvector(x) then
+		self._gizmoProps.offset:Set(x)
+	else
+		self._gizmoProps.offset:SetUnpacked(x, y, z)
+	end
 	self:UpdateOffset()
 	hook.Run("RagdollPoser_Gizmo_OffsetChanged", self._gizmoProps.offset)
 end
@@ -268,6 +272,16 @@ end
 function MGR:SetAngles(ang)
 	self._gizmoProps.ang = ang
 	self:UpdateOrientation()
+end
+
+---@return Vector
+function MGR:GetPosition()
+	return self._gizmoProps.pos
+end
+
+---@return Angle
+function MGR:GetAngles()
+	return self._gizmoProps.ang
 end
 
 ---@param state boolean

@@ -125,6 +125,7 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 	local quatInfo = initials[1]
 	local quat = quatInfo and quatInfo[1]
 	local initialTransform = quatInfo and quatInfo[2]
+	local initialScale = quatInfo and quatInfo[3]
 
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
@@ -133,8 +134,9 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 		local w, x, y, z = qi:Unpack()
 		quat = quaternion.new(w, x, y, z)
 		initialTransform = transform * IDENTITY_MATRIX
+		initialScale = initialTransform:GetScale()
 		initialTransform:SetScale(VECTOR_ONE)
-		quatInfo = { quat, initialTransform }
+		quatInfo = { quat, initialTransform, initialScale }
 		initials[1] = quatInfo
 	end
 
@@ -159,7 +161,7 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
 	transform:Set(scaleFreeTransform)
-	transform:SetScale(initialTransform:GetScale())
+	transform:SetScale(quatInfo[3])
 	return transform
 end
 

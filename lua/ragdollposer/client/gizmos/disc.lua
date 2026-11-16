@@ -230,10 +230,12 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 
 	local initialInfo = initials[1]
 	local initialTransform = initialInfo and initialInfo[1]
+	local initialScale = initialInfo and initialInfo[2]
 	if not initialTransform then
 		initialTransform = transform * IDENTITY_MATRIX
+		initialScale = initialTransform:GetScale()
 		initialTransform:SetScale(VECTOR_ONE)
-		initialInfo = { IDENTITY_MATRIX }
+		initialInfo = { initialTransform, initialScale }
 		initials[1] = initialInfo
 	end
 

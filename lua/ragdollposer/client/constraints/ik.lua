@@ -6,7 +6,9 @@
 local ik = include("base.lua")
 
 local MAX_ITERATIONS = 64
-local POSITION_EPSILON = 0.25
+-- This is the amount of precision to give to IKs.
+-- Is this a reasonable value? Would it be bad if I set it lower?
+local POSITION_EPSILON = 0.001
 local DAMPING = 0.15
 local MAX_STEP = math.rad(8)
 local MAX_REACH_FRACTION = 0.98

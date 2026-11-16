@@ -8,6 +8,7 @@ lock.Properties = {
 	desc = "#tool.ragdollposer.constraint.lockbone.desc",
 	help = "#tool.ragdollposer.constraint.lockbone.help",
 	icon = "icon16/brick.png",
+	short = "#tool.ragdollposer.constraint.lockbone.short",
 }
 
 ---@class BoneLockConstraintState: ConstraintState
@@ -281,12 +282,16 @@ function lock:GetOutputRoot()
 	end
 end
 
-local function createConstraint(state, name)
-	local base = lock:Init(state, name)
+local function createConstraint(entity, state, name)
+	local base = lock:Init(entity, state, name)
 	---@cast base BoneLockConstraint
 	-- print("lock bruh")
 	base.State.target = base.Owner
 	return base
+end
+
+if RagdollPoser.Constraints and not RagdollPoser.Constraints:IsRefreshing() then
+	hook.Run("RagdollPoser_Constraints_Refresh", lock.Properties.type)
 end
 
 return createConstraint

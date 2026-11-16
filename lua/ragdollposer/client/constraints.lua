@@ -1,7 +1,10 @@
 ---[CLIENT]
 ---
 ---@class RagdollPoser.Constraints
-local MGR = RagdollPoser.Constraints or {}
+local MGR = RagdollPoser.Constraints or {
+	---@type boolean
+	_refreshing = false,
+}
 
 ---@alias Space integer
 MGR.Space = {
@@ -159,19 +162,45 @@ function MGR:GetConstraintIndex(entity, id)
 	return stack and stack.set[id]
 end
 
-function MGR:Init()
+function MGR:Init(constraintType)
+	self.Constraints = {}
+	if constraintType then
+		self:SetRefreshing(true)
+		local success, err = pcall(function()
+			---@type fun(): Constraint
+			local constructor = include("ragdollposer/client/constraints/" .. constraintType .. ".lua")
+			---@type Constraint
+			local constraint = constructor()
+			table.insert(self.Constraints, constraint)
+			self.ConstraintConstructors[constraint.Properties.type] = constructor
+		end)
+		self:SetRefreshing(false)
+
+		if not success then
+			ErrorNoHaltWithStack("There was an error during constraint construction:", err, "\n")
+		end
+		return
+	end
+
 	local files = file.Find("lua/ragdollposer/client/constraints/*.lua", "GAME", "namedesc")
 	for _, f in ipairs(files or {}) do
 		if f == "base.lua" then
 			continue
 		end
 
-		---@type fun(): Constraint
-		local constructor = include("constraints/" .. f)
-		---@type Constraint
-		local constraint = constructor()
-		table.insert(self.Constraints, constraint)
-		self.ConstraintConstructors[constraint.Properties.type] = constructor
+		self:SetRefreshing(true)
+		local success, err = pcall(function()
+			---@type fun(): Constraint
+			local constructor = include("ragdollposer/client/constraints/" .. f)
+			---@type Constraint
+			local constraint = constructor()
+			table.insert(self.Constraints, constraint)
+			self.ConstraintConstructors[constraint.Properties.type] = constructor
+		end)
+		self:SetRefreshing(false)
+		if not success then
+			ErrorNoHaltWithStack("There was an error during constraint construction:", err, "\n")
+		end
 	end
 end
 
@@ -525,6 +554,18 @@ hook.Add("RagdollPoser_Input_KeyPress", "RagdollPoser_Constraints_Toggle", onKey
 RagdollPoser.Networking.UpdateConstraint = RagdollPoser.Networking.DefineSender("UpdateConstraint")
 RagdollPoser.Networking.UpdateConstraints = RagdollPoser.Networking.DefineSender("UpdateConstraints")
 
+function MGR:SetRefreshing(state)
+	self._refreshing = state
+end
+
+function MGR:IsRefreshing(state)
+	return self._refreshing
+end
+
 RagdollPoser.Constraints = MGR
 
 MGR:Init()
+
+hook.Add("RagdollPoser_Constraints_Refresh", "Constraints", function()
+	MGR:Init()
+end)

@@ -70,6 +70,7 @@ ik.Properties = {
 	name = "#tool.ragdollposer.constraint.ik.name",
 	desc = "#tool.ragdollposer.constraint.ik.desc",
 	help = "#tool.ragdollposer.constraint.ik.help",
+	short = "#tool.ragdollposer.constraint.ik.short",
 }
 
 ---@class IKConstraintState: ConstraintState
@@ -195,11 +196,8 @@ local function solveSymmetric3(a, b, c, rhs)
 		return nil
 	end
 
-	local response = Vector(
-		rhs:Dot(crossBC) / determinant,
-		rhs:Dot(c:Cross(a)) / determinant,
-		rhs:Dot(a:Cross(b)) / determinant
-	)
+	local response =
+		Vector(rhs:Dot(crossBC) / determinant, rhs:Dot(c:Cross(a)) / determinant, rhs:Dot(a:Cross(b)) / determinant)
 	if not isFiniteVector(response) then
 		return nil, "non-finite solver response"
 	end
@@ -412,14 +410,8 @@ local function solvePosition(entity, transforms, chain, goal, iterations, influe
 				radians = MAX_STEP
 			end
 			if radians > 1e-5 then
-				local applied, rotationError = applyJointRotation(
-					transforms,
-					subtrees[joint],
-					joint,
-					update.axis,
-					math.deg(radians),
-					saveMatrix
-				)
+				local applied, rotationError =
+					applyJointRotation(transforms, subtrees[joint], joint, update.axis, math.deg(radians), saveMatrix)
 				if not applied then
 					return false, rotationError, joint, iteration
 				end
@@ -580,6 +572,8 @@ function ik:EvaluatePose(entity, context)
 		return
 	end
 
+	-- FIXME: Descendant bones of a bone that has IK are locked in position.
+	-- These should be movable
 	local client = RagdollPoser.Entity.GetClientFromEntity(entity)
 	if not IsValid(client) then
 		return
@@ -881,6 +875,10 @@ local function createConstraint(entity, state, name)
 		base.State.weightRotationConfigured = true
 	end
 	return base
+end
+
+if RagdollPoser.Constraints and not RagdollPoser.Constraints:IsRefreshing() then
+	hook.Run("RagdollPoser_Constraints_Refresh", ik.Properties.type)
 end
 
 return createConstraint

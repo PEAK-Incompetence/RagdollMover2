@@ -8,6 +8,7 @@ lock.Properties = {
 	type = "bonemerge",
 	category = "#tool.ragdollposer.constraint.category.transform",
 	name = "#tool.ragdollposer.constraint.bonemerge.name",
+	short = "#tool.ragdollposer.constraint.bonemerge.short",
 	desc = "#tool.ragdollposer.constraint.bonemerge.desc",
 	help = "#tool.ragdollposer.constraint.bonemerge.help",
 	icon = "icon16/brick.png",
@@ -269,12 +270,16 @@ function lock:GetOutputRoot()
 	end
 end
 
-local function createConstraint(state, name)
-	local base = lock:Init(state, name)
+local function createConstraint(entity, state, name)
+	local base = lock:Init(entity, state, name)
 	---@cast base BonemergeConstraint
 	-- print("lock bruh")
 	base.State.target = base.Owner
 	return base
+end
+
+if RagdollPoser.Constraints and not RagdollPoser.Constraints:IsRefreshing() then
+	hook.Run("RagdollPoser_Constraints_Refresh", lock.Properties.type)
 end
 
 return createConstraint

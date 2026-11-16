@@ -243,6 +243,8 @@ local function makeConstraintEntry(parent, entity, constraint)
 		entry.keybinder.NumPad1:SetValue(constraint.State.key)
 	end
 
+	entry:SetExpanded(false)
+
 	return entry
 end
 
@@ -605,9 +607,10 @@ function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
 						enabled = true,
 						influence = 1,
 					}
+					name = Format("%s: %s", language.GetPhrase(constraint.Properties.short), entity:GetBoneName(bone))
 				end
 				---@diagnostic disable-next-line: param-type-mismatch
-				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state)
+				RagdollPoser.Constraints:Push(entity, constraint.Properties.type, state, name)
 			end)
 			option:SetTooltip(language.GetPhrase(constraint.Properties.desc))
 		end

@@ -344,7 +344,7 @@ function MGR:TestIntersect()
 	-- Gizmos don't have a sense of depth, so we need to measure the depth after collecting depth interests
 	local eyepos, eyevec, eyeang = RagdollPoser.View:GetView()
 	local directions = self._directions
-	local intersections = self._intersections
+	local intersections = {}
 	for i, direction in ipairs(directions) do
 		intersections[i] = direction:Intersect(eyepos, eyevec, self._gizmoProps)
 	end
@@ -1146,6 +1146,7 @@ local function onLeftClickUp(x, y, tr)
 		if not success then
 			ErrorNoHaltWithStack("There was an error when attempting to complete the transform:\n", err, "\n")
 		end
+		-- Set moving after PostTransform, so that we update the server entity with ragdollposer_static
 		MGR:SetMoving(false)
 	end
 end
@@ -1258,9 +1259,6 @@ function MGR:Draw()
 	local props = self._gizmoProps
 
 	if props.pos then
-		-- render.SetColorMaterialIgnoreZ()
-		-- render.CullMode(MATERIAL_CULLMODE_NONE)
-		-- render.DrawBox(props.pos, props.ang, tempMin, tempMax)
 		if self:IsMoving() then
 			local direction = self._directions[self._gizmoIndex]
 			direction:Draw(props, true)

@@ -1070,7 +1070,9 @@ function MGR:ResetSelected(transformType, bone, entity)
 				end
 				if resetAll or transformType == self.Mode.Rotation then
 					local scale = selectedMatrix:GetScale()
-					selectedMatrix:SetAngles(resetAng)
+					if parentBone >= 0 then
+						selectedMatrix:SetAngles(resetAng)
+					end
 					selectedMatrix:SetScale(scale)
 				end
 

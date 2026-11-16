@@ -95,6 +95,9 @@ local min, max = Vector(-1, -1, -1) * 5, Vector(1, 1, 1) * 5
 local scaleFreeTransform = Matrix()
 scaleFreeTransform:Identity()
 
+local IDENTITY_MATRIX = Matrix()
+IDENTITY_MATRIX:Identity()
+
 ---@param directions Quaternion[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
@@ -121,14 +124,17 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	local quatInfo = initials[1]
 	local quat = quatInfo and quatInfo[1]
+	local initialTransform = quatInfo and quatInfo[2]
 
+	scaleFreeTransform:Set(transform)
+	scaleFreeTransform:SetScale(VECTOR_ONE)
 	if not quat then
-		scaleFreeTransform:Set(transform)
-		scaleFreeTransform:SetScale(VECTOR_ONE)
 		local qi = quaternion.fromAngle(scaleFreeTransform:GetAngles())
 		local w, x, y, z = qi:Unpack()
 		quat = quaternion.new(w, x, y, z)
-		quatInfo = { quat, transform:GetScale() }
+		initialTransform = transform * IDENTITY_MATRIX
+		initialTransform:SetScale(VECTOR_ONE)
+		quatInfo = { quat, initialTransform }
 		initials[1] = quatInfo
 	end
 
@@ -138,8 +144,12 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	rotationQuaternion:Mul(quat)
 	if props.relativerotate then
+		-- For each initial transform, get the offset from the gizmo position, and then
+		-- apply rotation.
 		local ang = rotationQuaternion:Angle()
-		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
+		local initialPos = quatInfo[3]
+		local offsetPos =
+			WorldToLocal(initialTransform:GetTranslation(), angle_zero, props.finalPos, initialTransform:GetAngles())
 		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
 		scaleFreeTransform:SetTranslation(pos)
 		scaleFreeTransform:SetAngles(ang)
@@ -149,7 +159,7 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 
 	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
 	transform:Set(scaleFreeTransform)
-	transform:SetScale(quatInfo[2])
+	transform:SetScale(initialTransform:GetScale())
 	return transform
 end
 

@@ -101,6 +101,9 @@ function disc:Draw(props, selected)
 	end
 
 	drawQuad(mat, color, props.finalPos, self._axis, discScale * props.scale, props.width)
+	if RagdollPoser.Gizmo:IsMoving() then
+		render.DrawLine(props.finalPos - self._axis * 1000, props.finalPos + self._axis * 1000, color_white, true)
+	end
 end
 
 function disc:UpdateOrientation(orientation, props)
@@ -169,8 +172,6 @@ function disc:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
 	local startHit = props.finalPos + side * scale
 	local endHit = props.finalPos + (side + up * delta):GetNormalized() * scale
 
-	print(endHit:GetNormalized():Dot(startHit:GetNormalized()))
-
 	local mirrorNormal = vector_origin
 	if mirrorAxis == 0 then
 		mirrorNormal = eyeAng:Right()
@@ -195,6 +196,9 @@ end
 
 local scaleFreeTransform = Matrix()
 scaleFreeTransform:Identity()
+
+local IDENTITY_MATRIX = Matrix()
+IDENTITY_MATRIX:Identity()
 
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
@@ -224,19 +228,26 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 	)
 	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
 
-	local initialScale = initials[1]
-	if not initialScale then
-		initialScale = transform:GetScale()
-		initials[1] = initialScale
+	local initialInfo = initials[1]
+	local initialTransform = initialInfo and initialInfo[1]
+	if not initialTransform then
+		initialTransform = transform * IDENTITY_MATRIX
+		initialTransform:SetScale(VECTOR_ONE)
+		initialInfo = { IDENTITY_MATRIX }
+		initials[1] = initialInfo
 	end
 
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
 
 	if props.relativerotate then
+		-- For each initial transform, get the offset from the gizmo position, and then
+		-- apply rotation.
 		local ang = rotationQuaternion:Angle()
-		local offsetPos = WorldToLocal(props.pos, angle_zero, props.finalPos, props.ang)
-		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
+		-- This is meant for other selected bones
+		local gizmoOffsetPos =
+			WorldToLocal(initialTransform:GetTranslation(), angle_zero, props.finalPos, initialTransform:GetAngles())
+		local pos = LocalToWorld(gizmoOffsetPos, ang, props.finalPos, ang)
 		scaleFreeTransform:SetTranslation(pos)
 		scaleFreeTransform:SetAngles(ang)
 	else

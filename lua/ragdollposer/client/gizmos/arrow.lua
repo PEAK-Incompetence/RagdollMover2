@@ -73,6 +73,9 @@ function arrow:Draw(props, selected)
 	render.SetMaterial(mat)
 
 	render.DrawBeam(props.finalPos, endPos, props.scale * 0.5, 0, 1)
+	if RagdollPoser.Gizmo:IsMoving() then
+		render.DrawLine(props.finalPos - self._axis * 1000, props.finalPos + self._axis * 1000, color_white, true)
+	end
 end
 
 ---@param props GizmoProps

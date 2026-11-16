@@ -59,7 +59,8 @@ local MGR = {
 		ang = Angle(),
 		scale = 30,
 		width = 0.25,
-		offset = Vector(),
+		offset = Vector(), -- user specified offset
+		boneSelectedPos = Vector(), -- averaged selected bone position
 		partial = false,
 		sensitivity = 1,
 		---@type GizmoOrientation
@@ -155,9 +156,9 @@ local function setPositionFromSelection(selection)
 		end
 	end
 	averagePos:Div(count)
-	MGR:SetPosition(selectedPos)
-	local offset = WorldToLocal(averagePos, angle_zero, selectedPos, MGR:GetAngles())
-	MGR:SetOffset(offset)
+
+	MGR._gizmoProps.pos:Set(averagePos)
+	MGR._gizmoProps.boneSelectedPos:Set(selectedPos)
 	MGR:UpdateOffset()
 end
 

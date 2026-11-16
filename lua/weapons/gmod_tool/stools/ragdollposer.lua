@@ -16,6 +16,7 @@ TOOL.ClientConVar["relativerotate"] = 0
 TOOL.ClientConVar["xray"] = 0
 TOOL.ClientConVar["drawsphere"] = 1
 TOOL.ClientConVar["funsubtitles"] = 1
+TOOL.ClientConVar["selection"] = 1
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
@@ -34,6 +35,11 @@ function TOOL:LeftClick(tr)
 	end
 
 	if CLIENT then
+		return false
+	end
+
+	if not self:GetClientBool("selection") then
+		pl:SendLua('notification.AddLegacy(language.GetPhrase("#tool.ragdollposer.selection.failed"), NOTIFY_ERROR, 3)')
 		return false
 	end
 

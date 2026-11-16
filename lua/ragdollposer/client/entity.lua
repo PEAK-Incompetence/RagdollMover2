@@ -54,10 +54,6 @@ local static = CreateClientConVar(
 	0,
 	1
 )
-cvars.RemoveChangeCallback("ragdollposer_static", "RagdollPoser_StaticCVarChanged")
-cvars.AddChangeCallback("ragdollposer_static", function(convar, oldValue, newValue)
-	RagdollPoser.Entity.RefreshEntities(Entities)
-end, "RagdollPoser_StaticCVarChanged")
 
 --- @param client ClientEntity
 --- @param source Entity
@@ -101,13 +97,15 @@ local function clientBoneManipulator(self, numbones, staticProp)
 	local entity = ClientToEntity[self]
 	local matrixSet = EntityMatrices[entity]
 	local renderBounds = EntityRenderBounds[entity]
+	local static = static:GetBool()
+	local isMoving = RagdollPoser.Gizmo:IsMoving()
 	for b = 0, numbones - 1 do
 		local m = matrixSet[b + 1]
 		if not ismatrix(m) then
 			m = Matrix()
 			matrixSet[b + 1] = m
 		end
-		if shouldUpdate or not static:GetBool() then
+		if shouldUpdate or (not static and not isMoving) then
 			entity:CopyBoneMatrix(b, m)
 			renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
 		end
@@ -122,6 +120,9 @@ local function clientBoneManipulator(self, numbones, staticProp)
 				self:SetBoneMatrix(b, m)
 			end
 		end
+	end
+	if not static and not isMoving then
+		RagdollPoser.Gizmo:SetTransformFromSelection(RagdollPoser.Selection:GetSelection())
 	end
 	ClientShouldUpdate[self] = false
 

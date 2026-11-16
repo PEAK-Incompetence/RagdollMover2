@@ -1138,8 +1138,11 @@ end
 local function onLeftClickUp(x, y, tr)
 	if MGR:IsMoving() then
 		-- After doing stuff, apply final transforms, send to server
+		local success, err = pcall(MGR.PostTransform, MGR)
+		if not success then
+			ErrorNoHaltWithStack("There was an error when attempting to complete the transform:\n", err, "\n")
+		end
 		MGR:SetMoving(false)
-		MGR:PostTransform()
 	end
 end
 hook.Add("RagdollPoser_Input_LeftClickDown", "Gizmo", onLeftClickDown)

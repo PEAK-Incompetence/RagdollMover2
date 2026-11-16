@@ -53,6 +53,11 @@ local niceBonemergeNames = {
 	ent_composite = "Composite Bonemerge",
 }
 
+local badEntities = {
+	manipulate_bone = true,
+	manipulate_flex = true,
+}
+
 ---@param parentEntity Entity
 ---@return boolean
 function MGR:VerifySpawned(parentEntity)
@@ -74,6 +79,9 @@ function MGR:AddParentConstraints(entity)
 		local constraintBatch = {}
 		for _, child in ipairs(entity:GetChildren()) do
 			local class = child:GetClass()
+			if badEntities[class] then
+				continue
+			end
 
 			local name =
 				Format("%s: %s", RagdollPoser.Helpers.GetModelNameNice(child), niceBonemergeNames[class] or class)

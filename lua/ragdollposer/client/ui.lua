@@ -1177,8 +1177,13 @@ function MGR:BuildCPanel(cpanel)
 	-- print("constraint list items!")
 	-- print(constraintList.Items)
 
+	local enable = IsValid(entitySelector.selected)
+	addConstraint:SetEnabled(enable)
+	clearConstraints:SetEnabled(enable)
 	function addConstraint:DoClick()
-		MGR:ConstraintMenu(entitySelector.selected)
+		if IsValid(entitySelector.selected) then
+			MGR:ConstraintMenu(entitySelector.selected)
+		end
 	end
 
 	local function clearConstraintsUI()
@@ -1188,14 +1193,17 @@ function MGR:BuildCPanel(cpanel)
 	end
 
 	function clearConstraints:DoClick()
-		local menu = DermaMenu()
-		menu:AddOption(language.GetPhrase("#tool.ragdollposer.constraint.clear.confirm"), function()
-			local selected = RagdollPoser.Entity:GetEntityFromClient(entitySelector.selected)
-			clearConstraintsUI()
+		local selected = RagdollPoser.Entity:GetEntityFromClient(entitySelector.selected)
+		if IsValid(selected) then
+			local menu = DermaMenu()
+			menu:AddOption(language.GetPhrase("#tool.ragdollposer.constraint.clear.confirm"), function()
+				selected = RagdollPoser.Entity:GetEntityFromClient(entitySelector.selected)
+				clearConstraintsUI()
 
-			RagdollPoser.Constraints:Clear(selected)
-		end)
-		menu:Open()
+				RagdollPoser.Constraints:Clear(selected)
+			end)
+			menu:Open()
+		end
 	end
 
 	--- @param client ClientEntity
@@ -1246,6 +1254,10 @@ function MGR:BuildCPanel(cpanel)
 		local selectedEntity = selection[#selection]
 		entitySelector.selected = selectedEntity
 		updateConstraintUI(selectedEntity)
+
+		local enable = IsValid(selectedEntity)
+		addConstraint:SetEnabled(enable)
+		clearConstraints:SetEnabled(enable)
 
 		-- If we've only selected one entity
 		if #selection == 2 then

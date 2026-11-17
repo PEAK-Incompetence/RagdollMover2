@@ -417,14 +417,18 @@ local function onRightClickUp(x, y, tr)
 			-- PrintTable(selectionBuffer)
 			MGR:SetBusy(true)
 			handleMultipleBones(selectionBuffer, function(bone, entity, multiselect)
-				RagdollPoser.UI:ContextMenu(entity, bone, true)
+				timer.Simple(0, function()
+					RagdollPoser.UI:ContextMenu(entity, bone, true)
+				end)
 			end)
 		else
 			local bone = selectionBuffer[1]
 			local entity = selectionBuffer[2]
 			---@cast bone SelectionOddIndex
 			---@cast entity SelectionEvenIndex
-			RagdollPoser.UI:ContextMenu(entity, bone, true)
+			timer.Simple(0, function()
+				RagdollPoser.UI:ContextMenu(entity, bone, true)
+			end)
 		end
 		MGR:SetWasOnBone(false)
 	end

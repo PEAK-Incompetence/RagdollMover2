@@ -44,7 +44,7 @@ local function constraintListHook(listLayout)
 				v:SetParent(self)
 			end
 
-			self:OnModified()
+			--self:OnModified()
 		end
 	end
 
@@ -141,7 +141,7 @@ local function constraintListHook(listLayout)
 			end
 		end
 
-		self:OnModified()
+		-- self:OnModified()
 	end
 
 	listLayout:MakeDroppable(MGR.DnDTag, false)
@@ -818,6 +818,10 @@ end
 function MGR:ContextMenu(entity, bone, keepOpen)
 	gui.EnableScreenClicker(true)
 	local menu = DermaMenu(keepOpen)
+	---@diagnostic disable-next-line: redundant-parameter
+	local option = menu:AddOption(language.FormatPhrase("#tool.ragdollposer.context.title", entity:GetBoneName(bone)))
+	option:SetEnabled(false)
+	menu:AddSpacer()
 	RagdollPoser.UI:GizmoMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ResetMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
@@ -979,7 +983,9 @@ end
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
 	gizmoCategory:CheckBox("#tool.ragdollposer.local", "ragdollposer_local")
-	gizmoCategory:CheckBox("#tool.ragdollposer.partial", "ragdollposer_partial")
+	gizmoCategory
+		:CheckBox("#tool.ragdollposer.partial", "ragdollposer_partial")
+		:SetTooltip("#tool.ragdollposer.partial.tooltip")
 	local drawSphere = gizmoCategory:CheckBox("#tool.ragdollposer.gizmo.drawsphere", "ragdollposer_drawsphere")
 	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)

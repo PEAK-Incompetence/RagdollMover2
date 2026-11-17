@@ -74,6 +74,7 @@ local MGR = {
 	_moving = false,
 	_enabled = true,
 	_movingUI = false,
+	_operating = false,
 
 	---@type GizmoBase[]
 	_directions = {},
@@ -292,6 +293,16 @@ end
 ---@param state boolean
 function MGR:SetMoving(state)
 	self._moving = state
+end
+
+---@param state boolean
+function MGR:SetOperating(state)
+	self._operating = state
+end
+
+---@return boolean
+function MGR:IsOperating()
+	return self._operating
 end
 
 ---@param state boolean
@@ -983,9 +994,11 @@ local function sendSubPose(selection)
 end
 
 ---@param transformType GizmoMode
+---@param bone integer?
+---@param entity ClientEntity?
 function MGR:ResetSelected(transformType, bone, entity)
 	local selection = RagdollPoser.Selection:GetSelection()
-	if not selection[1] then
+	if not selection[1] and not bone and not entity then
 		return
 	end
 	local resetAll = transformType == 4
@@ -1093,8 +1106,11 @@ function MGR:ResetSelected(transformType, bone, entity)
 		end
 	end
 
+	self:SetOperating(true)
+	local targetSelection = {}
 	if bone and entity then
 		handleReset(bone, entity)
+		targetSelection = { bone, entity }
 	else
 		for i = 1, #selection - 1, 2 do
 			local bone = selection[i]
@@ -1103,10 +1119,38 @@ function MGR:ResetSelected(transformType, bone, entity)
 			---@cast client ClientEntity
 			handleReset(bone, client)
 		end
+		targetSelection = selection
 	end
 
-	local complete = table.Copy(selection)
+	local complete = table.Copy(targetSelection)
 	sendSubPose(complete)
+	self:SetOperating(false)
+end
+
+-- Not exactly 0, but less risky than complete 0, since
+-- we want our matrix to be invertible (have nonzero determinant)
+local zeroScale = Vector(0.0001, 0.0001, 0.0001)
+
+--- @param bone integer
+--- @param client ClientEntity
+function MGR:ScaleZero(bone, client)
+	local function handleScale(bone, client)
+		local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
+		local matrix = matrices[bone + 1]
+		if matrix then
+			matrix:SetScale(zeroScale)
+		end
+	end
+
+	self:SetOperating(true)
+	local targetSelection = {}
+	-- TODO: add recursive check
+	handleScale(bone, client)
+	targetSelection = { bone, client }
+
+	local complete = table.Copy(targetSelection)
+	sendSubPose(complete)
+	self:SetOperating(false)
 end
 
 ---Send our results after the transformation

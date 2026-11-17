@@ -98,7 +98,7 @@ local function clientBoneManipulator(self, numbones, staticProp)
 	local matrixSet = MGR.EntityMatrices[entity]
 	local renderBounds = MGR.EntityRenderBounds[entity]
 	local static = static:GetBool()
-	local isMoving = RagdollPoser.Gizmo:IsMoving()
+	local isMoving = RagdollPoser.Gizmo:IsMoving() or RagdollPoser.Gizmo:IsOperating()
 	for b = 0, numbones - 1 do
 		local m = matrixSet[b + 1]
 		if not ismatrix(m) then

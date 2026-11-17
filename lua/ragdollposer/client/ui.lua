@@ -755,6 +755,31 @@ function MGR:ResetMenu(client, bone, keepOpen, parentMenu)
 	end
 end
 
+--- Show options for manipulating bones
+--- @param client ClientEntity
+--- @param bone integer?
+--- @param keepOpen boolean?
+--- @param parentMenu DMenu?
+function MGR:BoneMenu(client, bone, keepOpen, parentMenu)
+	local menu
+	if parentMenu then
+		menu = parentMenu:AddSubMenu("#tool.ragdollposer.bone", function() end)
+	else
+		menu = DermaMenu(keepOpen)
+	end
+
+	menu:AddOption("#tool.ragdollposer.bone.scale.zero", function()
+		RagdollPoser.Gizmo:ScaleZero(bone, client)
+	end)
+	menu:AddOption("#tool.ragdollposer.bone.scale.zero.children", function()
+		-- TODO: Implement recursive children operation in Gizmo
+	end)
+
+	if not parentMenu then
+		menu:Open()
+	end
+end
+
 --- @param client ClientEntity
 --- @param bone integer?
 --- @param keepOpen boolean?
@@ -824,6 +849,7 @@ function MGR:ContextMenu(entity, bone, keepOpen)
 	menu:AddSpacer()
 	RagdollPoser.UI:GizmoMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ResetMenu(entity, bone, keepOpen, menu)
+	RagdollPoser.UI:BoneMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
 	menu:Open()
 	self:OffsetMenu(menu)

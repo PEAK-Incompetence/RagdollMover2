@@ -70,6 +70,7 @@ local traceOutput = {
 }
 local lastCheck = RealTime()
 
+local mouseKeyDown = {}
 ---@param cmd CUserCmd
 local function mouseInput(cmd)
 	local pl = LocalPlayer()
@@ -104,6 +105,19 @@ local function mouseInput(cmd)
 		if input.WasMouseReleased(MOUSE_RIGHT) and allowInput then
 			hook.Run("RagdollPoser_Input_RightClickUp", x, y, tr)
 			lastCheck = now
+		end
+
+		-- If we bound a command to our mouse keys, also run them!
+		for _, key in ipairs(MGR.ActiveKeybinds) do
+			if input.IsMouseDown(key) and not mouseKeyDown[key] then
+				mouseKeyDown[key] = true
+				local actions = MGR.KeyBinds[key]
+				if actions then
+					hook.Run("RagdollPoser_Input_KeyPress", MGR.KeyBinds[key], key)
+				end
+			elseif not input.IsMouseDown(key) and mouseKeyDown[key] then
+				mouseKeyDown[key] = false
+			end
 		end
 	end
 end

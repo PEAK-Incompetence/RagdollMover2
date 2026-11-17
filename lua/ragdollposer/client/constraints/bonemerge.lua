@@ -11,7 +11,7 @@ lock.Properties = {
 	short = "#tool.ragdollposer.constraint.bonemerge.short",
 	desc = "#tool.ragdollposer.constraint.bonemerge.desc",
 	help = "#tool.ragdollposer.constraint.bonemerge.help",
-	icon = "icon16/brick.png",
+	icon = "icon16/link.png",
 }
 
 ---@class BonemergeConstraintState: ConstraintState
@@ -24,6 +24,27 @@ lock.State = table.Merge(table.Copy(lock.State), {
 
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()
+
+local RED = Color(255, 0, 0)
+local DISABLED_COLOR = Color(255, 255, 255, 64)
+local DISABLED_RED = ColorAlpha(RED, 64)
+local spriteMat = Material(lock.Properties.icon)
+function lock:Draw()
+	local matrix = self:GetTransformFromBone(self.State.target, self.State.bone)
+	if not matrix then
+		return
+	end
+
+	render.SetMaterial(spriteMat)
+	render.DrawSprite(matrix:GetTranslation(), 2, 2, self.State.enabled and color_white or DISABLED_COLOR)
+
+	local matrix = self:GetTransformFromBone(self.State.otherTarget, 0)
+	if not matrix then
+		return
+	end
+	render.SetMaterial(spriteMat)
+	render.DrawSprite(matrix:GetTranslation(), 2, 2, self.State.enabled and RED or DISABLED_RED)
+end
 
 local function getMergeRootBones(parentTarget, childTarget, fallbackParentBone)
 	if childTarget:GetBoneCount() <= 0 then

@@ -13,6 +13,18 @@ lock.Properties = {
 	short = "#tool.ragdollposer.constraint.lockang.short",
 }
 
+local DISABLED_COLOR = Color(255, 255, 255, 64)
+local spriteMat = Material(lock.Properties.icon)
+function lock:Draw()
+	local matrix = self:GetTransformFromBone(self.State.target, self.State.bone)
+	if not matrix then
+		return
+	end
+
+	render.SetMaterial(spriteMat)
+	render.DrawSprite(matrix:GetTranslation(), 2, 2, self.State.enabled and color_white or DISABLED_COLOR)
+end
+
 function lock:ConstructUI(entry, props, state)
 	local ui, header, footer = self:ConstructUITemplate(entry, props or self.Properties, state or self.State)
 	header()

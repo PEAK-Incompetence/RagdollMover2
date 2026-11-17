@@ -408,6 +408,9 @@ end
 function MGR:SetConstraints(constraints)
 	-- print("setting constraints")
 	-- PrintTable(constraints)
+	---Clear the existing constraint stack for the upcoming one
+	---@diagnostic disable-next-line
+	EntityConstraintStacks = {}
 	for _, serialized in pairs(constraints) do
 		for _, s in ipairs(serialized) do
 			if isnumber(s._id) then

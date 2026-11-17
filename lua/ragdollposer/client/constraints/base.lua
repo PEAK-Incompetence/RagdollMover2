@@ -258,6 +258,17 @@ function Base:Evaluate(entity, controlledBone, transform, locals, parents, outpu
 ---@return boolean?
 function Base:EvaluatePose(entity, context) end
 
+---@param entity Entity
+---@param bone integer
+---@return VMatrix
+function Base:GetTransformFromBone(entity, bone)
+	if not IsValid(entity) or bone < 0 then
+		return
+	end
+	local matrices = RagdollPoser.Entity:GetMatrices(entity)
+	return matrices[bone + 1]
+end
+
 function Base:Draw() end
 
 ---@param entity Entity

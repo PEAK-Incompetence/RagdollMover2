@@ -186,6 +186,18 @@ local function updateConstraints(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateConstraints", updateConstraints)
 
+local function clearConstraints(len, ply)
+	local data = MGR.Players[ply]
+	local playerConstraints = data.Constraints or {}
+
+	local entity = net.ReadEntity()
+	if IsValid(entity) then
+		playerConstraints[entity] = nil
+	end
+	data.Constraints = playerConstraints
+end
+RagdollPoser.Networking.DefineReceiver("ClearConstraints", clearConstraints)
+
 local function updateConstraint(len, ply)
 	local data = MGR.Players[ply]
 	local playerConstraints = data.Constraints or {}

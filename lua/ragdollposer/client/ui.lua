@@ -1159,6 +1159,7 @@ function MGR:BuildCPanel(cpanel)
 
 	local constraintCategory = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.constraint"), "ControlPanel")
 	local addConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.add"))
+	local clearConstraints = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.clear"))
 
 	local constraintListForm =
 		makeCategory(constraintCategory, language.GetPhrase("tool.ragdollposer.constraint.list"), "DForm")
@@ -1180,13 +1181,28 @@ function MGR:BuildCPanel(cpanel)
 		MGR:ConstraintMenu(entitySelector.selected)
 	end
 
-	--- @param client ClientEntity
-	local function updateConstraintUI(client)
-		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
+	local function clearConstraintsUI()
 		constraintList:Clear()
 		constraintList.List = vgui.Create("DListLayout", constraintList)
 		constraintListHook(constraintList.List)
+	end
+
+	function clearConstraints:DoClick()
+		local menu = DermaMenu()
+		menu:AddOption(language.GetPhrase("#tool.ragdollposer.constraint.clear.confirm"), function()
+			local selected = RagdollPoser.Entity:GetEntityFromClient(entitySelector.selected)
+			clearConstraintsUI()
+
+			RagdollPoser.Constraints:Clear(selected)
+		end)
+		menu:Open()
+	end
+
+	--- @param client ClientEntity
+	local function updateConstraintUI(client)
+		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		-- constraintList.List:Dock(FILL)
+		clearConstraintsUI()
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
 			for _, constraint in ipairs(constraints) do

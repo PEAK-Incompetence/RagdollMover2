@@ -490,6 +490,19 @@ function MGR:Remove(entity, id)
 	end
 end
 
+function MGR:Clear(entity)
+	local stack = EntityConstraintStacks[entity]
+	if stack then
+		stack.array = {}
+		stack.set = {}
+		refreshStack(entity)
+
+		RagdollPoser.Networking.ClearConstraints()
+		net.WriteEntity(entity)
+		net.SendToServer()
+	end
+end
+
 ---@param entity Entity
 ---@param c Constraint
 ---@param d Constraint
@@ -585,6 +598,7 @@ hook.Add("RagdollPoser_Input_KeyPress", "RagdollPoser_Constraints_Toggle", onKey
 
 RagdollPoser.Networking.UpdateConstraint = RagdollPoser.Networking.DefineSender("UpdateConstraint")
 RagdollPoser.Networking.UpdateConstraints = RagdollPoser.Networking.DefineSender("UpdateConstraints")
+RagdollPoser.Networking.ClearConstraints = RagdollPoser.Networking.DefineSender("ClearConstraints")
 
 function MGR:SetRefreshing(state)
 	self._refreshing = state

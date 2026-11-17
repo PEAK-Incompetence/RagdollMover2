@@ -45,6 +45,7 @@ function MGR:GetMirrored(selection)
 		if mirrorSet[entity] and mirrorSet[entity][bone] then
 			continue
 		end
+		mirrorSet[entity] = mirrorSet[entity] or {}
 
 		local boneName = entity:GetBoneName(bone)
 		if boneName then
@@ -56,11 +57,11 @@ function MGR:GetMirrored(selection)
 					if mirror ~= boneName then
 						mirrorBone = entity:LookupBone(mirror)
 					end
-					if mirrorBone then
+					-- Avoid double counting our mirrored bones, or else we double transform
+					if mirrorBone and not mirrorSet[entity][bone] then
 						local index = #mirrored + 1
 						mirrored[index] = mirrorBone
 						mirrored[index + 1] = entity
-						mirrorSet[entity] = mirrorSet[entity] or {}
 						mirrorSet[entity][bone] = mirrorBone
 						break
 					end

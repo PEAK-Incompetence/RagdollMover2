@@ -164,19 +164,40 @@ scaleFreeTransform:Identity()
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
 ---@param accumulations number[]
+---@param props GizmoProps
 function arrow:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
 	local vector = directions[1]
-	local accumulationIndex = 1
 
-	local length = vector:Dot(delta)
+	-- Project the driven axis onto the screen
+	-- Why do this? It allows the translate to follow the mouse closely, even
+	-- when the axis we're manipulating closely aligngs with our view
+	local _, eyeVec, _ = RagdollPoser.View:GetView()
+	local screenVector = self:ProjectUnitToPlane(vector, eyeVec)
+
+	local length = screenVector:Dot(delta)
+	accumulations[1] = accumulations[1] + length
+
+	local lastSnap = initials[1]
+	if not lastSnap then
+		lastSnap = 0
+		initials[1] = lastSnap
+	end
+
+	if props.snap then
+		local snap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		length = snap - lastSnap
+		initials[1] = snap
+	end
 	local movement = vector * length
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
 	local scale = transform:GetScale()
 	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+
 	transform:Translate(movement / scale)
+
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
 	return transform

@@ -48,6 +48,22 @@ function Base.SetShearFreeScale(output, source, scaleMatrix)
 	output:SetScale(outputScale)
 end
 
+---@param v Vector Vector to project
+---@param n Vector Normal vector of plane
+---@return Vector projection Projection of vector on the plane
+function Base:ProjectVectorToPlane(v, n)
+	local projection = v - v:Dot(n) / n:LengthSqr() * n
+	return projection
+end
+
+---@param v Vector Vector to project. Must be unit
+---@param n Vector Normal vector of plane. Must be unit
+---@return Vector projection Projection of vector on the plane
+function Base:ProjectUnitToPlane(v, n)
+	local projection = v - v:Dot(n) * n
+	return projection
+end
+
 function Base:Init()
 	local base = setmetatable({}, Base)
 	return base
@@ -115,7 +131,7 @@ function Base:PreTransform(direction, initials) end
 ---@param directions Vector[] The directions of transformation--either a vector or an axis of rotation. This is an array because we might want to transform multiple bones in different directions
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix The initial state to mutate
----@param accumulations table Accumulation of translation or rotation, which we can use for snapping behaviors
+---@param accumulations number[] Accumulation of translation or rotation, which we can use for snapping behaviors
 ---@param initials table Accumulation of translation or rotation, which we can use for snapping behaviors
 ---@param gizmoProps GizmoProps
 ---@return VMatrix

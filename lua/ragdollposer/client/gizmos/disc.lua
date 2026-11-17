@@ -212,14 +212,31 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 	local startHit, endHit = deltaProps[2], deltaProps[3]
 
 	local direction = directions[1]
-	local accumulationIndex = 1
+
+	local initialInfo = initials[1]
+	local initialTransform = initialInfo and initialInfo[1]
+	local initialScale = initialInfo and initialInfo[2]
+	if not initialTransform then
+		initialTransform = transform * IDENTITY_MATRIX
+		initialScale = initialTransform:GetScale()
+		initialTransform:SetScale(VECTOR_ONE)
+		initialInfo = { initialTransform, initialScale, 0 }
+		initials[1] = initialInfo
+	end
 
 	local qi = quaternion.fromAngle(transform:GetAngles())
 	local axis = direction
 	local angle = math.atan2((startHit:Cross(endHit)):Dot(axis), startHit:Dot(endHit))
 	local degrees = math.deg(angle)
-	local newRot = accumulations[accumulationIndex] + degrees
-	accumulations[accumulationIndex] = newRot
+	local newRot = accumulations[1] + degrees
+	accumulations[1] = newRot
+
+	if props.snap then
+		local snap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		degrees = snap - initialInfo[3]
+		initialInfo[3] = snap
+	end
+
 	rotationQuaternion:SetAngleAxis(degrees, axis)
 	rotationQuaternion:Mul(qi)
 	debugoverlay.Line(
@@ -230,17 +247,6 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 		true
 	)
 	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
-
-	local initialInfo = initials[1]
-	local initialTransform = initialInfo and initialInfo[1]
-	local initialScale = initialInfo and initialInfo[2]
-	if not initialTransform then
-		initialTransform = transform * IDENTITY_MATRIX
-		initialScale = initialTransform:GetScale()
-		initialTransform:SetScale(VECTOR_ONE)
-		initialInfo = { initialTransform, initialScale }
-		initials[1] = initialInfo
-	end
 
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
@@ -261,6 +267,7 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 
 	transform:Set(scaleFreeTransform)
 	transform:SetScale(initialScale)
+
 	return transform
 end
 

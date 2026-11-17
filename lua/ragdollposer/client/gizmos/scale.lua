@@ -197,6 +197,8 @@ local COLOR = Color(255, 0, 0)
 ---@param directions Vector[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
+---@param accumulations number[]
+---@param props GizmoProps
 function scale:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
 	---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix}
@@ -206,16 +208,25 @@ function scale:Transform(directions, deltaProps, transform, accumulations, initi
 		local rotationMatrix = transform * IDENTITY_MATRIX
 		rotationMatrix:SetTranslation(vector_origin)
 		rotationMatrix:SetScale(VECTOR_ONE)
-		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix }
+		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix, 0 }
 		initials[1] = initialTransformTable
 	end
 
 	local vector = directions[1]
-	local accumulationIndex = 1
 
-	local length = vector:Dot(delta)
+	local _, eyeVec, _ = RagdollPoser.View:GetView()
+	local screenVector = self:ProjectUnitToPlane(vector, eyeVec)
+
+	local length = screenVector:Dot(delta) * 0.1
 	local initialTransform = initialTransformTable[1]
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
+	accumulations[1] = accumulations[1] + length
+
+	-- FIXME: Scale snapping seems to oscillate weirdly
+	if props.snap then
+		local snap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		length = (snap - initialTransformTable[4]) * 0.1
+		initialTransformTable[4] = snap
+	end
 
 	local scaleAngles = vector:Angle()
 	local bonePos = initialTransform:GetTranslation()
@@ -240,6 +251,7 @@ function scale:Transform(directions, deltaProps, transform, accumulations, initi
 	SCALE_MATRIX:Set(T)
 
 	scale.SetShearFreeScale(transform, initialTransform, SCALE_MATRIX)
+
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
 	debugoverlay.Line(

@@ -164,6 +164,39 @@ local function constraintListHook(listLayout)
 	end
 end
 
+---@param numpad RGPNumPad
+---@param action InputAction
+local function numpadHooks(numpad, action, keyChangedCallback)
+	---@class RGPNumPad: DBinder
+
+	local oldClick = numpad.DoClick
+	function numpad:DoClick()
+		local oldKey = self:GetValue()
+		RagdollPoser.Input:UnregisterKey(action, oldKey)
+		oldClick(self)
+	end
+
+	-- --- FIXME: Really buggy key bind handling
+	-- function numpad:DoMiddleClick()
+	-- 	local oldKey = self:GetValue()
+	-- 	local default = self:GetDefaultNumber()
+	-- 	RagdollPoser.Input:UnregisterKey(action, oldKey)
+	-- 	---@diagnostic disable-next-line
+	-- 	self:ResetToDefaultValue()
+	-- 	RagdollPoser.Input:RegisterKey(action, default)
+	-- end
+
+	-- --- TODO: Implement key clearing in case one wants to clear their key binds
+	-- function numpad:DoRightClick() end
+
+	function numpad:OnChange(newKey)
+		RagdollPoser.Input:RegisterKey(action, newKey)
+		if keyChangedCallback then
+			keyChangedCallback(newKey)
+		end
+	end
+end
+
 ---@param cpanel ControlPanel|DForm
 ---@param leftProps KeyBinderProps
 ---@param rightProps KeyBinderProps?
@@ -179,35 +212,9 @@ local function keyBinder(cpanel, leftProps, rightProps)
 		binder = cpanel:KeyBinder(leftProps.label, leftProps.cvar)
 	end
 
-	local oldClick1 = binder.NumPad1.DoClick
-	function binder.NumPad1:DoClick()
-		local oldKey = self:GetValue()
-		oldClick1(self)
-		RagdollPoser.Input:UnregisterKey(leftProps.action, oldKey)
-	end
-
-	function binder.NumPad1:OnChange(newKey)
-		RagdollPoser.Input:RegisterKey(leftProps.action, newKey)
-		if leftProps.keyChangedCallback then
-			leftProps.keyChangedCallback(newKey)
-		end
-	end
-
+	numpadHooks(binder.NumPad1, leftProps.action, leftProps.keyChangedCallback)
 	if rightProps then
-		local oldClick2 = binder.NumPad2.DoClick
-		function binder.NumPad2:DoClick()
-			local oldKey = self:GetValue()
-			-- print(oldKey)
-			oldClick2(self)
-			RagdollPoser.Input:UnregisterKey(rightProps.action, oldKey)
-		end
-
-		function binder.NumPad2:OnChange(newKey)
-			RagdollPoser.Input:RegisterKey(rightProps.action, newKey)
-			if rightProps.keyChangedCallback then
-				rightProps.keyChangedCallback(newKey)
-			end
-		end
+		numpadHooks(binder.NumPad2, rightProps.action, rightProps.keyChangedCallback)
 	end
 	return binder
 end
@@ -1117,6 +1124,15 @@ function MGR:BuildCPanel(cpanel)
 	mirrorCombo:AddChoice("z", 2)
 	local id = GetConVar("ragdollposer_mirror_axis"):GetInt() + 1
 	mirrorCombo:ChooseOption(mirrorMapping[id - 1], id)
+
+	local snapEnable = boneManip:CheckBox("#tool.ragdollposer.snap", "ragdollposer_snap")
+	snapEnable:SetTooltip("#tool.ragdollposer.snap")
+	local snapValue = boneManip:NumSlider("#tool.ragdollposer.snap.value", "ragdollposer_snap_value", 0, 180, 3)
+	local snapWide, snapTall = snapValue:GetSize()
+	snapValue:SizeTo(-1, snapEnable:GetChecked() and snapTall or 0, 0.1)
+	function snapEnable:OnChange(newValue)
+		snapValue:SizeTo(-1, newValue and snapTall or 0, 0.1)
+	end
 
 	local selectBoneAndRoot = keyBinder(boneManip, {
 		label = "#tool.ragdollposer.select.toggle",

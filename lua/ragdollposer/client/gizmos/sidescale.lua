@@ -199,7 +199,8 @@ end
 ---@param transform VMatrix
 ---@param accumulations number[]
 ---@param initials table
-function sidescale:Transform(directions, deltaProps, transform, accumulations, initials)
+---@param props GizmoProps
+function sidescale:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
 	local axes = self:GetDirection()
 	local axisA, axisB = axes[1], axes[2]
@@ -212,15 +213,26 @@ function sidescale:Transform(directions, deltaProps, transform, accumulations, i
 		local rotationMatrix = transform * IDENTITY_MATRIX
 		rotationMatrix:SetTranslation(vector_origin)
 		rotationMatrix:SetScale(VECTOR_ONE)
-		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix }
+		initialTransformTable = { transform * IDENTITY_MATRIX, transform:GetScale(), rotationMatrix, 0, 0 }
 		initials[1] = initialTransformTable
 	end
 
 	local bonePos = initialTransformTable[1]:GetTranslation()
-	local lengthA = axisA:Dot(delta)
-	local lengthB = axisB:Dot(delta)
-	local accumulationIndex = 1
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + lengthA + lengthB
+	local lengthA = axisA:Dot(delta) * 0.1
+	local lengthB = axisB:Dot(delta) * 0.1
+
+	accumulations[1] = accumulations[1] + lengthA
+	accumulations[2] = accumulations[2] + lengthB
+
+	-- FIXME: Scale snapping seems to oscillate weirdly
+	if props.snap then
+		local snapA = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		local snapB = math.Truncate(accumulations[2] / props.snapValue) * props.snapValue
+		lengthA = (snapA - initialTransformTable[#initialTransformTable - 1]) * 0.1
+		lengthB = (snapB - initialTransformTable[#initialTransformTable]) * 0.1
+		initialTransformTable[#initialTransformTable - 1] = snapA
+		initialTransformTable[#initialTransformTable] = snapB
+	end
 
 	setAxisScale(axisA, 1 + lengthA, bonePos, SCALE_MATRIX)
 	setAxisScale(axisB, 1 + lengthB, bonePos, AXIS_SCALE_MATRIX)

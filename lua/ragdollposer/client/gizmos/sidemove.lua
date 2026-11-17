@@ -153,18 +153,50 @@ function sidemove:Transform(directions, deltaProps, transform, accumulations, in
 	local up = self.up
 	local forward = self.forward
 
-	local vector = (right + up + forward):GetNormalized()
-	local accumulationIndex = 1
+	-- Why do this? It allows the translate to follow the mouse closely, even
+	-- when the axis we're manipulating closely aligns with our view
+	local _, _, eyeAng = RagdollPoser.View:GetView()
+	local screenRight = self:ProjectUnitToPlane(right, eyeAng:Forward())
+	local screenUp = self:ProjectUnitToPlane(up, eyeAng:Forward())
+	local screenForward = self:ProjectUnitToPlane(forward, eyeAng:Forward())
+	local rightLength, forwardLength, upLength = screenRight:Dot(delta), screenForward:Dot(delta), screenUp:Dot(delta)
 
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
-	local movement = right * right:Dot(delta) + forward * forward:Dot(delta) + up * up:Dot(delta)
+
+	local lastSnap = initials[1]
+	if not lastSnap then
+		lastSnap = 0
+		initials[1] = lastSnap
+		initials[2] = lastSnap
+		initials[3] = lastSnap
+	end
+
+	accumulations[1] = accumulations[1] + rightLength
+	accumulations[2] = accumulations[2] + forwardLength
+	accumulations[3] = accumulations[3] + upLength
+
+	if props.snap then
+		local snapRight = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		local snapForward = math.Truncate(accumulations[2] / props.snapValue) * props.snapValue
+		local snapUp = math.Truncate(accumulations[3] / props.snapValue) * props.snapValue
+		rightLength = snapRight - initials[1]
+		forwardLength = snapForward - initials[2]
+		upLength = snapUp - initials[3]
+		initials[1] = snapRight
+		initials[2] = snapForward
+		initials[3] = snapUp
+	end
+	local movement = right * rightLength + forward * forwardLength + up * upLength
+
 	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
 	local scale = transform:GetScale()
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + delta:Length()
 	transform:Translate(movement / scale)
-	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
-	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+
+	-- local vector = (right + up + forward):GetNormalized()
+	-- debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
+	-- debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + vector * 10, 0.5)
+
 	return transform
 end
 

@@ -556,8 +556,11 @@ function MGR:PreTransform()
 				self._transformedBoneSet[client] = self._transformedBoneSet[client] or {}
 				self._transformedBones[client] = self._transformedBones[client] or {}
 				self._transformed[client] = self._transformed[client] or {}
+				self._accumulations[client] = self._accumulations[client] or {}
 				for i, bone in ipairs(bones) do
 					local boneMatrix = client:GetBoneMatrix(bone)
+					-- We initialize an array of three zeroes, corresponding to the XYZ axes
+					self._accumulations[client][bone] = self._accumulations[client][bone] or { 0, 0, 0 }
 					self._matrices[client][bone] = boneMatrix
 					self._constraintMatrices[client][bone] = {}
 					self._localMatrices[client][bone] = self._localMatrices[client][bone] or {}
@@ -583,7 +586,7 @@ function MGR:PreTransform()
 			self._accumulations[client] = self._accumulations[client] or {}
 			for i, pivot in ipairs(pivots) do
 				pivots[i] = gizmo:PreTransform(pivot, self._initials)
-				self._accumulations[client][i] = 0
+				--- We're giving each client an accumulation
 			end
 		end
 	end
@@ -742,7 +745,7 @@ function MGR:Transform()
 					pivots[client],
 					deltaProps,
 					self._matrices[client][bone],
-					self._accumulations[client],
+					self._accumulations[client][bone],
 					self._initials[client][bone],
 					self._gizmoProps
 				)
@@ -1598,7 +1601,8 @@ local function onKeyPress(actions)
 		if not rootResetBone[1] then
 			local newestEntity = selection[#selection]
 			if IsValid(newestEntity) then
-				local rootBone = newestEntity:TranslatePhysBoneToBone(0)
+				local bone = newestEntity:TranslatePhysBoneToBone(0)
+				local rootBone = bone >= 0 and bone or 0
 				rootResetBone = { rootBone, newestEntity }
 			end
 		end
@@ -1658,6 +1662,8 @@ local function initializeGizmo(gizmo)
 		MGR._gizmoProps.localoffset = GetConVar("ragdollposer_localoffset"):GetBool()
 		MGR._gizmoProps.relativerotate = GetConVar("ragdollposer_relativerotate"):GetBool()
 		MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
+		MGR._gizmoProps.snap = GetConVar("ragdollposer_snap"):GetBool()
+		MGR._gizmoProps.snapValue = GetConVar("ragdollposer_snap_value"):GetFloat()
 	end
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
@@ -1671,64 +1677,62 @@ end)
 hook.Remove("RagdollPoser_Gizmo_Refresh", "Gizmo")
 hook.Add("RagdollPoser_Gizmo_Refresh", "Gizmo", initializeGizmo)
 
--- FIXME: Icky boilerplate below. How to improve this?
-local function updateWidth(_, old, new)
+-- This one is a little less worse than what I had before
+local function convarUpdater(cvar, callback)
+	cvars.AddChangeCallback(cvar, callback, cvar .. "_callback")
+	cvars.AddChangeCallback(cvar, callback, cvar .. "_callback")
+end
+
+convarUpdater("ragdollposer_width", function(_, old, new)
 	local result = tonumber(new)
 	if result then
 		MGR:SetWidth(result)
 	end
-end
-cvars.RemoveChangeCallback("ragdollposer_width", "ragdollposer_width_callback")
-cvars.AddChangeCallback("ragdollposer_width", updateWidth, "ragdollposer_width_callback")
-local function updateScale(_, old, new)
+end)
+convarUpdater("ragdollposer_scale", function(_, old, new)
 	local result = tonumber(new)
 	if result then
 		MGR:SetScale(result)
 	end
-end
-cvars.RemoveChangeCallback("ragdollposer_scale", "ragdollposer_scale_callback")
-cvars.AddChangeCallback("ragdollposer_scale", updateScale, "ragdollposer_scale_callback")
-local function updateMirror(_, old, new)
+end)
+
+convarUpdater("ragdollposer_mirror", function(_, old, new)
 	MGR._mirror = tobool(tonumber(new))
-end
-cvars.RemoveChangeCallback("ragdollposer_mirror", "ragdollposer_mirror_callback")
-cvars.AddChangeCallback("ragdollposer_mirror", updateMirror, "ragdollposer_mirror_callback")
+end)
 
-local function updatePartial(_, old, new)
+convarUpdater("ragdollposer_partial", function(_, old, new)
 	MGR._gizmoProps.partial = tobool(tonumber(new))
-end
-cvars.RemoveChangeCallback("ragdollposer_partial", "ragdollposer_partial_callback")
-cvars.AddChangeCallback("ragdollposer_partial", updatePartial, "ragdollposer_partial_callback")
+end)
 
-local function updateOrientation(_, old, new)
+convarUpdater("ragdollposer_local", function(_, old, new)
 	new = tonumber(new)
 	local newOrientation = Either(tobool(new), MGR.Orientation.Local, MGR.Orientation.World)
 
 	MGR._gizmoProps.orientation = newOrientation
 	MGR:UpdateOrientation()
-end
-cvars.RemoveChangeCallback("ragdollposer_local", "ragdollposer_local_callback")
-cvars.AddChangeCallback("ragdollposer_local", updateOrientation, "ragdollposer_local_callback")
+end)
 
-local function updateRelativeRotate(_, old, new)
+convarUpdater("ragdollposer_relativerotate", function(_, old, new)
 	MGR._gizmoProps.relativerotate = tobool(tonumber(new))
-end
-cvars.RemoveChangeCallback("ragdollposer_relativerotate", "ragdollposer_relativerotate_callback")
-cvars.AddChangeCallback("ragdollposer_relativerotate", updateRelativeRotate, "ragdollposer_relativerotate_callback")
+end)
 
-local function updateLocalOffset(_, old, new)
+convarUpdater("ragdollposer_localoffset", function(_, old, new)
 	MGR._gizmoProps.localoffset = tobool(tonumber(new))
 	MGR:UpdateOffset()
-end
-cvars.RemoveChangeCallback("ragdollposer_localoffset", "ragdollposer_localoffset_callback")
-cvars.AddChangeCallback("ragdollposer_localoffset", updateLocalOffset, "ragdollposer_localoffset_callback")
+end)
 
-local function updateDrawSphere(_, old, new)
+convarUpdater("ragdollposer_drawsphere", function(_, old, new)
 	MGR._gizmoProps.drawsphere = tobool(tonumber(new))
 	MGR:UpdateOffset()
-end
-cvars.RemoveChangeCallback("ragdollposer_drawsphere", "ragdollposer_drawsphere_callback")
-cvars.AddChangeCallback("ragdollposer_drawsphere", updateDrawSphere, "ragdollposer_localoffset_callback")
+end)
+
+convarUpdater("ragdollposer_snap", function(_, old, new)
+	MGR._gizmoProps.snap = tobool(tonumber(new))
+end)
+
+convarUpdater("ragdollposer_snap_value", function(_, old, new)
+	MGR._gizmoProps.snapValue = tonumber(new) or tonumber(old)
+end)
 
 concommand.Add("ragdollposer_resetgizmo", function()
 	initializeGizmo()

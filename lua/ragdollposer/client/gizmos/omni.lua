@@ -73,14 +73,6 @@ local sharedDeltaProps = {
 local mirrorMatrix = Matrix()
 mirrorMatrix:Identity()
 
----@param v Vector Vector to project
----@param n Vector Normal vector of plane
----@return Vector projection Projection of vector on the plane
-local function projectVectorToPlane(v, n)
-	local projection = v - v:Dot(n) / n:LengthSqr() * n
-	return projection
-end
-
 function omni:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 	local eyePos, eyeVec, eyeAng = self.eyePos, self.eyeVec, self.eyeAng
 	local forward = eyeAng:Forward()
@@ -95,7 +87,7 @@ function omni:ProcessDelta(start, endPos, props, mirrorAxis, eyeDelta)
 
 	sharedDeltaProps[1]:Set(endHit)
 	sharedDeltaProps[1]:Sub(startHit)
-	sharedDeltaProps[1]:Add(projectVectorToPlane(eyeDelta, back))
+	sharedDeltaProps[1]:Add(self:ProjectVectorToPlane(eyeDelta, back))
 
 	if mirrorAxis >= 0 then
 		local length = sharedDeltaProps[1]:Length()
@@ -131,17 +123,41 @@ scaleFreeTransform:Identity()
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
 ---@param accumulations number[]
+---@param props GizmoProps
 function omni:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
 	local vector = directions[1]
-	local accumulationIndex = 1
 
-	local length = delta:Length()
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + length
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
+
+	local eyePos, eyeVec, eyeAng = self.eyePos, self.eyeVec, self.eyeAng
+
+	local right = self.eyeAng:Right()
+	local up = self.eyeAng:Up()
+	local rightLength = right:Dot(delta)
+	local upLength = up:Dot(delta)
+
+	accumulations[1] = accumulations[1] + rightLength
+	accumulations[2] = accumulations[2] + upLength
+	local lastSnap = initials[1]
+	if not lastSnap then
+		lastSnap = 0
+		initials[1] = lastSnap
+		initials[2] = lastSnap
+	end
+
+	if props.snap then
+		local rightSnap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		local upSnap = math.Truncate(accumulations[2] / props.snapValue) * props.snapValue
+		rightLength = rightSnap - initials[1]
+		upLength = upSnap - initials[2]
+		initials[1] = rightSnap
+		initials[2] = upSnap
+	end
+
 	local scale = transform:GetScale()
-	local movement = delta * 1
+	local movement = right * rightLength + up * upLength
 	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
 	transform:Translate(movement / scale)
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)

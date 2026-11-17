@@ -101,26 +101,11 @@ IDENTITY_MATRIX:Identity()
 ---@param directions Quaternion[]
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
+---@param accumulations number[]
 function ball:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
-	local left = -eyeAng:Right()
+	local right = eyeAng:Right()
 	local up = eyeAng:Up()
-
-	local dx, dy = self.dx, self.dy
-
-	-- The closer we are to the gizmo, the more precise the movement should be
-	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
-	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
-	local scale = props.scale
-	-- The smaller the ball, the more rotation we give
-	local angle = distance / scale * eyedist
-
-	local axis = -left * dy + up * dx
-	axis:Normalize()
-
-	rotationQuaternion:SetAngleAxis(angle, axis)
-
-	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
 	local quatInfo = initials[1]
 	local quat = quatInfo and quatInfo[1]
@@ -136,20 +121,39 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 		initialTransform = transform * IDENTITY_MATRIX
 		initialScale = initialTransform:GetScale()
 		initialTransform:SetScale(VECTOR_ONE)
-		quatInfo = { quat, initialTransform, initialScale }
+		quatInfo = { quat, initialTransform, initialScale, 0 }
 		initials[1] = quatInfo
 	end
 
-	local accumulationIndex = 1
+	local dx, dy = self.dx, self.dy
 
-	accumulations[accumulationIndex] = accumulations[accumulationIndex] + angle
+	-- The closer we are to the gizmo, the more precise the movement should be
+	local eyedist = eyePos:Distance(props.finalPos) / PRECISION_FACTOR
+	local distance = math.sqrt(dx ^ 2 + dy ^ 2)
+	local scale = props.scale
+	-- The smaller the ball, the more rotation we give
+	local angle = distance / scale * eyedist
+
+	local accumulationIndex = 1
+	local axis = right * dy + up * dx
+	axis:Normalize()
+
+	accumulations[1] = accumulations[1] + angle
+	if props.snap then
+		local snap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
+		angle = snap - quatInfo[4]
+		quatInfo[4] = snap
+	end
+
+	rotationQuaternion:SetAngleAxis(angle, axis)
+
+	debugoverlay.BoxAngles(props.finalPos, min, max, rotationQuaternion:Angle(), 0.2)
 
 	rotationQuaternion:Mul(quat)
 	if props.relativerotate then
 		-- For each initial transform, get the offset from the gizmo position, and then
 		-- apply rotation.
 		local ang = rotationQuaternion:Angle()
-		local initialPos = quatInfo[3]
 		local offsetPos =
 			WorldToLocal(initialTransform:GetTranslation(), angle_zero, props.finalPos, initialTransform:GetAngles())
 		local pos = LocalToWorld(offsetPos, ang, props.finalPos, ang)
@@ -160,8 +164,11 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 	end
 
 	scaleFreeTransform:SetAngles(rotationQuaternion:Angle())
+	-- We set the scaleFree transform first, and then scale.
+	-- Because if we don't do this, mouse movement will scale with how big the
+	-- transform is
 	transform:Set(scaleFreeTransform)
-	transform:SetScale(quatInfo[3])
+	transform:SetScale(initialScale)
 	return transform
 end
 

@@ -1159,7 +1159,7 @@ function MGR:BuildCPanel(cpanel)
 	local constraintListContainer = vgui.Create("DPanel", constraintListForm)
 	constraintListForm:AddItem(constraintListContainer)
 	constraintListContainer:SizeTo(-1, 200, 0)
-	---@class ConstraintForm: rgp_dcategorylist
+	---@class ConstraintForm: DCategoryList
 	---@field Items ConstraintEntry[]
 	---@field List DListLayout
 	local constraintList = vgui.Create("DCategoryList", constraintListContainer)

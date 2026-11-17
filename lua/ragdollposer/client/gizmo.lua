@@ -299,10 +299,6 @@ function MGR:SetMovingUI(state)
 	self._movingUI = state
 end
 
-function MGR:GetMoving()
-	return self._moving
-end
-
 function MGR:IsMoving()
 	return self._moving
 end
@@ -823,6 +819,9 @@ local function doTransform()
 	local equipped = RagdollPoser.Helpers.Equipped()
 	if equipped and RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and MGR:IsMoving() then
 		MGR:Transform()
+	else
+		MGR:SetMoving(false)
+		MGR:SetMovingUI(false)
 	end
 end
 
@@ -1510,7 +1509,7 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 end)
 
 local function onKeyPress(actions)
-	if MGR:GetMoving() then
+	if MGR:IsMoving() then
 		return
 	end
 	if actions[RagdollPoser.Actions.CycleGizmo] then

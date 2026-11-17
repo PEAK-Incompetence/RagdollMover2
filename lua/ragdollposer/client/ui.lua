@@ -12,6 +12,8 @@ MGR.BoneCategory = {
 	NonPhys = 2,
 }
 
+MGR.DnDTag = "rgp_constraint_dnd"
+
 local categoryToType = {
 	[MGR.BoneCategory.Phys] = RagdollPoser.Bones.BoneType.Physics,
 	[MGR.BoneCategory.NonPhys] = RagdollPoser.Bones.BoneType.Manipulate,
@@ -31,6 +33,137 @@ local getModelIcon, getNiceModelName = RagdollPoser.Helpers.GetModelNodeIconPath
 ---@field action InputAction
 ---@field keyChangedCallback fun(newKey: BUTTON_CODE)?
 
+---@param listLayout DListLayout
+local function constraintListHook(listLayout)
+	function listLayout:DropAction_Simple(Drops, bDoDrop, Command, x, y)
+		self:SetDropTarget(0, 0, self:GetWide(), 2)
+
+		if bDoDrop then
+			for k, v in pairs(Drops) do
+				v = v:OnDrop(self)
+				v:SetParent(self)
+			end
+
+			self:OnModified()
+		end
+	end
+
+	function listLayout:DropAction_Normal(Drops, bDoDrop, Command, x, y)
+		local closest = self:GetClosestChild(x, y)
+		if not IsValid(closest) then
+			return self:DropAction_Simple(Drops, bDoDrop, Command, x, y)
+		end
+
+		-- This panel is only meant to be copied from, not edited!
+		if self:GetReadOnly() then
+			return
+		end
+
+		local h = closest:GetTall()
+		local w = closest:GetWide()
+
+		local disty = y - (closest.y + h * 0.5)
+		local distx = x - (closest.x + w * 0.5)
+
+		local drop = 0
+		if self.bDropCenter then
+			drop = 5
+		end
+
+		if disty < 0 and self.bDropTop and (drop == 0 or math.abs(disty) > h * 0.1) then
+			drop = 8
+		end
+		if disty >= 0 and self.bDropBottom and (drop == 0 or math.abs(disty) > h * 0.1) then
+			drop = 2
+		end
+		if distx < 0 and self.bDropLeft and (drop == 0 or math.abs(distx) > w * 0.1) then
+			drop = 4
+		end
+		if distx >= 0 and self.bDropRight and (drop == 0 or math.abs(distx) > w * 0.1) then
+			drop = 6
+		end
+
+		self:UpdateDropTarget(drop, closest)
+
+		if table.HasValue(Drops, closest) then
+			return
+		end
+
+		if not bDoDrop and not self:GetUseLiveDrag() then
+			return
+		end
+
+		-- This keeps the drop order the same,
+		-- whether we add it before an object or after
+		if drop == 6 or drop == 2 then
+			Drops = table.Reverse(Drops)
+		end
+
+		for k, v in pairs(Drops) do
+			-- Don't drop one of our parents onto us
+			-- because we'll be sucked into a vortex
+			if v:IsOurChild(self) then
+				continue
+			end
+			if not v.Header then
+				v = v:GetParent()
+			end
+
+			-- Copy the panel if we are told to from the DermaMenu(), or if we are moving from a read only panel to a not read only one.
+			if
+				(
+					Command and Command == "copy"
+					or (
+						IsValid(v:GetParent())
+						and v:GetParent().GetReadOnly
+						and v:GetParent():GetReadOnly()
+						and v:GetParent():GetReadOnly() ~= self:GetReadOnly()
+					)
+				) and v.Copy
+			then
+				v = v:Copy()
+			end
+
+			v = v:OnDrop(self, closest, drop == 2)
+
+			if drop == 5 then
+				closest:DroppedOn(v)
+			end
+
+			if drop == 8 or drop == 4 then
+				v:SetParent(self)
+				v:MoveToBefore(closest)
+			end
+
+			if drop == 2 or drop == 6 then
+				v:SetParent(self)
+				v:MoveToAfter(closest)
+			end
+		end
+
+		self:OnModified()
+	end
+
+	listLayout:MakeDroppable(MGR.DnDTag, false)
+
+	---@param child DForm
+	function listLayout:OnChildAdded(child)
+		child:Dock(TOP)
+
+		local dn = self:GetDnD()
+		if dn then
+			child:Droppable(self:GetDnD())
+			if child.Header then
+				child.Header:Droppable(self:GetDnD())
+			end
+		end
+
+		if self:IsSelectionCanvas() then
+			child:SetSelectable(true)
+		end
+	end
+end
+
 ---@param cpanel ControlPanel|DForm
 ---@param leftProps KeyBinderProps
 ---@param rightProps KeyBinderProps?
@@ -49,7 +182,6 @@ local function keyBinder(cpanel, leftProps, rightProps)
 	local oldClick1 = binder.NumPad1.DoClick
 	function binder.NumPad1:DoClick()
 		local oldKey = self:GetValue()
-		-- print(oldKey)
 		oldClick1(self)
 		RagdollPoser.Input:UnregisterKey(leftProps.action, oldKey)
 	end
@@ -107,9 +239,10 @@ local function makeConstraintEntry(parent, entity, constraint)
 	---@class ConstraintEntry: ControlPanel
 	---@field Header DCategoryHeader
 	local entry = makeCategory(parent, "", "ControlPanel")
-	entry:SetList(parent)
+	entry:SetList(parent.List)
+	parent.List:Add(entry)
 	parent.Items[index] = entry
-
+	entry.constraint = constraint
 	function entry.Header:DoRightClick()
 		local menu = DermaMenu()
 
@@ -128,6 +261,16 @@ local function makeConstraintEntry(parent, entity, constraint)
 	entry.icon = vgui.Create("DImage", entry)
 	entry.name = vgui.Create("DTextEntry", entry)
 	entry.enabled = vgui.Create("DCheckBox", entry)
+
+	entry.Header.UpdateColours = function(self, skin)
+		if self:GetParent() and not self:GetParent():GetExpanded() then
+			self:SetExpensiveShadow(0, Color(0, 0, 0, 200))
+			return self:SetTextStyleColor(skin.Colours.Category.Header_Closed)
+		end
+
+		self:SetExpensiveShadow(1, Color(0, 0, 0, 100))
+		return self:SetTextStyleColor(skin.Colours.Category.Header)
+	end
 
 	function entry.name:OnValueChange(newText)
 		constraint.Properties.name = newText
@@ -161,6 +304,11 @@ local function makeConstraintEntry(parent, entity, constraint)
 	entry.up:SetTooltip("#tool.ragdollposer.constraint.move.up")
 	entry.down:SetTooltip("#tool.ragdollposer.constraint.move.down")
 
+	function entry:ValidateArrows(index, count)
+		self.up:SetEnabled(index > 1)
+		self.down:SetEnabled(index < count)
+	end
+
 	function entry.up.DoClick()
 		local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
 		local index = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
@@ -172,10 +320,9 @@ local function makeConstraintEntry(parent, entity, constraint)
 			parent.Items[index] = previousEntry
 
 			RagdollPoser.Constraints:Swap(entity, constraint, stack[newIndex])
-			previousEntry.down:SetEnabled(index < #stack)
-			previousEntry.up:SetEnabled(index > 1)
-			entry.up:SetEnabled(newIndex > 1)
-			entry.down:SetEnabled(newIndex < #stack)
+
+			previousEntry:ValidateArrows(index, #stack)
+			entry:ValidateArrows(newIndex, #stack)
 		end
 	end
 
@@ -190,11 +337,31 @@ local function makeConstraintEntry(parent, entity, constraint)
 			parent.Items[index] = nextEntry
 
 			RagdollPoser.Constraints:Swap(entity, constraint, stack[newIndex])
-			nextEntry.up:SetEnabled(index > 1)
-			nextEntry.down:SetEnabled(index < #stack)
-			entry.up:SetEnabled(newIndex > 1)
-			entry.down:SetEnabled(newIndex < #stack)
+
+			nextEntry:ValidateArrows(index, #stack)
+			entry:ValidateArrows(newIndex, #stack)
 		end
+	end
+
+	---@param pnl DListLayout
+	---@param closest ConstraintEntry
+	---@param isBelow boolean
+	function entry:OnDrop(pnl, closest, isBelow)
+		if closest then
+			local myIndex = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
+			local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
+
+			table.remove(parent.Items, myIndex)
+			RagdollPoser.Constraints:MoveTo(entity, constraint, closest.constraint, isBelow)
+			local myNewIndex = RagdollPoser.Constraints:GetConstraintIndex(entity, constraint._id)
+			table.insert(parent.Items, myNewIndex, self)
+
+			for i, item in ipairs(parent.Items) do
+				item:ValidateArrows(i, #stack)
+			end
+		end
+
+		return self
 	end
 
 	local stack = RagdollPoser.Constraints:GetConstraintStack(entity)
@@ -992,10 +1159,13 @@ function MGR:BuildCPanel(cpanel)
 	local constraintListContainer = vgui.Create("DPanel", constraintListForm)
 	constraintListForm:AddItem(constraintListContainer)
 	constraintListContainer:SizeTo(-1, 200, 0)
-	---@class ConstraintForm: DCategoryList
+	---@class ConstraintForm: rgp_dcategorylist
 	---@field Items ConstraintEntry[]
+	---@field List DListLayout
 	local constraintList = vgui.Create("DCategoryList", constraintListContainer)
 	constraintList:Dock(FILL)
+	constraintList.List = vgui.Create("DListLayout", constraintList)
+	constraintList.List:Dock(FILL)
 	constraintList.Items = {}
 	-- print("constraint list items!")
 	-- print(constraintList.Items)
@@ -1007,8 +1177,10 @@ function MGR:BuildCPanel(cpanel)
 	--- @param client ClientEntity
 	local function updateConstraintUI(client)
 		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
-		-- print("clear selected")
 		constraintList:Clear()
+		constraintList.List = vgui.Create("DListLayout", constraintList)
+		constraintListHook(constraintList.List)
+		-- constraintList.List:Dock(FILL)
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
 			for _, constraint in ipairs(constraints) do

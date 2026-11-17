@@ -513,6 +513,38 @@ function MGR:Swap(entity, c, d)
 	return true
 end
 
+---@param entity Entity
+---@param c Constraint
+---@param d Constraint
+---@param isAfter boolean equivalent to isBelow in UI
+function MGR:MoveTo(entity, c, d, isAfter)
+	local stack = EntityConstraintStacks[entity]
+	if not stack then
+		return false
+	end
+	refreshStack(entity)
+
+	local i = stack.set[c._id]
+	local j = stack.set[d._id]
+	if not i or not j or i == j or stack.array[i] ~= c or stack.array[j] ~= d then
+		return false
+	end
+
+	table.remove(stack.array, i)
+	refreshStack(entity)
+	j = stack.set[d._id]
+	local newI = j
+
+	if isAfter then
+		newI = newI + 1
+	end
+	table.insert(stack.array, newI, c)
+	refreshStack(entity)
+	self:UpdateConstraints()
+	hook.Run("RagdollPoser_Constraints_ConstraintOrderChanged", entity)
+	return true
+end
+
 hook.Remove("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved")
 hook.Add("EntityRemoved", "RagdollPoser_Constraints_EntityRemoved", function(ent, fullUpdate)
 	if fullUpdate then

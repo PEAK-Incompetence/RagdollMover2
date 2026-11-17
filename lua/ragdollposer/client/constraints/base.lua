@@ -43,7 +43,7 @@ function Base:ConstructUITemplate(entry, props, state)
 	local function header()
 		-- entity to target
 		---@class ConstraintTargetSearch: DTextEntry
-		ui.target = entry:TextEntry(string.NiceName(language.GetPhrase(props.name)), "")
+		ui.target = entry:TextEntry("#tool.ragdollposer.constraint.target", "")
 		-- bone of entity to target
 		---@class ConstraintBoneSearch: DTextEntry
 		---@field Menu DMenu

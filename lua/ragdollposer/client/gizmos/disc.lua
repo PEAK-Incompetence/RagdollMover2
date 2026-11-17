@@ -167,10 +167,13 @@ end
 function disc:ProcessDeltaUI(start, endPos, props, mirrorAxis, delta)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 	local side = self._axis:Angle():Right()
-	local up = self._axis:Angle():Up()
 	local scale = props.scale
-	local startHit = props.finalPos + side * scale
-	local endHit = props.finalPos + (side + up * delta):GetNormalized() * scale
+	local final = props.finalPos
+	local startHit = side
+	local endHit = (startHit * 1):Angle()
+
+	endHit:RotateAroundAxis(self._axis, delta)
+	endHit = endHit:Forward()
 
 	local mirrorNormal = vector_origin
 	if mirrorAxis == 0 then

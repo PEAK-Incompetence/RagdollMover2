@@ -1465,6 +1465,35 @@ function MGR:ResetHoverScale()
 	end
 end
 
+function MGR:DrawTraced()
+	local eyeTrace = LocalPlayer():GetEyeTrace()
+	local entity = eyeTrace.Entity
+	local physBone = eyeTrace.PhysicsBone
+	local bone = entity:TranslatePhysBoneToBone(physBone)
+	bone = bone and bone >= 0 and bone or 0
+	if IsValid(entity) and not IsValid(RagdollPoser.Entity:GetClientFromEntity(entity)) then
+		local bonePos = entity:GetBoneMatrix(bone)
+		bonePos = bonePos and bonePos:GetTranslation() or entity:GetPos()
+		local screen = bonePos:ToScreen()
+		RagdollPoser.Entity:ExposeBones(entity)
+		local boneName = entity:GetBoneName(bone)
+		if boneName and screen then
+			surface.DrawCircle(screen.x, screen.y, MAX_BONE_SIZE, GREEN)
+			draw.SimpleTextOutlined(
+				boneName,
+				"RagdollPoserFont",
+				screen.x,
+				screen.y,
+				GREEN,
+				TEXT_ALIGN_LEFT,
+				TEXT_ALIGN_TOP,
+				OUTLINE_WIDTH,
+				BLACK
+			)
+		end
+	end
+end
+
 function MGR:Render()
 	cam.Start2D()
 	local mouseHovered = self:DrawBones()
@@ -1473,6 +1502,7 @@ function MGR:Render()
 	self:DrawScaling(mouseHovered)
 	self:DrawSelected()
 	self:DrawHovered()
+	self:DrawTraced()
 	cam.End2D()
 
 	cam.Start3D()

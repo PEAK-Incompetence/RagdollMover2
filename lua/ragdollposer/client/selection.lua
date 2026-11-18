@@ -267,6 +267,9 @@ local function getBones(x, y)
 				continue
 			end
 			local boneType = bones:GetBoneType(entity, b)
+			if boneType == boneTypes.Procedural then
+				continue
+			end
 			if MGR._filter and MGR._filter ~= boneType then
 				continue
 			end

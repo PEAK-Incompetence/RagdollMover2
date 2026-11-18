@@ -1054,7 +1054,7 @@ function MGR:BuildCPanel(cpanel)
 
 	local precise = keyBinder(gizmoCategory, {
 		label = "#tool.ragdollposer.precise",
-		cvar = "ragdollposer_precise_key",
+		cvar = "ragdollposer_precision_key",
 		action = RagdollPoser.Actions.DoPrecision,
 	})
 

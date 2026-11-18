@@ -348,6 +348,9 @@ local function onLeftClickDown(x, y, tr)
 	if MGR:IsBusy() then
 		return
 	end
+	if not RagdollPoser.UI:IsHoveringWorld() then
+		return
+	end
 
 	-- If we were on a bone, then set wasOnBone = true
 	getBones(x, y)

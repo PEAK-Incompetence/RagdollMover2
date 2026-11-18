@@ -11,6 +11,8 @@
 ---Modify the matrices of the client representation. Then send the
 ---matrices of the modified result to the server
 ---
+---FIXME: This is still not hot refresh friendly
+---
 ---@class RagdollPoser.Entity
 local MGR = RagdollPoser.Entity or {}
 
@@ -69,23 +71,26 @@ local function copyVisualsToClient(client, source)
 	end
 end
 
+---Display the entity
 ---@param self ClientEntity
 local function renderOverride(self, flags)
 	local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_DRAWTRANSLUCENTSUBMODELS)
 	if RagdollPoser.Helpers.Equipped() then
 		-- Draw the entity underneath the ghost
 		local entity = MGR.ClientToEntity[self]
-		copyVisualsToClient(self, entity)
+		if IsValid(entity) then
+			copyVisualsToClient(self, entity)
 
-		entity:DrawModel(flags)
-		cam.IgnoreZ(true)
-		render.OverrideColorWriteEnable(true, false)
-		self:DrawModel(transparentFlags)
-		render.OverrideColorWriteEnable(false, false)
-		render.SetBlend(0.75)
-		self:DrawModel(transparentFlags)
-		render.SetBlend(1)
-		cam.IgnoreZ(false)
+			entity:DrawModel(flags)
+			render.OverrideColorWriteEnable(true, false)
+			self:DrawModel(transparentFlags)
+			render.OverrideColorWriteEnable(false, false)
+			cam.IgnoreZ(true)
+			render.SetBlend(0.5)
+			self:DrawModel(transparentFlags)
+			render.SetBlend(1)
+			cam.IgnoreZ(false)
+		end
 	end
 end
 
@@ -151,6 +156,7 @@ hook.Add("PreDrawOpaqueRenderables", "RagdollPoser_Entity_StaticProps", updateSt
 function MGR:CreateEntities()
 	for _, client in ipairs(self.ClientEntities) do
 		if IsValid(client) then
+			client.RenderOverride = nil
 			client:RemoveCallback("BuildBonePositions", self.ClientBoneCallbacks[client])
 			client:Remove()
 			self.ClientToEntity[client] = nil
@@ -450,5 +456,20 @@ for _, ent in ipairs(ents.GetAll()) do
 		ent:Remove()
 	end
 end
+
+function MGR:Reset()
+	for _, client in ipairs(self.ClientEntities) do
+		if IsValid(client) then
+			client.RenderOverride = nil
+			client:RemoveCallback("BuildBonePositions", self.ClientBoneCallbacks[client])
+			client:Remove()
+			self.ClientToEntity[client] = nil
+			self.ClientShouldUpdate[client] = nil
+		end
+	end
+	refreshClientData()
+end
+
+MGR:Reset()
 
 RagdollPoser.Entity = MGR

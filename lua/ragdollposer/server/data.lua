@@ -102,9 +102,14 @@ local function sendSubPose(len, ply)
 			local matrix = matrices[b]
 			local boneName = entity:GetBoneName(b)
 			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			local po = entity:GetPhysicsObjectNum(physBone)
+			local po = physBone >= 0 and entity:GetPhysicsObjectNum(physBone)
 			-- Some physics objects start their physics at index 1, not index 0
-			if isStaticProp or (physicsCount == 1 and not po) then
+			if isStaticProp or (physicsCount == 1 and not po and #bones == 1) then
+				-- Need to check that physics count is 1 and bones is 1 so we use this
+				-- Otherwise, getphysicsobjectnum will return the parent physics bone that the bone
+				-- is attached to and run set position multiple times
+				-- FIXME: Is the logic sound for just getting a single physics object? Think this could
+				-- be fixed
 				po = entity:GetPhysicsObject()
 			end
 			if matrix then
@@ -302,6 +307,11 @@ function MGR.GetConstrainedEntities(entity)
 		if MGR.ValidateModelEntity(ent) then
 			table.insert(constrainedList, ent)
 		end
+	end
+	-- Add prop_effect entities in here automatically
+	if IsValid(entity.AttachedEntity) then
+		constrainedList[#constrainedList + 1] = entity.AttachedEntity
+		constrainedTab[entity.AttachedEntity] = entity.AttachedEntity
 	end
 	return constrainedList, constrainedTab
 end

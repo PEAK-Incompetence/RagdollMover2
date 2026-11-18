@@ -960,6 +960,11 @@ local function sendSubPose(selection)
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
 		local isBonemerge = RagdollPoser.Bonemerge:IsBonemergeEntity(entity)
+		-- TODO: Make a module which modifies the matrices for different scripted entities
+		-- e.g.
+		-- - animated props
+		-- - prop_effect
+		-- - ragdoll resizer entities
 
 		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
 		RagdollPoser.Entity:ExposeBones(entity)

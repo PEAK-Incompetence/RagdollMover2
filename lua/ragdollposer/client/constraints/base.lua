@@ -266,7 +266,7 @@ function Base:GetTransformFromBone(entity, bone)
 		return
 	end
 	local matrices = RagdollPoser.Entity:GetMatrices(entity)
-	return matrices[bone + 1]
+	return matrices and matrices[bone + 1]
 end
 
 function Base:Draw() end

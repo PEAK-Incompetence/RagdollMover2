@@ -1046,8 +1046,8 @@ function MGR:BuildCPanel(cpanel)
 		:CheckBox("#tool.ragdollposer.partial", "ragdollposer_partial")
 		:SetTooltip("#tool.ragdollposer.partial.tooltip")
 	local drawSphere = gizmoCategory:CheckBox("#tool.ragdollposer.gizmo.drawsphere", "ragdollposer_drawsphere")
-	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
-	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
+	local scaleSlider = gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
+	local widthSlider = gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
 
 	local cycleAndSurface = keyBinder(gizmoCategory, {
 		label = "#tool.ragdollposer.cycle",
@@ -1171,6 +1171,8 @@ function MGR:BuildCPanel(cpanel)
 	function snapEnable:OnChange(newValue)
 		snapValue:SizeTo(-1, newValue and snapTall or 0, 0.1)
 	end
+
+	self.snapValue = snapValue
 
 	local selectBoneAndRoot = keyBinder(boneManip, {
 		label = "#tool.ragdollposer.select.toggle",

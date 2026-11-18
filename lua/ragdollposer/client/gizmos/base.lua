@@ -2,6 +2,10 @@
 local Base = {}
 Base.__index = Base
 
+local dxLevel = render.GetDXLevel()
+local dx11 = dxLevel >= 110 and dxLevel <= 114
+local dx12 = dxLevel >= 120
+
 local scaledMatrix = Matrix()
 local forward = Vector()
 local right = Vector()
@@ -89,6 +93,39 @@ function Base:SendVertexMetaData(vertexObject, vertexProps) end
 ---@param orientation GizmoOrientation
 ---@param props GizmoProps
 function Base:UpdateOrientation(orientation, props) end
+
+-- Avoid clones of this
+-- TODO: move this to the gizmo object and do dependency injection
+DUMMY_MODEL = DUMMY_MODEL or ClientsideModel("models/shadertest/vertexlit.mdl")
+DUMMY_MODEL:SetModelScale(0) -- make it invisible
+---@param gridSize number
+---@param xOffset number
+---@param yOffset number
+local function sendGridData(gridSize, xOffset, yOffset)
+	render.SuppressEngineLighting(true)
+
+	render.SetModelLighting(0, gridSize, xOffset, yOffset)
+
+	DUMMY_MODEL:DrawModel()
+
+	render.SuppressEngineLighting(false)
+end
+local gridMaterial = Material(dx11 and "ragdollposer/grid_dx11" or "ragdollposer/grid")
+
+---@param origin Vector
+---@param axis Vector
+---@param scale number
+---@param width number
+---@param snapValue number
+function Base:DrawGrid(origin, axis, scale, width, snapValue)
+	local gridSize = scale * 10
+	local gridWidth = width * 0.5 / snapValue
+	sendGridData(gridSize / snapValue * 0.5, 0, 0)
+	gridMaterial:SetFloat("$c0_x", gridWidth)
+	gridMaterial:SetFloat("$c0_y", gridWidth)
+	render.SetMaterial(gridMaterial)
+	render.DrawQuadEasy(origin, axis, gridSize, gridSize, color_white, 0)
+end
 
 ---@param props GizmoProps
 ---@param selected boolean

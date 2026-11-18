@@ -220,6 +220,14 @@ function MGR:UpdateInitializers()
 	}
 end
 
+---@return GizmoSideMove
+function MGR:GetGridDrawer()
+	if not self._gridDrawer then
+		self._gridDrawer = gizmos.sidemove()
+	end
+	return self._gridDrawer
+end
+
 function MGR:SetWidth(width)
 	self._gizmoProps.width = width
 end
@@ -286,6 +294,11 @@ end
 ---@return Vector
 function MGR:GetPosition()
 	return self._gizmoProps.pos
+end
+
+---@return Vector
+function MGR:GetFinalPosition()
+	return self._gizmoProps.finalPos
 end
 
 ---@return Angle
@@ -1560,6 +1573,18 @@ function MGR:DrawTraced()
 	end
 end
 
+function MGR:DrawGrid()
+	local _, _, eyeAng = RagdollPoser.View:GetView()
+	local gridDrawer = self:GetGridDrawer()
+	gridDrawer:DrawGrid(
+		self:GetFinalPosition(),
+		eyeAng:Forward(),
+		self._gizmoProps.scale,
+		self._gizmoProps.width,
+		self._gizmoProps.snapValue
+	)
+end
+
 function MGR:Render()
 	cam.Start2D()
 	local mouseHovered = self:DrawBones()
@@ -1572,6 +1597,9 @@ function MGR:Render()
 	cam.End2D()
 
 	cam.Start3D()
+	if RagdollPoser.UI.snapValue and RagdollPoser.UI.snapValue:IsEditing() then
+		self:DrawGrid()
+	end
 	self:Draw()
 	cam.End3D()
 

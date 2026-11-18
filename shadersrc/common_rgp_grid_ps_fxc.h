@@ -41,7 +41,7 @@ float4 main( PS_INPUT frag ) : COLOR
     float2 _LineWidth = float2(LineWidth.x, LineWidth.y);
     half4 _LineColor = half4(1.0, 1.0, 1.0, 1.0);
     half4 _BaseColor = half4(1.0, 1.0, 1.0, 0.0);
-    float grid = PristineGrid(frag.uv, _LineWidth);
+    float grid = PristineGrid(frag.uv * 2.0 - 1.0, _LineWidth);
 
     float4 color = lerp(_BaseColor, _LineColor, grid * _LineColor.a);
 

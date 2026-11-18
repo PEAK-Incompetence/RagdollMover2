@@ -48,29 +48,6 @@ end
 
 local YELLOW = Color(255, 255, 0)
 
-local dxLevel = render.GetDXLevel()
-local dx11 = dxLevel >= 110 and dxLevel <= 114
-local dx12 = dxLevel >= 120
-
-local gridMaterial = Material(dx11 and "ragdollposer/grid_dx11" or "ragdollposer/grid")
-
--- Avoid clones of this
--- TODO: move this to the gizmo object and do dependency injection
-DUMMY_MODEL = DUMMY_MODEL or ClientsideModel("models/shadertest/vertexlit.mdl")
-DUMMY_MODEL:SetModelScale(0) -- make it invisible
----@param gridSize number
----@param xOffset number
----@param yOffset number
-local function sendVertexMetadata(gridSize, xOffset, yOffset)
-	render.SuppressEngineLighting(true)
-
-	render.SetModelLighting(0, gridSize, xOffset, yOffset)
-
-	DUMMY_MODEL:DrawModel()
-
-	render.SuppressEngineLighting(false)
-end
-
 ---@param props GizmoProps
 ---@param selected boolean
 function omni:Draw(props, selected)
@@ -81,12 +58,7 @@ function omni:Draw(props, selected)
 	-- literally a square breh
 	render.DrawSprite(props.finalPos, scale * scaleMultiplier, scale * scaleMultiplier, color)
 	if RagdollPoser.Gizmo:IsMoving() and props.snap and self.eyeVec then
-		local gridSize = scale * 10
-		sendVertexMetadata(gridSize / props.snapValue, gridSize * 0.267, gridSize * 0.267)
-		gridMaterial:SetFloat("$c0_x", props.width * 0.5 / props.snapValue)
-		gridMaterial:SetFloat("$c0_y", props.width * 0.5 / props.snapValue)
-		render.SetMaterial(gridMaterial)
-		render.DrawQuadEasy(props.finalPos, self.eyeVec, gridSize, gridSize, color, 0)
+		self:DrawGrid(props.finalPos, self.eyeVec, scale, props.width, props.snapValue)
 	end
 end
 

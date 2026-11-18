@@ -102,6 +102,7 @@ IDENTITY_MATRIX:Identity()
 ---@param deltaProps DeltaProps
 ---@param transform VMatrix
 ---@param accumulations number[]
+---@param props GizmoProps
 function ball:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local eyePos, eyeVec, eyeAng = RagdollPoser.View:GetView()
 	local right = eyeAng:Right()
@@ -143,6 +144,10 @@ function ball:Transform(directions, deltaProps, transform, accumulations, initia
 		local snap = math.Truncate(accumulations[1] / props.snapValue) * props.snapValue
 		angle = snap - quatInfo[4]
 		quatInfo[4] = snap
+	end
+
+	if props.precision then
+		angle = angle * 0.5
 	end
 
 	rotationQuaternion:SetAngleAxis(angle, axis)

@@ -70,6 +70,8 @@ local MGR = {
 		drawsphere = false,
 		finalPos = Vector(),
 		skeleton = false,
+		precision = false,
+		surface = false,
 	},
 
 	_moving = false,
@@ -349,6 +351,9 @@ end
 RagdollPoser.Networking.DefineReceiver("SetOffset", setOffset)
 
 function MGR:TestIntersect()
+	if not RagdollPoser.UI:IsHoveringWorld() then
+		return false
+	end
 	-- Gizmos don't have a sense of depth, so we need to measure the depth after collecting depth interests
 	local eyepos, eyevec, eyeang = RagdollPoser.View:GetView()
 	local directions = self._directions
@@ -1598,6 +1603,13 @@ hook.Add("RagdollPoser_Entity_PostRefresh", "Gizmo", function()
 end)
 
 local function onKeyPress(actions)
+	if actions[RagdollPoser.Actions.DoPrecision] then
+		MGR._gizmoProps.precision = true
+	end
+	if actions[RagdollPoser.Actions.AttachSurface] then
+		MGR._gizmoProps.attach = true
+	end
+
 	if MGR:IsMoving() then
 		return
 	end
@@ -1624,6 +1636,17 @@ local function onKeyPress(actions)
 	end
 end
 hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", onKeyPress)
+
+local function onKeyRelease(actions)
+	print("release key")
+	if actions[RagdollPoser.Actions.DoPrecision] then
+		MGR._gizmoProps.precision = false
+	end
+	if actions[RagdollPoser.Actions.AttachSurface] then
+		MGR._gizmoProps.attach = false
+	end
+end
+hook.Add("RagdollPoser_Input_KeyRelease", "Gizmo", onKeyRelease)
 
 local function updateHover(state)
 	RagdollPoser.Networking.UpdateHovering()

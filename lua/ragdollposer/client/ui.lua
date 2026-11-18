@@ -868,6 +868,22 @@ function MGR:ContextMenu(entity, bone, keepOpen)
 	end
 end
 
+local filteredPanels = {
+	GModBasePanel = true,
+	[""] = true, -- This is just a representation of "I'm not hovering over anything"
+	ContextMenu = true,
+	DNotify = true,
+}
+
+function MGR:IsHoveringWorld()
+	local hoveredPanel = vgui.GetHoveredPanel()
+	local parentPanel = hoveredPanel and hoveredPanel:GetParent()
+	local hoveredClass = hoveredPanel and hoveredPanel:GetName() or ""
+	local parentClass = parentPanel and parentPanel:GetName() or ""
+	-- Only allow input when we're hovering over nothing or on the panels shown above
+	return filteredPanels[hoveredClass] or filteredPanels[parentClass]
+end
+
 ---These delta setter/getters are used by the precise bone manip
 ---sliders to communicate slider deltas to the gizmos
 ---@param delta number
@@ -1023,10 +1039,20 @@ function MGR:BuildCPanel(cpanel)
 	gizmoCategory:NumSlider("#tool.ragdollposer.scale", "ragdollposer_scale", 0.1, 50, 2)
 	gizmoCategory:NumSlider("#tool.ragdollposer.width", "ragdollposer_width", 0.1, 1, 2)
 
-	local cycle = keyBinder(gizmoCategory, {
+	local cycleAndSurface = keyBinder(gizmoCategory, {
 		label = "#tool.ragdollposer.cycle",
 		cvar = "ragdollposer_cycle_key",
 		action = RagdollPoser.Actions.CycleGizmo,
+	}, {
+		label = "#tool.ragdollposer.surface",
+		cvar = "ragdollposer_surface_key",
+		action = RagdollPoser.Actions.AttachSurface,
+	})
+
+	local precise = keyBinder(gizmoCategory, {
+		label = "#tool.ragdollposer.precise",
+		cvar = "ragdollposer_precise_key",
+		action = RagdollPoser.Actions.DoPrecision,
 	})
 
 	local gizmoOffsets =

@@ -219,6 +219,9 @@ function scale:Transform(directions, deltaProps, transform, accumulations, initi
 
 	local length = screenVector:Dot(delta) * 0.1
 	local initialTransform = initialTransformTable[1]
+	if props.precision then
+		length = length * 0.5
+	end
 	accumulations[1] = accumulations[1] + length
 
 	-- FIXME: Scale snapping seems to oscillate weirdly

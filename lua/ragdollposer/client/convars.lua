@@ -42,6 +42,18 @@ registerInputConVar(
 	KEY_R,
 	RagdollPoser.Actions.SelectRoot
 )
+registerInputConVar(
+	"ragdollposer_surface_key",
+	"Input for attaching an object to the nearest surface with the omnipos gizmo",
+	KEY_NONE,
+	RagdollPoser.Actions.AttachSurface
+)
+registerInputConVar(
+	"ragdollposer_precision_key",
+	"Input for attaching an object to the nearest surface with the omnipos gizmo",
+	KEY_LCONTROL,
+	RagdollPoser.Actions.DoPrecision
+)
 
 local function refreshKeys()
 	for _, convarInfo in ipairs(inputConVars) do

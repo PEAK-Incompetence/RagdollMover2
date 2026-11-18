@@ -127,8 +127,11 @@ hook.Add("CreateMove", "RagdollPoser_MouseInput", mouseInput)
 
 local keysDown = {}
 local function keyboardInput()
+	-- Don't execute anything if we're typing something
+	local keyboardFocus = vgui.GetKeyboardFocus()
+
 	local equipped = RagdollPoser.Helpers.Equipped()
-	if equipped then
+	if equipped and not keyboardFocus then
 		for _, key in ipairs(MGR.ActiveKeybinds) do
 			if input.IsKeyDown(key) and not keysDown[key] then
 				keysDown[key] = true
@@ -138,12 +141,14 @@ local function keyboardInput()
 				end
 			elseif not input.IsKeyDown(key) and keysDown[key] then
 				keysDown[key] = false
+				local actions = MGR.KeyBinds[key]
+				if actions then
+					hook.Run("RagdollPoser_Input_KeyRelease", MGR.KeyBinds[key], key)
+				end
 			end
 		end
 	end
 end
-hook.Remove("PlayerButtonDown", "RagdollPoser_KeyboardInput")
-hook.Remove("KeyPress", "RagdollPoser_KeyboardInput")
 hook.Remove("Think", "RagdollPoser_KeyboardInput")
 hook.Add("Think", "RagdollPoser_KeyboardInput", keyboardInput)
 

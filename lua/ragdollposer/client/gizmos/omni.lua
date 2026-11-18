@@ -138,6 +138,11 @@ function omni:Transform(directions, deltaProps, transform, accumulations, initia
 	local rightLength = right:Dot(delta)
 	local upLength = up:Dot(delta)
 
+	if props.precision then
+		rightLength = rightLength * 0.5
+		upLength = upLength * 0.5
+	end
+
 	accumulations[1] = accumulations[1] + rightLength
 	accumulations[2] = accumulations[2] + upLength
 	local lastSnap = initials[1]
@@ -156,10 +161,19 @@ function omni:Transform(directions, deltaProps, transform, accumulations, initia
 		initials[2] = upSnap
 	end
 
-	local scale = transform:GetScale()
-	local movement = right * rightLength + up * upLength
-	movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
-	transform:Translate(movement / scale)
+	local trace = RagdollPoser.View:GetTrace()
+
+	if props.attach and trace.HitPos then
+		-- FIXME: After switching out of surface attach, bring the object back to the
+		-- initial plane
+		transform:SetTranslation(trace.HitPos)
+	else
+		local scale = transform:GetScale()
+		local movement = right * rightLength + up * upLength
+		movement:Rotate(scaleFreeTransform:GetInverse():GetAngles())
+
+		transform:Translate(movement / scale)
+	end
 	debugoverlay.Axis(transform:GetTranslation(), transform:GetAngles(), 1, 0.1, true)
 	debugoverlay.Line(transform:GetTranslation(), transform:GetTranslation() + delta * 10, 0.5)
 

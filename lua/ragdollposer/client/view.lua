@@ -23,4 +23,25 @@ function MGR:GetView()
 	return eyepos, eyevec, eyeang
 end
 
+---@type TraceResult
+local output = {}
+---@type Trace
+local traceConfig = {
+	filter = {},
+	start = Vector(),
+	endPos = Vector(),
+	output = output,
+}
+---@param filter Entity[]
+function MGR:GetTrace(filter)
+	local eyepos, eyevec = self:GetView()
+
+	traceConfig.start = eyepos
+	traceConfig.endPos = eyepos + eyevec * 16384
+	traceConfig.filter = filter
+	util.TraceLine(traceConfig)
+
+	return output
+end
+
 RagdollPoser.View = MGR

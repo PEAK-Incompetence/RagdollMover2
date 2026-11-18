@@ -189,6 +189,11 @@ function arrow:Transform(directions, deltaProps, transform, accumulations, initi
 		length = snap - lastSnap
 		initials[1] = snap
 	end
+
+	if props.precision then
+		length = length * 0.5
+	end
+
 	local movement = vector * length
 
 	scaleFreeTransform:Set(transform)

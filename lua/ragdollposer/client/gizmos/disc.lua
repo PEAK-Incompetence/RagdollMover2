@@ -237,6 +237,10 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 		initialInfo[3] = snap
 	end
 
+	if props.precision then
+		degrees = degrees * 0.5
+	end
+
 	rotationQuaternion:SetAngleAxis(degrees, axis)
 	rotationQuaternion:Mul(qi)
 	debugoverlay.Line(

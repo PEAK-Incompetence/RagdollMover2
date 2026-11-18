@@ -221,6 +221,10 @@ function sidescale:Transform(directions, deltaProps, transform, accumulations, i
 	local lengthA = axisA:Dot(delta) * 0.1
 	local lengthB = axisB:Dot(delta) * 0.1
 
+	if props.precision then
+		lengthA = lengthA * 0.5
+		lengthB = lengthB * 0.5
+	end
 	accumulations[1] = accumulations[1] + lengthA
 	accumulations[2] = accumulations[2] + lengthB
 

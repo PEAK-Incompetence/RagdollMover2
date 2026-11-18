@@ -160,7 +160,11 @@ function sidemove:Transform(directions, deltaProps, transform, accumulations, in
 	local screenUp = self:ProjectUnitToPlane(up, eyeAng:Forward())
 	local screenForward = self:ProjectUnitToPlane(forward, eyeAng:Forward())
 	local rightLength, forwardLength, upLength = screenRight:Dot(delta), screenForward:Dot(delta), screenUp:Dot(delta)
-
+	if props.precision then
+		rightLength = rightLength * 0.5
+		upLength = upLength * 0.5
+		forwardLength = forwardLength * 0.5
+	end
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
 

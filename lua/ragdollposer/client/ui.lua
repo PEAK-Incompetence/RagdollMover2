@@ -579,7 +579,7 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 	end
 
 	function child:DoRightClick()
-		MGR:ContextMenu()
+		MGR:ContextMenu(entity, bone)
 	end
 
 	return child

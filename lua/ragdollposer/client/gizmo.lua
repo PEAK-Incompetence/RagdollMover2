@@ -69,6 +69,7 @@ local MGR = {
 		relativerotate = false,
 		drawsphere = false,
 		finalPos = Vector(),
+		skeleton = false,
 	},
 
 	_moving = false,
@@ -1230,7 +1231,9 @@ function MGR:DrawBones()
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
 	local selection = RagdollPoser.Selection
-	if selection:GetEnabled() then
+	local inSelectMode = selection:GetEnabled()
+	local alphaMultiplier = inSelectMode and 1 or 0.25
+	if inSelectMode or self._gizmoProps.skeleton then
 		local ents = RagdollPoser.Entity:GetClientEntities()
 		for _, ent in ipairs(ents) do
 			if not IsValid(ent) then
@@ -1239,7 +1242,9 @@ function MGR:DrawBones()
 
 			RagdollPoser.Entity:ExposeBones(ent)
 
-			table.insert(mouseHovered, ent)
+			if inSelectMode then
+				table.insert(mouseHovered, ent)
+			end
 			for b = 0, ent:GetBoneCount() - 1 do
 				local name = ent:GetBoneName(b)
 				if name == "__INVALIDBONE__" then
@@ -1260,13 +1265,15 @@ function MGR:DrawBones()
 				end
 				local color = boneTypeToColor[boneType]
 
-				local pointSelected = selection:RaycastBone(x, y, tx, ty)
-				if pointSelected then
-					color = YELLOW
-					table.insert(mouseHovered, b)
+				if inSelectMode then
+					local pointSelected = selection:RaycastBone(x, y, tx, ty)
+					if pointSelected then
+						color = YELLOW
+						table.insert(mouseHovered, b)
+					end
 				end
 
-				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
+				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color.r, color.g, color.b, color.a * alphaMultiplier)
 
 				local childSelected = false
 				for _, childBone in ipairs(ent:GetChildBones(b)) do
@@ -1279,13 +1286,18 @@ function MGR:DrawBones()
 
 					local cx, cy = data.x, data.y
 
-					if not pointSelected and not childSelected and selection:RaycastBoneLine(x, y, tx, ty, cx, cy) then
+					if
+						inSelectMode
+						and not pointSelected
+						and not childSelected
+						and selection:RaycastBoneLine(x, y, tx, ty, cx, cy)
+					then
 						color = YELLOW
 						table.insert(mouseHovered, b)
 						childSelected = true
 					end
 
-					surface.SetDrawColor(color.r, color.g, color.b, color.a)
+					surface.SetDrawColor(color.r, color.g, color.b, color.a * alphaMultiplier)
 					surface.DrawLine(tx, ty, cx, cy)
 				end
 			end
@@ -1664,6 +1676,7 @@ local function initializeGizmo(gizmo)
 		MGR._gizmoProps.drawsphere = GetConVar("ragdollposer_drawsphere"):GetBool()
 		MGR._gizmoProps.snap = GetConVar("ragdollposer_snap"):GetBool()
 		MGR._gizmoProps.snapValue = GetConVar("ragdollposer_snap_value"):GetFloat()
+		MGR._gizmoProps.skeleton = GetConVar("ragdollposer_skeleton"):GetBool()
 	end
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
@@ -1732,6 +1745,10 @@ end)
 
 convarUpdater("ragdollposer_snap_value", function(_, old, new)
 	MGR._gizmoProps.snapValue = tonumber(new) or tonumber(old)
+end)
+
+convarUpdater("ragdollposer_skeleton", function(_, old, new)
+	MGR._gizmoProps.skeleton = tobool(tonumber(new))
 end)
 
 concommand.Add("ragdollposer_resetgizmo", function()

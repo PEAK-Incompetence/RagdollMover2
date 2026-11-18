@@ -62,7 +62,7 @@ local badEntities = {
 ---@return boolean
 function MGR:VerifySpawned(parentEntity)
 	local firstSpawned = parentEntity:GetNWBool("rgp_firstSpawned")
-	print(firstSpawned, parentEntity)
+	-- print(firstSpawned, parentEntity)
 	return firstSpawned ~= nil and firstSpawned
 end
 

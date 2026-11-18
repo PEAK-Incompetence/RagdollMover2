@@ -19,6 +19,7 @@ TOOL.ClientConVar["funsubtitles"] = 1
 TOOL.ClientConVar["selection"] = 1
 TOOL.ClientConVar["snap"] = 0
 TOOL.ClientConVar["snap_value"] = 45
+TOOL.ClientConVar["skeleton"] = 0
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)

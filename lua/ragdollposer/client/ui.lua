@@ -823,6 +823,13 @@ function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
 
 	for category, constraints in SortedPairs(categories) do
 		local submenu = menu:AddSubMenu(category)
+		table.sort(constraints, function(a, b)
+			---@cast a Constraint
+			---@cast b Constraint
+			local nameA = language.GetPhrase(a.Properties.name)
+			local nameB = language.GetPhrase(b.Properties.name)
+			return nameA < nameB
+		end)
 		for _, constraint in ipairs(constraints) do
 			local name = language.GetPhrase(constraint.Properties.name)
 			local option = submenu:AddOption(language.GetPhrase(name), function()

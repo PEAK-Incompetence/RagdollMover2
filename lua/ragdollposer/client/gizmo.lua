@@ -1638,7 +1638,6 @@ end
 hook.Add("RagdollPoser_Input_KeyPress", "Gizmo", onKeyPress)
 
 local function onKeyRelease(actions)
-	print("release key")
 	if actions[RagdollPoser.Actions.DoPrecision] then
 		MGR._gizmoProps.precision = false
 	end

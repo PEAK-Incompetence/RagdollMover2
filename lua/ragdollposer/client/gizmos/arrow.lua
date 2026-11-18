@@ -2,7 +2,7 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
-local VECTOR_ONE = Vector(1, 1, 1)
+local VECTOR_ONE = RagdollPoser.Constants.VECTOR_ONE
 
 ---@module "gizmo/base"
 ---@class GizmoArrow: GizmoBase

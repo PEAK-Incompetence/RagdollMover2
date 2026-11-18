@@ -170,7 +170,7 @@ local T = Matrix()
 local R_INV = Matrix()
 
 local SCALE_VECTOR = Vector(1, 1, 1)
-local VECTOR_ONE = Vector(1, 1, 1)
+local VECTOR_ONE = RagdollPoser.Constants.VECTOR_ONE
 local COLOR = Color(255, 0, 0)
 
 local function setAxisScale(axis, factor, bonePos, result)

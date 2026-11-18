@@ -8,7 +8,7 @@ local ball = include("base.lua")
 ---@module "quaternion"
 local quaternion = include("ragdollposer/shared/quaternion.lua")
 
-local VECTOR_ONE = Vector(1, 1, 1)
+local VECTOR_ONE = RagdollPoser.Constants.VECTOR_ONE
 
 local scaleMultiplier = 1.5
 local BALL_SCALE = 0.6

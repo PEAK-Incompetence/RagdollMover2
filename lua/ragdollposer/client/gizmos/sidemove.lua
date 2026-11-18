@@ -2,7 +2,7 @@
 -- oriented along its side while always facing us (beam). We'll use a
 -- erode / dilate shader algorithm to shrink and grow the arrow.
 
-local VECTOR_ONE = Vector(1, 1, 1)
+local VECTOR_ONE = RagdollPoser.Constants.VECTOR_ONE
 
 ---@module "gizmo/base"
 ---@class GizmoSideMove: GizmoBase
@@ -18,6 +18,29 @@ local developer = GetConVar("developer")
 local squareLength = 0.15
 local offset = 0.3
 local YELLOW = Color(255, 255, 0)
+
+local dxLevel = render.GetDXLevel()
+local dx11 = dxLevel >= 110 and dxLevel <= 114
+local dx12 = dxLevel >= 120
+
+local gridMaterial = Material(dx11 and "ragdollposer/grid_dx11" or "ragdollposer/grid")
+
+-- Avoid clones of this
+-- TODO: move this to the gizmo object and do dependency injection
+DUMMY_MODEL = DUMMY_MODEL or ClientsideModel("models/shadertest/vertexlit.mdl")
+DUMMY_MODEL:SetModelScale(0) -- make it invisible
+---@param gridSize number
+---@param xOffset number
+---@param yOffset number
+local function sendVertexMetadata(gridSize, xOffset, yOffset)
+	render.SuppressEngineLighting(true)
+
+	render.SetModelLighting(0, gridSize, xOffset, yOffset)
+
+	DUMMY_MODEL:DrawModel()
+
+	render.SuppressEngineLighting(false)
+end
 
 local math_abs = math.abs
 ---@param vector Vector
@@ -36,16 +59,19 @@ function sidemove:Draw(props, selected)
 	local up = self.up
 	local forward = self.forward
 
+	local point = props.finalPos + (right + up + forward):GetNormalized() * scale * offset
+
 	render.SetColorMaterialIgnoreZ()
 	render.CullMode(MATERIAL_CULLMODE_NONE)
-	render.DrawQuadEasy(
-		props.finalPos + (right + up + forward):GetNormalized() * scale * offset,
-		self._axis,
-		scale * squareLength,
-		scale * squareLength,
-		color,
-		0
-	)
+	render.DrawQuadEasy(point, self._axis, scale * squareLength, scale * squareLength, color, 0)
+	if RagdollPoser.Gizmo:IsMoving() and props.snap then
+		local gridSize = scale * 10
+		sendVertexMetadata(gridSize / props.snapValue, gridSize * 0.267, gridSize * 0.267)
+		gridMaterial:SetFloat("$c0_x", props.width * 0.5 / props.snapValue)
+		gridMaterial:SetFloat("$c0_y", props.width * 0.5 / props.snapValue)
+		render.SetMaterial(gridMaterial)
+		render.DrawQuadEasy(point, self._axis, gridSize, gridSize, color, 0)
+	end
 	render.CullMode(MATERIAL_CULLMODE_CCW)
 end
 

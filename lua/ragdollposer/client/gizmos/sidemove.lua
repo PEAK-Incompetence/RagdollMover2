@@ -98,7 +98,8 @@ function sidemove:Intersect(eyepos, direction, props)
 	if hitPos then
 		local distance = hitPos:DistToSqr(center)
 
-		local result = distance < (0.5 * squareLength * scale) ^ 2
+		local area = 2 * squareLength * math.sqrt(2) * scale
+		local result = distance < area
 		if result then
 			debugoverlay.Box(hitPos, tempMin, tempMax, 0.1)
 		end

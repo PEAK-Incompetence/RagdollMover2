@@ -31,13 +31,20 @@ function arrow:Intersect(eyepos, direction, props)
 	render.SetColorMaterialIgnoreZ()
 	local scale = props.scale
 
+	local right, up = self._right, self._up
+	local boxThickness = scale * 0.05
+
+	-- Scale the hitbox scales so they surround the arrows
+	local min = tempMin + (boxThickness - 1) * right:Dot(tempMin) * right + (boxThickness - 1) * up:Dot(tempMin) * up
+	local max = tempMax + (boxThickness - 1) * right:Dot(tempMax) * right + (boxThickness - 1) * up:Dot(tempMax) * up
+
 	local angle = props.orientation == RagdollPoser.Gizmo.Orientation.Local and props.ang or angle_zero
 	if developer:GetBool() then
 		render.DrawBox(
 			props.finalPos,
 			angle,
-			tempMin + self._direction * scale * centerPadding,
-			tempMax + self._direction * scale
+			min + self._direction * scale * centerPadding,
+			max + self._direction * scale
 		)
 	end
 	local result = util.IntersectRayWithOBB(
@@ -45,8 +52,8 @@ function arrow:Intersect(eyepos, direction, props)
 		direction * 16384,
 		props.finalPos,
 		angle,
-		tempMin + self._direction * scale * centerPadding,
-		tempMax + self._direction * scale
+		min + self._direction * scale * centerPadding,
+		max + self._direction * scale
 	)
 	if result then
 		debugoverlay.Box(result, tempMin, tempMax, 0.1)
@@ -154,6 +161,8 @@ function arrow:UpdateOrientation(orientation, props)
 	else
 		self._axis:Set(self._direction)
 	end
+	self._right = self._direction:Angle():Right()
+	self._up = self._direction:Angle():Up()
 end
 
 -- Try to prevent some matrix creations to avoid gc cycles

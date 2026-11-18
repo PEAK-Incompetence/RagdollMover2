@@ -71,7 +71,14 @@ end
 local tempMin, tempMax = Vector(-1, -1, -1), Vector(1, 1, 1)
 
 function disc:Intersect(eyepos, direction, props)
-	local hitPos = util.IntersectRayWithPlane(eyepos, direction * 16384, props.finalPos, self._axis)
+	local _, _, eyeAng = RagdollPoser.View:GetView()
+
+	local hitPos = util.IntersectRayWithPlane(
+		eyepos,
+		direction * 16384,
+		props.finalPos,
+		self._facesUs and eyeAng:Forward() or self._axis
+	)
 	local distSqr = hitPos and hitPos:DistToSqr(props.finalPos) or -1
 	local halfScale = (self._facesUs and 0.625 or 0.5) * props.scale
 

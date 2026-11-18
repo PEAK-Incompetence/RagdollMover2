@@ -26,6 +26,26 @@ Base.State = {
 	influence = 1,
 }
 
+-- TODO: Provide colors from theming
+local ENABLED_COLOR = Color(255, 255, 255, 128)
+local DISABLED_COLOR = Color(255, 255, 255, 32)
+---@param target Entity
+---@param bone integer
+---@param spriteMat IMaterial
+---@param enabledColor Color?
+---@param disabledColor Color?
+function Base:DrawIcon(target, bone, spriteMat, enabledColor, disabledColor)
+	local matrix = self:GetTransformFromBone(target, bone)
+	if not matrix then
+		return
+	end
+	enabledColor = enabledColor or ENABLED_COLOR
+	disabledColor = disabledColor or DISABLED_COLOR
+
+	render.SetMaterial(spriteMat)
+	render.DrawSprite(matrix:GetTranslation(), 2, 2, self.State.enabled and ENABLED_COLOR or DISABLED_COLOR)
+end
+
 -- Consider using an enum for types to reduce net cost
 
 ---@class SerializedConstraint

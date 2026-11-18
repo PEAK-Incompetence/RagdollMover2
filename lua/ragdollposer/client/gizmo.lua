@@ -1270,6 +1270,9 @@ function MGR:DrawBones()
 				local tx, ty = data.x, data.y
 				local x, y = input.GetCursorPos()
 				local boneType = bones:GetBoneType(ent, b)
+				if boneType == boneTypes.Procedural then
+					continue
+				end
 				if selection._filter and selection._filter ~= boneType then
 					continue
 				end
@@ -1481,13 +1484,7 @@ function MGR:DrawBoneNames(mouseHovered)
 			local boneName = targetEntity:GetBoneName(entry)
 			local color = color_white
 			local boneType = RagdollPoser.Bones:GetBoneType(targetEntity, entry)
-			if boneType == RagdollPoser.Bones.BoneType.Physics then
-				color = GREEN
-			elseif boneType == RagdollPoser.Bones.BoneType.Manipulate then
-				color = CYAN
-			elseif boneType == RagdollPoser.Bones.BoneType.Procedural then
-				color = RED
-			end
+			color = boneTypeToColor[boneType] or color
 
 			draw.SimpleTextOutlined(
 				boneName,

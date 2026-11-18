@@ -11,7 +11,7 @@ local MAX_ITERATIONS = 64
 local POSITION_EPSILON = 0.001
 local DAMPING = 0.15
 local MAX_STEP = math.rad(8)
-local MAX_REACH_FRACTION = 0.98
+local MAX_REACH_FRACTION = 0.9975
 local LINE_COLOR = Color(0, 220, 255, 255)
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()

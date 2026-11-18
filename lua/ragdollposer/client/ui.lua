@@ -695,13 +695,16 @@ local function updateBoneTree(boneTree, selection, boneTypeRestriction)
 end
 
 ---@param menu DMenu
-function MGR:OffsetMenu(menu)
-	local x = input.GetCursorPos()
-	menu:Open(x)
+function MGR:OffsetMenu(menu, yOffset)
+	local x, y = input.GetCursorPos()
+	menu:Open(x, y)
 	-- Open it twice. Why? So that we can offset it when the internals performs all the positioning
-	local w = menu:GetWide()
+	local w, h = menu:GetSize()
 	x = math.min(x, ScrW()) - w * 0.99
-	menu:Open(x)
+	if yOffset then
+		y = math.min(y, ScrH()) - yOffset * 1.05
+	end
+	menu:Open(x, y)
 end
 
 --- @param client ClientEntity
@@ -859,7 +862,7 @@ function MGR:ContextMenu(entity, bone, keepOpen)
 	RagdollPoser.UI:BoneMenu(entity, bone, keepOpen, menu)
 	RagdollPoser.UI:ConstraintMenu(entity, bone, keepOpen, menu)
 	menu:Open()
-	self:OffsetMenu(menu)
+	self:OffsetMenu(menu, option:GetTall())
 
 	function menu:OnRemove()
 		RagdollPoser.Gizmo:SetEnabled(true)

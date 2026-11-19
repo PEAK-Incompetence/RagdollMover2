@@ -1291,7 +1291,7 @@ function MGR:DrawBones()
 				end
 				local color = boneTypeToColor[boneType]
 
-				if inSelectMode then
+				if inSelectMode and RagdollPoser.UI:IsHoveringWorld() then
 					local pointSelected = selection:RaycastBone(x, y, tx, ty)
 					if pointSelected then
 						color = YELLOW
@@ -1314,6 +1314,7 @@ function MGR:DrawBones()
 
 					if
 						inSelectMode
+						and RagdollPoser.UI:IsHoveringWorld()
 						and not pointSelected
 						and not childSelected
 						and selection:RaycastBoneLine(x, y, tx, ty, cx, cy)
@@ -1367,6 +1368,7 @@ end)
 local BLUE = Color(0, 0, 255, 255)
 local hoverMat = Matrix()
 function MGR:DrawHovered()
+	local bones = RagdollPoser.Bones
 	for entity, bone in pairs(hovered) do
 		entity:CopyBoneMatrix(bone, hoverMat)
 		local p = hoverMat:GetTranslation()
@@ -1375,7 +1377,8 @@ function MGR:DrawHovered()
 			continue
 		end
 		local tx, ty = data.x, data.y
-		local color = BLUE
+		local boneType = bones:GetBoneType(entity, bone)
+		local color = boneTypeToColor[boneType]
 
 		-- TODO: Categorize based on bone type
 		surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color)
@@ -1420,6 +1423,10 @@ function MGR:DrawSelected()
 		end
 		RagdollPoser.Entity:ExposeBones(entity)
 		local matrix = entity:GetBoneMatrix(bone)
+		if not matrix then
+			continue
+		end
+
 		local data = matrix:GetTranslation():ToScreen()
 		if not data.visible then
 			continue
@@ -1519,6 +1526,13 @@ local defaultScaleVector = Vector(1, 1, 1)
 function MGR:DrawScaling(mouseHovered)
 	local targetEntity = NULL
 
+	local sin = 1 + 0.1 * math.sin(2.666 * math.pi * RealTime())
+	scaleVector:SetUnpacked(sin, sin, sin)
+
+	for ent, bone in pairs(hovered) do
+		ent:ManipulateBoneScale(bone, scaleVector)
+	end
+
 	for i = 1, #mouseHovered do
 		local entry = mouseHovered[i]
 		local nextEntry = mouseHovered[i + 1]
@@ -1528,8 +1542,6 @@ function MGR:DrawScaling(mouseHovered)
 			targetEntity = entry
 		elseif IsValid(targetEntity) then
 			---@cast entry integer
-			local sin = 1 + 0.1 * math.sin(2.666 * math.pi * RealTime())
-			scaleVector:SetUnpacked(sin, sin, sin)
 			targetEntity:ManipulateBoneScale(entry, scaleVector)
 		end
 	end

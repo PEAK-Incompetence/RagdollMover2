@@ -124,6 +124,19 @@ function MGR.CanXRaySelect(ply, state)
 	return hasAccess
 end
 
+---@param entity Entity
+---@return Entity
+function MGR.GetAncestor(entity)
+	if not IsValid(entity) then
+		return entity
+	end
+
+	while entity:GetParent() ~= NULL do
+		entity = entity:GetParent()
+	end
+	return entity
+end
+
 if CLIENT then
 	---[CLIENT]
 	---

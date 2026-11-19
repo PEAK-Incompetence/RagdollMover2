@@ -2,7 +2,7 @@
 ---@alias SelectionOddIndex integer
 
 ---@alias Selection (SelectionEvenIndex|SelectionOddIndex)[]
----@alias SelectedEntities table<Entity, true>
+---@alias SelectedEntities table<ClientEntity, true>
 
 ---Entity bone pair. The iteration is as follows
 ---
@@ -54,7 +54,7 @@ function MGR:EndDrag()
 end
 
 ---@param bone integer
----@param entity Entity
+---@param entity ClientEntity
 ---@param accumulate boolean
 function MGR:SelectOne(bone, entity, accumulate)
 	RagdollPoser.Log("selected", bone, entity)

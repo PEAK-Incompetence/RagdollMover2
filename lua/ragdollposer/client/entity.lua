@@ -57,6 +57,16 @@ local static = CreateClientConVar(
 	1
 )
 
+local xray = CreateClientConVar(
+	"ragdollposer_xray_selection",
+	0,
+	true,
+	true,
+	"If set to 1, selected will render in front of all models.",
+	0,
+	1
+)
+
 --- @param client ClientEntity
 --- @param source Entity
 local function copyVisualsToClient(client, source)
@@ -78,11 +88,19 @@ local function renderOverride(self, flags)
 	if RagdollPoser.Helpers.Equipped() then
 		-- Draw the entity underneath the ghost
 		local entity = MGR.ClientToEntity[self]
+		local root = RagdollPoser.Helpers.GetAncestor(entity)
+		local clientRoot = MGR.EntityToClient[root]
+		local selectedEntities = RagdollPoser.Selection:GetSelectedEntities()
+		-- Only draw if the selected entity is the `root` or has the `root` as its parent.
+		if not selectedEntities[clientRoot] then
+			return
+		end
+
 		if IsValid(entity) then
 			copyVisualsToClient(self, entity)
 
 			entity:DrawModel(flags)
-			cam.IgnoreZ(true)
+			cam.IgnoreZ(xray:GetBool())
 			render.OverrideColorWriteEnable(true, false)
 			self:DrawModel(transparentFlags)
 			render.OverrideColorWriteEnable(false, false)

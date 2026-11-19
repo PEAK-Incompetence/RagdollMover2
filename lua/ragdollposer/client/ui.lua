@@ -1109,6 +1109,8 @@ function MGR:BuildCPanel(cpanel)
 	static:SetTooltip("#tool.ragdollposer.static.tooltip")
 	local xray = misc:CheckBox("#tool.ragdollposer.xray", "ragdollposer_xray")
 	xray:SetTooltip("#tool.ragdollposer.xray.tooltip")
+	local xraySelection = misc:CheckBox("#tool.ragdollposer.xray.selection", "ragdollposer_xray_selection")
+	xraySelection:SetTooltip("#tool.ragdollposer.xray.selection.tooltip")
 	local subtitle = misc:CheckBox("#tool.ragdollposer.misc.funsubtitles", "ragdollposer_funsubtitles")
 	subtitle:SetTooltip("#tool.ragdollposer.misc.funsubtitles.tooltip")
 

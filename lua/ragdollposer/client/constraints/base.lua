@@ -118,6 +118,7 @@ function Base:ConstructUITemplate(entry, props, state)
 						base:SetText(name)
 						updateTarget(entity)
 						RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
+						RagdollPoser.Constraints:UpdateSingleGraph(self.Owner, self)
 					end)
 				end
 
@@ -130,6 +131,7 @@ function Base:ConstructUITemplate(entry, props, state)
 					base:SetText("")
 					updateTarget(NULL)
 					RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
+					RagdollPoser.Constraints:UpdateSingleGraph(self.Owner, self)
 				end)
 				menu:AddOption("#tool.ragdollposer.constraint.target.set.picker", function() end)
 

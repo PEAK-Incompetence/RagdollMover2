@@ -89,10 +89,20 @@ local function renderOverride(self, flags)
 		-- Draw the entity underneath the ghost
 		local entity = MGR.ClientToEntity[self]
 		local root = RagdollPoser.Helpers.GetAncestor(entity)
-		local clientRoot = MGR.EntityToClient[root]
-		local selectedEntities = RagdollPoser.Selection:GetSelectedEntities()
+
+		local constrainedEntities = RagdollPoser.Constraints:GetGraphForEntity(entity)
+		local shouldDraw = RagdollPoser.Selection:IsEntitySelected(root)
+		if constrainedEntities then
+			for _, constrained in ipairs(constrainedEntities.array) do
+				if RagdollPoser.Selection:IsEntitySelected(constrained) then
+					shouldDraw = true
+					break
+				end
+			end
+		end
+
 		-- Only draw if the selected entity is the `root` or has the `root` as its parent.
-		if not selectedEntities[clientRoot] then
+		if not shouldDraw then
 			return
 		end
 

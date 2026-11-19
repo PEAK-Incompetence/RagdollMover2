@@ -76,7 +76,9 @@ function MGR:SelectOne(bone, entity, accumulate)
 		end
 	else
 		selectedEntities = {}
-		entitySelectedBones[entity] = {}
+		entitySelectedBones = {
+			[entity] = {},
+		}
 		entityBonePairs = { bone, entity }
 		entitySelectedBones[entity][bone] = true
 		selectedEntities[entity] = true
@@ -201,6 +203,19 @@ end
 
 function MGR:WasOnBone()
 	return self._wasOnBone
+end
+
+---@param entity Entity
+---@return boolean
+function MGR:IsEntitySelected(entity)
+	local client = RagdollPoser.Entity:GetClientFromEntity(entity)
+	return selectedEntities[client]
+end
+
+---@param client ClientEntity
+---@return boolean
+function MGR:IsClientEntitySelected(client)
+	return selectedEntities[client]
 end
 
 ---@param state boolean

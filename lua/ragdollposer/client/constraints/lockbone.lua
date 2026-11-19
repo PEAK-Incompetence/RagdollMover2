@@ -154,6 +154,7 @@ function lock:ConstructUI(entry, props, state)
 					updateTarget(target)
 					ui.otherTarget:SetText(getEntityName(target))
 					RagdollPoser.Constraints:UpdateConstraint(constraint.Owner, constraint)
+					RagdollPoser.Constraints:UpdateSingleGraph(constraint.Owner, constraint)
 				end)
 			end
 		end

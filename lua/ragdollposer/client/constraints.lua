@@ -30,7 +30,26 @@ MGR.ConstraintConstructors = {}
 local EntityConstraintStacks = MGR.EntityConstraintStacks or {}
 MGR.EntityConstraintStacks = EntityConstraintStacks
 
+---TODO: This is only used for drawing entities in the same
+---graph. Ensure we don't get DAGs
+---@type table<Entity, SetArray<Entity>>
+local EntityGraph = MGR.EntityGraph or {}
+MGR.EntityGraph = EntityGraph
+
 -- DAG for evaluating constraints
+
+---@class SetArray<T>
+---@field set table<T, integer>
+---@field array T[]
+
+---@generic T: Entity
+---@return SetArray<T>
+local function createSetArray()
+	return {
+		set = {},
+		array = {},
+	}
+end
 
 ---@param entity Entity
 ---@param type string
@@ -356,7 +375,7 @@ end
 ---@param name string?
 ---@return Constraint?
 function MGR:Push(entity, type, state, name)
-	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
+	local stack = EntityConstraintStacks[entity] or createSetArray()
 	EntityConstraintStacks[entity] = stack
 	refreshStack(entity)
 	local constraint = constructConstraint(entity, type, state, name)
@@ -365,6 +384,7 @@ function MGR:Push(entity, type, state, name)
 		stack.array[index] = constraint
 		stack.set[constraint._id] = index
 		EntityConstraintStacks[entity] = stack
+		self:UpdateSingleGraph(entity, constraint)
 		hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, { constraint })
 	end
 	EntityConstraintStacks[entity] = stack
@@ -380,7 +400,7 @@ end
 ---@param batch ConstraintBatch[]
 ---@return Constraint[]?
 function MGR:PushBatch(entity, batch)
-	local stack = EntityConstraintStacks[entity] or { set = {}, array = {} }
+	local stack = EntityConstraintStacks[entity] or createSetArray()
 	EntityConstraintStacks[entity] = stack
 	refreshStack(entity)
 	local constraints = {}
@@ -402,6 +422,7 @@ function MGR:PushBatch(entity, batch)
 	hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, constraints)
 	EntityConstraintStacks[entity] = stack
 	self:UpdateConstraints()
+	self:UpdateGraph()
 end
 
 ---@param constraints table<Entity, SerializedConstraint[]>
@@ -434,6 +455,66 @@ function MGR:SetConstraints(constraints)
 		-- PrintTable(stack)
 		EntityConstraintStacks[entity] = stack
 	end
+	self:UpdateGraph()
+end
+
+function MGR:AddEntityRelation(entityA, entityB)
+	if IsValid(entityA) then
+		self.EntityGraph[entityA] = self.EntityGraph[entityA] or createSetArray()
+	end
+	if IsValid(entityB) then
+		self.EntityGraph[entityB] = self.EntityGraph[entityB] or createSetArray()
+	end
+
+	if IsValid(entityA) and IsValid(entityB) then
+		if not self.EntityGraph[entityA].set[entityB] and not self.EntityGraph[entityB].set[entityA] then
+			self.EntityGraph[entityA].set[entityB] = table.insert(self.EntityGraph[entityA].array, entityB)
+			self.EntityGraph[entityB].set[entityA] = table.insert(self.EntityGraph[entityB].array, entityA)
+		end
+	end
+end
+
+-- TODO: Add an incremental version so we don't have to traverse this on every Push
+function MGR:UpdateGraph()
+	self.EntityGraph = {}
+	for entity, stack in pairs(EntityConstraintStacks) do
+		for _, constraint in ipairs(stack.array) do
+			local target = constraint.State.target
+			local otherTarget = constraint.State.otherTarget
+
+			self:AddEntityRelation(entity, target)
+			self:AddEntityRelation(target, otherTarget)
+			self:AddEntityRelation(entity, otherTarget)
+		end
+	end
+end
+
+---@param entity Entity
+---@param constraint Constraint
+function MGR:UpdateSingleGraph(entity, constraint)
+	---@type SetArray<Entity>
+	local graph = self.EntityGraph[entity]
+	if graph then
+		-- Clean up NULL entities
+		for e, id in SortedPairsByValue(graph.set, true) do
+			if not IsValid(e) then
+				graph.set[e] = nil
+				table.remove(graph.array, id)
+			end
+		end
+	end
+
+	local constraintEntity = constraint.State.target
+	local otherEntity = constraint.State.otherTarget
+	self:AddEntityRelation(entity, constraintEntity)
+	self:AddEntityRelation(entity, otherEntity)
+	self:AddEntityRelation(constraintEntity, otherEntity)
+end
+
+---@param entity Entity
+---@return SetArray<Entity>
+function MGR:GetGraphForEntity(entity)
+	return self.EntityGraph[entity]
 end
 
 function MGR:UpdateConstraints()
@@ -490,6 +571,7 @@ function MGR:Remove(entity, id)
 		table.remove(stack.array, removedIndex)
 		refreshStack(entity)
 		self:UpdateConstraints()
+		self:UpdateGraph()
 	end
 end
 
@@ -525,6 +607,7 @@ function MGR:Swap(entity, c, d)
 	stack.array[i], stack.array[j] = d, c
 	refreshStack(entity)
 	self:UpdateConstraints()
+	self:UpdateGraph()
 	hook.Run("RagdollPoser_Constraints_ConstraintOrderChanged", entity)
 	return true
 end

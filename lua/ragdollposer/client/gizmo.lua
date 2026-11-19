@@ -1559,10 +1559,11 @@ end
 function MGR:DrawTraced()
 	local eyeTrace = LocalPlayer():GetEyeTrace()
 	local entity = eyeTrace.Entity
-	local physBone = eyeTrace.PhysicsBone
-	local bone = entity:TranslatePhysBoneToBone(physBone)
-	bone = bone and bone >= 0 and bone or 0
 	if IsValid(entity) and not IsValid(RagdollPoser.Entity:GetClientFromEntity(entity)) then
+		local physBone = eyeTrace.PhysicsBone
+		local bone = entity:TranslatePhysBoneToBone(physBone)
+		bone = bone and bone >= 0 and bone or 0
+
 		local bonePos = entity:GetBoneMatrix(bone)
 		bonePos = bonePos and bonePos:GetTranslation() or entity:GetPos()
 		local screen = bonePos:ToScreen()

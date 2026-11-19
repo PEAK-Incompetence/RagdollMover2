@@ -436,14 +436,14 @@ function ik:ConstructUI(entry, props, state)
 	ui.length = entry:NumSlider("#tool.ragdollposer.constraint.ik.length", "", 1, 16, 0)
 	ui.length:SetValue(self.State.length)
 	function ui.length.OnValueChanged(_, value)
-		self.State.length = math.Clamp(math.Round(value), 1, 16)
+		self.State.length = math.max(math.floor(value), 1)
 		RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
 	end
 
 	ui.iterations = entry:NumSlider("#tool.ragdollposer.constraint.ik.iterations", "", 1, MAX_ITERATIONS, 0)
 	ui.iterations:SetValue(self.State.iterations)
 	function ui.iterations.OnValueChanged(_, value)
-		self.State.iterations = math.Clamp(math.Round(value), 1, MAX_ITERATIONS)
+		self.State.iterations = math.Clamp(math.floor(value), 1, MAX_ITERATIONS)
 		RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
 	end
 

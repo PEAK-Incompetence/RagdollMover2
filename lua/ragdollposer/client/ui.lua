@@ -858,6 +858,11 @@ function MGR:ConstraintMenu(client, bone, keepOpen, parentMenu)
 end
 
 function MGR:ContextMenu(entity, bone, keepOpen)
+	-- TODO: Why does this become invalid all of a sudden?
+	if not IsValid(entity) then
+		return
+	end
+
 	gui.EnableScreenClicker(true)
 	local menu = DermaMenu(keepOpen)
 	---@diagnostic disable-next-line: redundant-parameter

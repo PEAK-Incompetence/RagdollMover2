@@ -240,6 +240,13 @@ function lock:EvaluatePose(entity, context)
 		return captureOffset(self, parentTarget, childTarget, transforms, childMatrices)
 	end
 
+	-- FIXME: this messes up some bonemerged cosmetics
+	-- e.g. models/workshop/player/items/heavy/dec24_cossack_camo_style2/dec24_cossack_camo_style2.mdl
+	-- what it does is flip the model on every click on the gizmo
+	--
+	-- ai made this.
+	-- the point of this is to preserve the offset of a bonemerged entity
+	-- when it is currently away from its parent
 	local worldOffset
 	if self._offset and parentRoot then
 		-- Rotate the saved root-relative offset with the parent's current root pose.
@@ -260,6 +267,8 @@ function lock:EvaluatePose(entity, context)
 			end
 		end
 	end
+
+	-- TODO: Account for child bones of the bonemerged entity that the parent entity doesn't have
 
 	return true
 end

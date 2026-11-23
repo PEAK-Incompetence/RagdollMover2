@@ -864,25 +864,6 @@ hook.Add("Think", "RagdollPoser_Gizmo_Transform", doTransform)
 hook.Remove("InputMouseApply", "RagdollPoser_Gizmo_Transform")
 hook.Add("InputMouseApply", "RagdollPoser_Gizmo_Transform", doTransform)
 
----Bone matrices and entity's angles aren't consistent with each other
----so we need to correct this
----@param entity Entity
----@param bone integer
----@param matrix VMatrix
-local function fixAngleOffset(entity, bone, matrix)
-	local m1 = Matrix()
-	m1:Rotate(entity:GetAngles())
-	local m2 = Matrix()
-	m2:Rotate(entity:GetBoneMatrix(bone):GetAngles())
-	local offset = m2:GetTransposed() * m1
-	local trace = offset:GetField(1, 1) + offset:GetField(2, 2) + offset:GetField(3, 3)
-	local difference = math.acos(math.Clamp((trace - 1) * 0.5, -1, 1))
-	if difference >= 1e-6 then
-		local rotation = matrix * offset
-		matrix:SetAngles(rotation:GetAngles())
-	end
-end
-
 ---Send update bone transforms of the selected bone hierarchy
 ---@param selection Selection
 local function sendSubPose(selection)
@@ -972,50 +953,7 @@ local function sendSubPose(selection)
 	RagdollPoser.Networking.SendSubPose()
 	net.WriteUInt(#entities, 13)
 	for _, entity in ipairs(entities) do
-		local isBonemerge = RagdollPoser.Bonemerge:IsBonemergeEntity(entity)
-		-- TODO: Make a module which modifies the matrices for different scripted entities
-		-- e.g.
-		-- - animated props
-		-- - prop_effect
-		-- - ragdoll resizer entities
-
-		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
-		RagdollPoser.Entity:ExposeBones(entity)
-		RagdollPoser.Entity:ExposeBones(client)
-		net.WriteEntity(entity)
-		local matrices = RagdollPoser.Entity:GetMatrices(entity)
-		local bs = bones[entity]
-		local count = #bs
-		net.WriteUInt(count, 8)
-		local physCount = RagdollPoser.Entity:GetPhysBoneCount(entity)
-		for _, b in ipairs(bs) do
-			net.WriteUInt(b, 8)
-			local matrix = matrices[b + 1] * IDENTITY_MATRIX
-
-			local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			if not isBonemerge and (physbone >= 0 or isStaticProp(entity)) then
-				-- Compare if bone matrices and angles match up
-				-- if not, then we need to apply corrections
-				-- TODO: Does this happen with ragdolls too?
-				-- TODO: Add parented entity layer so that matrices sent there is correct
-				-- All bonemerged entities use manipulates, while parented use setpos/setang
-				if physCount == 1 then
-					fixAngleOffset(entity, b, matrix)
-				end
-
-				-- Send world transforms and everything
-				net.WriteMatrix(matrix)
-			else
-				if isBonemerge then
-					RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
-					-- boneMatrix:SetScale(matrix:GetScale())
-				else
-					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
-					boneMatrix:SetScale(matrix:GetScale())
-				end
-				net.WriteMatrix(boneMatrix)
-			end
-		end
+		RagdollPoser.ClientTransformer:SendTransform(entity, bones[entity])
 	end
 	net.SendToServer()
 end

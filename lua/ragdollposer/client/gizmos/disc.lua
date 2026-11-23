@@ -259,6 +259,7 @@ function disc:Transform(directions, deltaProps, transform, accumulations, initia
 	)
 	debugoverlay.Axis(transform:GetTranslation(), rotationQuaternion:Angle(), 10, 0.2, true)
 
+	-- FIXME: Scaling a bone causes drift
 	scaleFreeTransform:Set(transform)
 	scaleFreeTransform:SetScale(VECTOR_ONE)
 

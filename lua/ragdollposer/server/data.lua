@@ -90,40 +90,16 @@ local function sendSubPose(len, ply)
 		---@type VMatrix[]
 		local matrices = {}
 		local bones = {}
+		local boneSet = {}
 		for _ = 1, matrixCount do
 			local b = net.ReadUInt(8)
-			table.insert(bones, b)
+			boneSet[b] = table.insert(bones, b)
 			matrices[b] = net.ReadMatrix()
 		end
 
-		local isStaticProp = RagdollPoser.Helpers.IsStaticProp(entity)
-		local physicsCount = entity:GetPhysicsObjectCount()
-		for _, b in ipairs(bones) do
-			local matrix = matrices[b]
-			local boneName = entity:GetBoneName(b)
-			local physBone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-			local po = physBone >= 0 and entity:GetPhysicsObjectNum(physBone)
-			-- Some physics objects start their physics at index 1, not index 0
-			if isStaticProp or (physicsCount == 1 and not po and #bones == 1) then
-				-- Need to check that physics count is 1 and bones is 1 so we use this
-				-- Otherwise, getphysicsobjectnum will return the parent physics bone that the bone
-				-- is attached to and run set position multiple times
-				-- FIXME: Is the logic sound for just getting a single physics object? Think this could
-				-- be fixed
-				po = entity:GetPhysicsObject()
-			end
-			if matrix then
-				if po then
-					po:SetPos(matrix:GetTranslation())
-					po:SetAngles(matrix:GetAngles())
-					po:Wake()
-					po:EnableMotion(false)
-				else
-					entity:ManipulateBonePosition(b, matrix:GetTranslation())
-					entity:ManipulateBoneAngles(b, matrix:GetAngles())
-				end
-				entity:ManipulateBoneScale(b, matrix:GetScale())
-			end
+		if IsValid(entity) then
+			local class = entity:GetClass()
+			RagdollPoser.ServerTransformer:DoTransform(class, entity, bones, boneSet, matrices)
 		end
 	end
 
@@ -386,8 +362,23 @@ local function updateHover(len, pl)
 end
 RagdollPoser.Networking.DefineReceiver("UpdateHovering", updateHover)
 
--- TODO: Account for edge cases where someone might advanced bonemerge a ragdoll onto another ragdoll or prop
--- and loading them from a duplicator or GMod save after map reload
+local function countPhysics(model)
+	local modelInfo = util.GetModelInfo(model)
+	local keyvalues = modelInfo and util.KeyValuesToTablePreserveOrder(modelInfo.KeyValues or "")
+	if not keyvalues then
+		return 0
+	end
+
+	local count = 0
+	-- 32 is the max number of physics object we can have (index 0 .. 31)
+	for i = 1, 32 do
+		if keyvalues[i] and keyvalues[i].Key == "solid" then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 local function sendPhysBoneCount(entity)
 	timer.Simple(0, function()
 		if IsValid(entity) and entity.GetModel and entity:GetModel() then
@@ -399,9 +390,8 @@ local function sendPhysBoneCount(entity)
 				"rgp_firstSpawned",
 				not (entity.EntityMods and entity.EntityMods[MGR.DuplicatorKey] ~= nil)
 			)
-			-- print(entity:GetNWBool("rgp_firstSpawned"), "is first spawned?", entity)
 
-			local count = entity:GetPhysicsObjectCount()
+			local count = countPhysics(entity:GetModel())
 			MGR.UpdatePhysBoneCount(entity, count > 0 and count or 1)
 		end
 	end)

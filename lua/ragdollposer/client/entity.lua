@@ -92,6 +92,7 @@ local function renderOverride(self, flags)
 
 		local constrainedEntities = RagdollPoser.Constraints:GetGraphForEntity(entity)
 		local shouldDraw = RagdollPoser.Selection:IsEntitySelected(root)
+			or RagdollPoser.Selection:IsEntitySelected(entity)
 		if constrainedEntities then
 			for _, constrained in ipairs(constrainedEntities.array) do
 				if RagdollPoser.Selection:IsEntitySelected(constrained) then
@@ -141,6 +142,11 @@ local function clientBoneManipulator(self, numbones, staticProp)
 		if shouldUpdate or (not static and not isMoving) then
 			entity:CopyBoneMatrix(b, m)
 			renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
+			if entity:GetClass() == "prop_effect" then
+				-- TODO: Are there other entities that have a delay unless you hover over them?
+				m:SetTranslation(entity:GetPos())
+				m:SetAngles(entity:GetAngles())
+			end
 		end
 
 		local name = self:GetBoneName(b)

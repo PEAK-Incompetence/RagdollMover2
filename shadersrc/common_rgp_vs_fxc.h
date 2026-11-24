@@ -1,10 +1,22 @@
+#if defined(DX12)
+cbuffer VertexShaderConstants : register( b0 )
+{
+	float4 cEyePosWaterZ : packoffset( c2 );
+    row_major float4x4 cViewProj : packoffset( c8 );
+	float3 cAmbientCubeX [ 2 ] : packoffset ( c21 ) ;
+	float3 cAmbientCubeY [ 2 ] : packoffset ( c23 ) ;
+	float3 cAmbientCubeZ [ 2 ] : packoffset ( c25 ) ;
+};
+#else
 const float4 cEyePosWaterZ				: register(c2);
-#define cEyePos			cEyePosWaterZ.xyz
 const float4x4 cViewProj				: register(c8);
 
 const float3 cAmbientCubeX [ 2 ] : register ( c21 );
 const float3 cAmbientCubeY [ 2 ] : register ( c23 );
 const float3 cAmbientCubeZ [ 2 ] : register ( c25 );
+#endif
+#define cEyePos			cEyePosWaterZ.xyz
+
 
 // Our default vertex data input structure
 struct VS_INPUT
@@ -28,7 +40,11 @@ struct VS_OUTPUT
 VS_OUTPUT main(VS_INPUT v)
 {
 	// World space -> Screen space calculation
+	#if defined(DX12)
+	float4 projPos = mul(cViewProj, v.vPos);
+	#else
 	float4 projPos = mul(v.vPos, cViewProj);
+	#endif
 
 	float minDist = cAmbientCubeX[0].x;
 	float maxDist = cAmbientCubeX[0].y;

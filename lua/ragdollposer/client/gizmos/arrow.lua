@@ -13,8 +13,16 @@ local arrow = include("base.lua")
 
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
+local dx12 = dxLevel == 120
 
-local arrowMaterial = Material(dx11 and "ragdollposer/arrow_dx11" or "ragdollposer/arrow")
+local path = "ragdollposer/arrow"
+local dxPath = ""
+if dx12 then
+	dxPath = "_dx12"
+elseif dx11 then
+	dxPath = "_dx11"
+end
+local arrowMaterial = Material(path .. dxPath)
 local texture = arrowMaterial:GetTexture("$basetexture")
 local width, height = texture:Width(), texture:Height()
 

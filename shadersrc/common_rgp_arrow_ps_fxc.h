@@ -1,17 +1,25 @@
 
-#if defined(DX11)
-Texture2D BaseTexture : register(t0);
+#if defined(DX11) || defined(DX12)
+Texture2D<float4> BaseTexture : register(t0);
 SamplerState _BaseSampler : register(s0);
 #else
 sampler BaseTexture : register(s0);
 #endif
 
+#if defined(DX12)
+cbuffer PixelShaderConstants : register( b0 )
+{
+	float4 WidthColor : packoffset( c0 );
+	float4 TexelSize : packoffset( c1 );
+};
+#else
 float4 WidthColor : register(c0); // (width, r, g, b)
 float4 TexelSize : register(c1); // (width, height, 1/width, 1/height)
+#endif
 
 struct PS_INPUT
 {
-    #if defined(DX11)
+    #if defined(DX11) || defined(DX12)
     float4 P            : SV_Position;
     #else
     float2 P            : VPOS;
@@ -27,7 +35,7 @@ float bias(float t, float b) {
 
 float4 sampleBase(float2 uv) {
     float4 tex;
-    #if defined(DX11)
+    #if defined(DX11) || defined(DX12)
     tex = BaseTexture.Sample(_BaseSampler, uv);
     #else
     tex = tex2D(BaseTexture, uv);
@@ -37,6 +45,8 @@ float4 sampleBase(float2 uv) {
 
 #if defined(DX11)
 float4 main( PS_INPUT frag ) : SV_Target
+#elif defined(DX12)
+float4 main( PS_INPUT frag ) : SV_Target0
 #else
 float4 main( PS_INPUT frag ) : COLOR
 #endif
@@ -59,7 +69,7 @@ float4 main( PS_INPUT frag ) : COLOR
         } 
     }
 
-    #if defined(DX11)
+    #if defined(DX11) || defined(DX12)
     float alpha = color.a;
     float aa = max(abs(ddx(alpha)) + abs(ddy(alpha)), 1.0 / 255.0);
     color.a = smoothstep(0.5 - aa, 0.5 + aa, alpha);

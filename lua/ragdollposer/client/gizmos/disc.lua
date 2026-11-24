@@ -12,11 +12,19 @@ local VECTOR_ONE = RagdollPoser.Constants.VECTOR_ONE
 
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
-local dx12 = dxLevel >= 120
+local dx12 = dxLevel == 120
 
+local path = "ragdollposer/disc"
+local partialPath = path .. "_partial"
+local dxPath = ""
+if dx12 then
+	dxPath = "_dx12"
+elseif dx11 then
+	dxPath = "_dx11"
+end
 -- DiscMaterial shaders come from legacy Ragdoll Mover. These should go inside `disc.lua`
-local discMaterial = Material(dx11 and "ragdollposer/disc_dx11" or "ragdollposer/disc")
-local discMaterialPartial = Material(dx11 and "ragdollposer/disc_partial_dx11" or "ragdollposer/disc_partial")
+local discMaterial = Material(path .. dxPath)
+local discMaterialPartial = Material(partialPath .. dxPath)
 
 local scaleMultiplier = 1.5
 

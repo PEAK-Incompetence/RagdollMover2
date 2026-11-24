@@ -4,7 +4,16 @@ Base.__index = Base
 
 local dxLevel = render.GetDXLevel()
 local dx11 = dxLevel >= 110 and dxLevel <= 114
-local dx12 = dxLevel >= 120
+local dx12 = dxLevel == 120
+
+local path = "ragdollposer/grid"
+local dxPath = ""
+if dx12 then
+	dxPath = "_dx12"
+elseif dx11 then
+	dxPath = "_dx11"
+end
+local gridMaterial = Material(path .. dxPath)
 
 local scaledMatrix = Matrix()
 local forward = Vector()
@@ -110,7 +119,6 @@ local function sendGridData(gridSize, xOffset, yOffset)
 
 	render.SuppressEngineLighting(false)
 end
-local gridMaterial = Material(dx11 and "ragdollposer/grid_dx11" or "ragdollposer/grid")
 
 ---@param origin Vector
 ---@param axis Vector

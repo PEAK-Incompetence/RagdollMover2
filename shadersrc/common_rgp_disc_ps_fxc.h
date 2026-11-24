@@ -1,9 +1,15 @@
-
+#if defined(DX12)
+cbuffer PixelShaderConstants : register( b0 )
+{
+	float4 WidthColor : packoffset( c0 );
+};
+#else
 float4 WidthColor : register(c0); // (width, r, g, b)
+#endif
 
 struct PS_INPUT
 {
-    #if defined(DX11)
+    #if defined(DX11) || defined(DX12)
     float4 P            : SV_Position;
     #else
     float2 P            : VPOS;
@@ -19,6 +25,8 @@ float bias(float t, float b) {
 
 #if defined(DX11)
 float4 main( PS_INPUT frag ) : SV_Target
+#elif defined(DX12)
+float4 main( PS_INPUT frag ) : SV_Target0
 #else
 float4 main( PS_INPUT frag ) : COLOR
 #endif

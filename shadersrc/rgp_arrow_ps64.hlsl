@@ -1,0 +1,2 @@
+#define DX12
+#include "common_rgp_arrow_ps_fxc.h"

@@ -7,6 +7,7 @@ local MGR = RagdollPoser.Bones or {}
 
 ---@alias BoneType integer
 MGR.BoneType = {
+	Invalid = -1,
 	Physics = 0,
 	Manipulate = 1,
 	Procedural = 2,
@@ -21,7 +22,7 @@ MGR.ModelBones = MGR.ModelBones or {}
 ---@return BoneType
 function MGR:GetBoneType(entity, bone)
 	local model = entity:GetModel()
-	return self.ModelBones[model][bone]
+	return self.ModelBones[model] and self.ModelBones[model][bone] or MGR.BoneType.Invalid
 end
 
 ---@param ent Entity

@@ -55,8 +55,7 @@ end
 ---@param type string
 ---@param state ConstraintState?
 ---@param name string?
----@param id integer?
-local function constructConstraint(entity, type, state, name, id)
+local function constructConstraint(entity, type, state, name)
 	local constructor = MGR.ConstraintConstructors[type]
 	if constructor then
 		local constraint = constructor(entity, state, name)
@@ -182,7 +181,6 @@ function MGR:GetConstraintIndex(entity, id)
 end
 
 function MGR:Init(constraintType)
-	self.Constraints = {}
 	if constraintType then
 		self:SetRefreshing(true)
 		local success, err = pcall(function()
@@ -190,7 +188,11 @@ function MGR:Init(constraintType)
 			local constructor = include("ragdollposer/client/constraints/" .. constraintType .. ".lua")
 			---@type Constraint
 			local constraint = constructor()
-			table.insert(self.Constraints, constraint)
+			for i, c in ipairs(self.Constraints) do
+				if c.Properties.type == constraintType then
+					self.Constraints[i] = constraint
+				end
+			end
 			self.ConstraintConstructors[constraint.Properties.type] = constructor
 		end)
 		self:SetRefreshing(false)
@@ -200,6 +202,7 @@ function MGR:Init(constraintType)
 		end
 		return
 	end
+	self.Constraints = {}
 
 	local files = file.Find("lua/ragdollposer/client/constraints/*.lua", "GAME", "namedesc")
 	for _, f in ipairs(files or {}) do
@@ -425,7 +428,7 @@ function MGR:PushBatch(entity, batch)
 	self:UpdateGraph()
 end
 
----@param constraints table<Entity, SerializedConstraint[]>
+---@param constraints table<Entity, NetworkedConstraint[]>
 function MGR:SetConstraints(constraints)
 	-- print("setting constraints")
 	-- PrintTable(constraints)
@@ -444,7 +447,7 @@ function MGR:SetConstraints(constraints)
 		local array = {}
 		local set = {}
 		for _, s in ipairs(serialized) do
-			local constraint = constructConstraint(entity, s.Type, s.State, s.Name, s._id)
+			local constraint = constructConstraint(entity, RagdollPoser.TypeConstraints[s.Type], s.State, s.Name)
 			if constraint then
 				local index = #array + 1
 				array[index] = constraint
@@ -452,7 +455,6 @@ function MGR:SetConstraints(constraints)
 			end
 		end
 		local stack = { set = set, array = array }
-		-- PrintTable(stack)
 		EntityConstraintStacks[entity] = stack
 	end
 	self:UpdateGraph()
@@ -517,6 +519,18 @@ function MGR:GetGraphForEntity(entity)
 	return self.EntityGraph[entity]
 end
 
+---@param stack Constraints
+---@param serializedConstraints SerializedConstraint[]
+local function sendConstraints(stack, serializedConstraints)
+	net.WriteUInt(#stack.array, RagdollPoser.ConstraintBits)
+	for i, constraint in ipairs(serializedConstraints) do
+		print(constraint.Type, RagdollPoser.ConstraintTypes[constraint.Type], constraint.Name)
+		net.WriteUInt(RagdollPoser.ConstraintTypes[constraint.Type], RagdollPoser.ConstraintTypeBits)
+		net.WriteString(constraint.Name)
+		net.WriteTable(constraint.State)
+	end
+end
+
 function MGR:UpdateConstraints()
 	for entity, stack in pairs(EntityConstraintStacks) do
 		if not IsValid(entity) then
@@ -525,17 +539,24 @@ function MGR:UpdateConstraints()
 	end
 
 	RagdollPoser.Networking.UpdateConstraints()
-	local count = table.Count(EntityConstraintStacks)
-	net.WriteUInt(count, 13)
+	local entityCount = table.Count(EntityConstraintStacks)
+	net.WriteUInt(entityCount, RagdollPoser.Constants.MAX_EDICT_BITS)
 	for entity, stack in pairs(EntityConstraintStacks) do
 		net.WriteEntity(entity)
 		local serializedConstraints = {}
 		for _, constraint in ipairs(stack.array) do
 			table.insert(serializedConstraints, constraint:Serialize())
 		end
-		net.WriteTable(serializedConstraints, true)
+		sendConstraints(stack, serializedConstraints)
 	end
 	net.SendToServer()
+end
+
+---@param constraint SerializedConstraint
+local function sendConstraint(constraint)
+	net.WriteUInt(RagdollPoser.ConstraintTypes[constraint.Type], RagdollPoser.ConstraintTypeBits)
+	net.WriteString(constraint.Name)
+	net.WriteTable(constraint.State)
 end
 
 ---@param entity Entity
@@ -552,10 +573,11 @@ function MGR:UpdateConstraint(entity, constraint)
 		refreshStack(entity)
 		RagdollPoser.Networking.UpdateConstraint()
 		net.WriteEntity(entity)
-		net.WriteUInt(stack.set[constraint._id], 13)
-		net.WriteTable(constraint:Serialize())
+		net.WriteUInt(stack.set[constraint._id], RagdollPoser.ConstraintBits)
+		sendConstraint(constraint:Serialize())
 		net.SendToServer()
 	end
+	self:UpdateSingleGraph(entity, constraint)
 end
 
 ---@param entity Entity

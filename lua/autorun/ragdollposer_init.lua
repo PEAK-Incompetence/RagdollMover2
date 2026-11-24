@@ -1,5 +1,19 @@
 RagdollPoser = RagdollPoser or {}
 RagdollPoser.Mode = "ragdollposer"
+RagdollPoser.ConstraintTypeBits = 7
+RagdollPoser.ConstraintBits = 32
+
+---Keep these constraint type orders fixed
+---@enum ConstraintType
+RagdollPoser.ConstraintTypes = {
+	bonemerge = 0,
+	ik = 1,
+	lockang = 2,
+	lockbone = 3,
+	lockpos = 4,
+	lockscale = 5,
+}
+RagdollPoser.TypeConstraints = table.Flip(RagdollPoser.ConstraintTypes)
 
 local root = "ragdollposer/"
 

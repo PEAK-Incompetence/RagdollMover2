@@ -20,7 +20,7 @@ MGR.Players = MGR.Players or {}
 ---@field SelectedBone integer
 ---@field SelectedEntities Entity[]
 ---@field SelectedEntitySet table<Entity, Entity>
----@field Constraints table<Entity, SerializedConstraint[]>
+---@field Constraints table<Entity, NetworkedConstraint[]>
 ---@field Hovering boolean Prevent entity selection when hovering over the gizmo
 
 RagdollPoser.Networking.SendAssemblyInfo = RagdollPoser.Networking.DefineSender("SendAssemblyInfo")
@@ -82,17 +82,17 @@ local function restoreDuplicatedConstraintReferences(constraints, entity, create
 end
 
 local function sendSubPose(len, ply)
-	local entityCount = net.ReadUInt(13)
+	local entityCount = net.ReadUInt(RagdollPoser.Constants.MAX_EDICT_BITS)
 
 	for _ = 1, entityCount do
 		local entity = net.ReadEntity()
-		local matrixCount = net.ReadUInt(8)
+		local matrixCount = net.ReadUInt(RagdollPoser.Constants.MAX_BONE_BITS)
 		---@type VMatrix[]
 		local matrices = {}
 		local bones = {}
 		local boneSet = {}
 		for _ = 1, matrixCount do
-			local b = net.ReadUInt(8)
+			local b = net.ReadUInt(RagdollPoser.Constants.MAX_BONE_BITS)
 			boneSet[b] = table.insert(bones, b)
 			matrices[b] = net.ReadMatrix()
 		end
@@ -144,16 +144,33 @@ hook.Add("CanTool", "RagdollPoser_Data_TrackDuplicator", function(ply, tr, tooln
 	end
 end)
 
+---@return NetworkedConstraint[]
+local function readConstraints()
+	local constraints = {}
+	local constraintCount = net.ReadUInt(RagdollPoser.ConstraintBits)
+	for i = 1, constraintCount do
+		local type = net.ReadUInt(RagdollPoser.ConstraintTypeBits)
+		local name = net.ReadString()
+		local state = net.ReadTable()
+		constraints[i] = {
+			Type = type,
+			Name = name,
+			State = state,
+		}
+	end
+	return constraints
+end
+
 local function updateConstraints(len, ply)
 	local data = MGR.Players[ply]
 	local playerConstraints = data.Constraints or {}
 
-	---@type table<Entity, SerializedConstraint[]>
+	---@type table<Entity, NetworkedConstraint[]>
 	local entityConstraints = {}
-	local count = net.ReadUInt(13)
-	for _ = 1, count do
+	local entityCount = net.ReadUInt(RagdollPoser.Constants.MAX_EDICT_BITS)
+	for _ = 1, entityCount do
 		local entity = net.ReadEntity()
-		entityConstraints[entity] = net.ReadTable(true)
+		entityConstraints[entity] = readConstraints()
 		if IsValid(entity) then
 			trackEntityDuplicators(entity)
 		end
@@ -179,13 +196,25 @@ local function clearConstraints(len, ply)
 end
 RagdollPoser.Networking.DefineReceiver("ClearConstraints", clearConstraints)
 
+---@return NetworkedConstraint
+local function readConstraint()
+	local type = net.ReadUInt(RagdollPoser.ConstraintTypeBits)
+	local name = net.ReadString()
+	local state = net.ReadTable()
+	return {
+		Type = type,
+		Name = name,
+		State = state, ---@diagnostic disable-line
+	}
+end
+
 local function updateConstraint(len, ply)
 	local data = MGR.Players[ply]
 	local playerConstraints = data.Constraints or {}
 
 	local entity = net.ReadEntity()
-	local index = net.ReadUInt(13)
-	local constraint = net.ReadTable() ---@as SerializedConstraint
+	local index = net.ReadUInt(RagdollPoser.ConstraintBits)
+	local constraint = readConstraint() ---@as NetworkedConstraint
 	if IsValid(entity) then
 		playerConstraints[entity][index] = constraint
 		data.Constraints = playerConstraints
@@ -219,7 +248,7 @@ end)
 
 ---@param ply Player
 ---@param ent Entity
----@param data SerializedConstraint[]
+---@param data NetworkedConstraint[]
 local function entityModifier(ply, ent, data)
 	local d = MGR.Players[ply]
 	if not d then
@@ -243,25 +272,42 @@ for _, pl in ipairs(player.GetAll()) do
 	initializePlayer(pl)
 end
 
+---@param constraints NetworkedConstraint[]
+local function writeConstraints(constraints)
+	local count = #constraints
+	net.WriteUInt(count, RagdollPoser.ConstraintBits)
+	for i = 1, count do
+		local constraint = constraints[i]
+		-- Do backwards compatibility with old dupe data
+		if isstring(constraint.Type) then
+			constraint.Type = RagdollPoser.ConstraintTypes[constraint.Type]
+		end
+
+		net.WriteUInt(constraint.Type, RagdollPoser.ConstraintTypeBits)
+		net.WriteString(constraint.Name)
+		net.WriteTable(constraint.State)
+	end
+end
+
 ---@param pl Player
 ---@param entity Entity
 ---@param bone integer
 ---@param entities Entity[]
----@param constraints table<Entity, SerializedConstraint[]>
-function MGR.RefreshEntities(pl, entity, bone, entities, constraints)
+---@param constraints table<Entity, NetworkedConstraint[]>
+function MGR:RefreshEntities(pl, entity, bone, entities, constraints)
 	RagdollPoser.Log("refreshing", pl, entity, bone, entities)
 	constraints = constraints or {}
 	RagdollPoser.Networking.SendAssemblyInfo()
 	net.WriteEntity(entity)
-	net.WriteUInt(bone, 8)
-	net.WriteUInt(#entities, 10)
+	net.WriteUInt(bone, RagdollPoser.Constants.MAX_BONE_BITS)
+	net.WriteUInt(#entities, RagdollPoser.Constants.MAX_ENTITY_LIST_BITS)
 	for i = 1, #entities do
 		local e = entities[i]
 		net.WriteEntity(e)
 		local cs = constraints[e]
 		net.WriteBool(cs ~= nil)
 		if cs then
-			net.WriteTable(cs, true)
+			writeConstraints(cs)
 		end
 	end
 	net.Send(pl)
@@ -361,11 +407,11 @@ end
 RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSender("EntityPhysBoneCount")
 
 ---@param entity Entity
-function MGR.UpdatePhysBoneCount(entity, count)
+function MGR:UpdatePhysBoneCount(entity, count)
 	RagdollPoser.Networking.EntityPhysBoneCount()
 	-- print("entityphysbonecount send", entity, entity:GetPhysicsObjectCount())
 	net.WriteEntity(entity)
-	net.WriteUInt(count, 5)
+	net.WriteUInt(count, RagdollPoser.Constants.MAX_PHYSBONE_BITS)
 	net.Broadcast()
 end
 
@@ -416,7 +462,7 @@ hook.Add("OnEntityCreated", "RagdollPoser_SendPhysBone", sendPhysBoneCount)
 
 local function updateSelectedBone(len, ply)
 	local data = MGR.Players[ply]
-	local bone = net.ReadUInt(8)
+	local bone = net.ReadUInt(RagdollPoser.Constants.MAX_BONE_BITS)
 	local entity = net.ReadEntity()
 
 	if IsValid(entity) then

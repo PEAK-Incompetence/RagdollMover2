@@ -847,8 +847,6 @@ function MGR:Transform()
 end
 
 local function doTransform()
-	-- FIXME: Make this not run while we are holstering
-	-- We can also just disable the input system when we are holstering, to prevent the left-click event altogether
 	local equipped = RagdollPoser.Helpers.Equipped()
 	if equipped and RagdollPoser.Selection:GetSelection()[1] and MGR:IsEnabled() and MGR:IsMoving() then
 		MGR:Transform()
@@ -947,11 +945,8 @@ local function sendSubPose(selection)
 		entityIndex = entityIndex + 1
 	end
 
-	-- Shared matrix for copying into, to prevent garbage collection
-	local boneMatrix = Matrix()
-
 	RagdollPoser.Networking.SendSubPose()
-	net.WriteUInt(#entities, 13)
+	net.WriteUInt(#entities, RagdollPoser.Constants.MAX_EDICT_BITS)
 	for _, entity in ipairs(entities) do
 		RagdollPoser.ClientTransformer:SendTransform(entity, bones[entity])
 	end
@@ -1173,6 +1168,7 @@ local YELLOW = Color(255, 255, 0, 255)
 
 -- TODO: Use themings
 local boneTypeToColor = {
+	[RagdollPoser.Bones.BoneType.Invalid] = color_white,
 	[RagdollPoser.Bones.BoneType.Physics] = GREEN,
 	[RagdollPoser.Bones.BoneType.Manipulate] = CYAN,
 	[RagdollPoser.Bones.BoneType.Procedural] = RED,

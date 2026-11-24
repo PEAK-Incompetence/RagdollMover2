@@ -62,7 +62,7 @@ local function sendReceiver(name, count, ply)
 		net.Start("RagdollPoser_AddReceiver")
 		net.WriteString(name)
 		-- print("send receiver", count)
-		net.WriteUInt(count, 12)
+		net.WriteUInt(count, SENDER_ID_BITS)
 		if SERVER then
 			if ply then
 				net.Send(ply)
@@ -147,7 +147,7 @@ end
 
 local function addReceiver()
 	local name = net.ReadString()
-	local id = net.ReadUInt(12)
+	local id = net.ReadUInt(SENDER_ID_BITS)
 	-- If we already defined a receiver with a specific name
 	-- print("add receiver", name, id)
 	if ReceiverCallbackBuffer[name] then

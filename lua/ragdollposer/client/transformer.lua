@@ -52,7 +52,7 @@ function MGR:RestoreDefaults()
 	self.EntityMap = {
 		prop_ragdoll = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
 				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 				if physbone >= 0 then
@@ -72,7 +72,7 @@ function MGR:RestoreDefaults()
 		end,
 		prop_physics = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
 
 				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
@@ -91,7 +91,7 @@ function MGR:RestoreDefaults()
 			local parent = entity:GetParent()
 			local clientParent = IsValid(parent) and RagdollPoser.Entity:GetClientFromEntity(parent)
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
 
 				if b == 0 then
@@ -147,7 +147,7 @@ function MGR:RestoreDefaults()
 			local baseline = RagdollPoser.Gizmo._transformBaseline[client]
 			-- FIXME: Animated Props jitter when I have this enabled. Probably cause of SetupBones?
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
 
 				if b == 0 then
@@ -192,7 +192,7 @@ function MGR:RestoreDefaults()
 		end,
 		prop_effect = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
 
 				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
@@ -209,7 +209,23 @@ function MGR:RestoreDefaults()
 		end,
 		ent_advbonemerge = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
-				net.WriteUInt(b, 8)
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
+
+				RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
+				net.WriteMatrix(boneMatrix)
+			end
+		end,
+		ent_composite = function(entity, client, bones, matrices)
+			for _, b in ipairs(bones) do
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
+
+				RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
+				net.WriteMatrix(boneMatrix)
+			end
+		end,
+		ent_bonemerged = function(entity, client, bones, matrices)
+			for _, b in ipairs(bones) do
+				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 
 				RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
 				net.WriteMatrix(boneMatrix)
@@ -234,8 +250,21 @@ function MGR:AddTransform(class, transformFunction, override)
 	self.EntityMap[class] = transformFunction
 end
 
+local aliases = {
+	hl_camera = "prop_physics",
+	gmod_cameraprop = "prop_physics",
+}
+
 function MGR:SendTransform(entity, bones)
 	local class = entity:GetClass()
+	class = aliases[class] or class
+	if string.find(class, "npc_") then
+		class = "prop_animated"
+	end
+	if string.find(class, "weapon_") then
+		class = "ent_bonemerged"
+	end
+
 	local func = self.EntityMap[class]
 	if func then
 		IDENTITY_MATRIX:Identity()
@@ -247,7 +276,7 @@ function MGR:SendTransform(entity, bones)
 		net.WriteEntity(entity)
 		local matrices = RagdollPoser.Entity:GetMatrices(entity)
 		local count = #bones
-		net.WriteUInt(count, 8)
+		net.WriteUInt(count, RagdollPoser.Constants.MAX_BONE_BITS)
 		func(entity, client, bones, matrices)
 	end
 end

@@ -109,6 +109,8 @@ function MGR:RestoreDefaults()
 		end,
 		prop_effect = genericPhysicsProp,
 		ent_advbonemerge = genericManipulate,
+		ent_composite = genericManipulate,
+		ent_bonemerged = genericManipulate,
 	}
 end
 
@@ -127,12 +129,25 @@ function MGR:AddTransform(class, transformFunction, override)
 	self.EntityMap[class] = transformFunction
 end
 
+local aliases = {
+	hl_camera = "prop_physics",
+	gmod_cameraprop = "prop_physics",
+}
+
 ---@param class string
 ---@param entity Entity
 ---@param bones integer[]
 ---@param boneSet table<integer, integer>
 ---@param matrices VMatrix[]
 function MGR:DoTransform(class, entity, bones, boneSet, matrices)
+	class = aliases[class] or class
+	if string.find(class, "npc_") then
+		class = "prop_animated"
+	end
+	if string.find(class, "weapon_") then
+		class = "prop_dynamic"
+	end
+
 	local func = self.EntityMap[class]
 	if func then
 		local success, err = pcall(func, entity, bones, boneSet, matrices)

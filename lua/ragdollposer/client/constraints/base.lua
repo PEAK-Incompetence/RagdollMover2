@@ -54,6 +54,11 @@ end
 ---@field State ConstraintState
 ---@field _id integer
 
+---@class NetworkedConstraint
+---@field Type integer
+---@field Name string
+---@field State ConstraintState
+
 ---@param entry ConstraintEntry
 ---@param props ConstraintProps
 ---@param state ConstraintState

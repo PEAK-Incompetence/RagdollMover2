@@ -464,7 +464,7 @@ hook.Add("RagdollPoser_Selection_Selected", "UpdateSelectedBone", function(selec
 	if count > 0 then
 		RagdollPoser.Networking.UpdateSelectedBone()
 		local selectedBone, selectedEntity = selection[count - 1], selection[count]
-		net.WriteUInt(selectedBone, 8)
+		net.WriteUInt(selectedBone, RagdollPoser.Constants.MAX_BONE_BITS)
 		net.WriteEntity(selectedEntity)
 		net.SendToServer()
 	end

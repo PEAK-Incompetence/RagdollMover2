@@ -17,7 +17,7 @@
 local MGR = RagdollPoser.Entity or {}
 
 ---@type Entity[]
-MGR.Entities = MGR.Entities
+MGR.Entities = MGR.Entities or {}
 ---@type ClientEntity[]
 MGR.ClientEntities = MGR.ClientEntities or {}
 
@@ -79,6 +79,9 @@ local function copyVisualsToClient(client, source)
 	for i = 0, source:GetFlexNum() - 1 do
 		client:SetFlexWeight(i, source:GetFlexWeight(i))
 	end
+
+	client:SetRenderMode(source:GetRenderMode())
+	client:SetColor(source:GetColor())
 end
 
 ---Display the entity
@@ -133,6 +136,10 @@ local function clientBoneManipulator(self, numbones, staticProp)
 	local renderBounds = MGR.EntityRenderBounds[entity]
 	local static = static:GetBool()
 	local isMoving = RagdollPoser.Gizmo:IsMoving() or RagdollPoser.Gizmo:IsOperating()
+
+	if not matrixSet then
+		return
+	end
 	for b = 0, numbones - 1 do
 		local m = matrixSet[b + 1]
 		if not ismatrix(m) then
@@ -418,6 +425,25 @@ function MGR:UpdateEntity(entity)
 	end
 end
 
+--- Assume we are in the receiving process
+---@return NetworkedConstraint[]
+local function readConstraints()
+	---@type NetworkedConstraint[]
+	local networkedConstraints = {}
+	local count = net.ReadUInt(RagdollPoser.ConstraintBits)
+	for i = 1, count do
+		local type = net.ReadUInt(RagdollPoser.ConstraintTypeBits) -- Type
+		local name = net.ReadString() -- Name
+		local state = net.ReadTable() -- State
+		networkedConstraints[i] = {
+			Type = type,
+			Name = name,
+			State = state, ---@diagnostic disable-line
+		}
+	end
+	return networkedConstraints
+end
+
 -- After receiving entity info, create `prop_dynamic` clones of the given entities,
 -- move it and copy the pose of the ragdoll, and either
 -- a) stay put, or
@@ -425,13 +451,13 @@ end
 
 local function sendAssemblyInfo()
 	local ent = net.ReadEntity()
-	local bone = net.ReadUInt(8)
-	local count = net.ReadUInt(10)
+	local bone = net.ReadUInt(RagdollPoser.Constants.MAX_BONE_BITS)
+	local count = net.ReadUInt(RagdollPoser.Constants.MAX_ENTITY_LIST_BITS)
 	---@type Entity[]
 	local entities = {}
 	-- print(ent, bone, count)
 	local constraintCount = 0
-	---@type table<Entity, SerializedConstraint[]>
+	---@type table<Entity, NetworkedConstraint[]>
 	local entityConstraints = {}
 	for i = 1, count do
 		local e = net.ReadEntity()
@@ -439,7 +465,7 @@ local function sendAssemblyInfo()
 		local hasConstraint = net.ReadBool()
 		if hasConstraint then
 			constraintCount = constraintCount + 1
-			entityConstraints[e] = net.ReadTable(true)
+			entityConstraints[e] = readConstraints()
 		end
 	end
 
@@ -472,7 +498,7 @@ end
 
 local function getPhysBoneCount(len, ply)
 	local entity = net.ReadEntity()
-	local count = net.ReadUInt(5)
+	local count = net.ReadUInt(RagdollPoser.Constants.MAX_PHYSBONE_BITS)
 	if IsValid(entity) then
 		local model = entity:GetModel()
 

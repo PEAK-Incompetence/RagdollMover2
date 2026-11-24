@@ -165,24 +165,28 @@ local function getIndependentManipulationScale(worldScale, parentScale, relative
 	return localScale
 end
 
----@param bonemergeEntity Entity
----@param bone integer
----@param output VMatrix
-function MGR:GetBonemergePose(bonemergeEntity, bone, output)
-	-- client entity bone matrices are represented in world space, but we're interested in their offset from the parent entity that they are representing
-	-- so let's just get current offsets from the bonemergeEntity and parentEntity
+---@type table<string, fun(b: Entity, p: Entity, bone: integer): integer>
+local parentBoneMap = {
+	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone)
+		if parentEntity.AdvBone_BoneInfo then
+			local info = parentEntity.AdvBone_BoneInfo[bone]
+			return info and info.parent
+		end
+	end,
+	ent_composite = function(bonemergeEntity, parentEntity, bone)
+		local parentBone = bonemergeEntity:GetParentAttachment()
+		if parentBone ~= 0 then
+			return parentBone
+		end
+		return parentEntity:LookupBone(bonemergeEntity:GetBoneName(bone))
+	end,
+}
 
-	local parentEntity = bonemergeEntity:GetParent()
-	if not IsValid(parentEntity) then
-		output:Identity()
-		return
-	end
+local transformMap = {
+	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone, parentBone, output)
+		local childMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
+		local parentMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
 
-	local childMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
-	local parentMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
-	local boneName = bonemergeEntity:GetBoneName(bone)
-	local parentBone = parentEntity:LookupBone(boneName)
-	if parentBone then
 		local parentMatrix = parentMatrices and parentMatrices[parentBone + 1]
 		local childMatrix = childMatrices and childMatrices[bone + 1]
 		if not parentMatrix or not childMatrix then
@@ -213,6 +217,67 @@ function MGR:GetBonemergePose(bonemergeEntity, bone, output)
 		output:SetScale(
 			getIndependentManipulationScale(childMatrix:GetScale(), parentMatrix:GetScale(), relativeAngles)
 		)
+	end,
+	ent_composite = function(bonemergeEntity, parentEntity, bone, parentBone, output)
+		local bmMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
+		local pMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
+
+		local currentMatrix = Matrix()
+		currentMatrix:Set(bmMatrices[bone + 1])
+		currentMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local currentParentTransform = Matrix()
+		currentParentTransform:Set(pMatrices[bone + 1])
+		currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local currentLocal = currentParentTransform:GetInverse() * currentMatrix
+
+		local pastMatrix = bonemergeEntity:GetBoneMatrix(bone)
+		pastMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local pastParentTransform = parentEntity:GetBoneMatrix(parentBone)
+		pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local pastLocal = pastParentTransform:GetInverse() * pastMatrix
+
+		local existingLocal = Matrix()
+		existingLocal:Translate(bonemergeEntity:GetLocalPos())
+		existingLocal:Rotate(bonemergeEntity:GetLocalAngles())
+
+		-- Get the difference between the new offset and current offset
+		local delta = currentLocal * pastLocal:GetInverse()
+
+		local finalLocal = delta * existingLocal
+		output:Identity()
+		output:Translate(finalLocal:GetTranslation())
+		output:Rotate(finalLocal:GetAngles())
+	end,
+}
+
+---@param bonemergeEntity Entity
+---@param bone integer
+---@param output VMatrix
+function MGR:GetBonemergePose(bonemergeEntity, bone, output)
+	-- client entity bone matrices are represented in world space, but we're interested in their offset from the parent entity that they are representing
+	-- so let's just get current offsets from the bonemergeEntity and parentEntity
+
+	local parentEntity = bonemergeEntity:GetParent()
+	if not IsValid(parentEntity) then
+		output:Identity()
+		return
+	end
+
+	local class = bonemergeEntity:GetClass()
+	local boneName = bonemergeEntity:GetBoneName(bone)
+
+	local parentBoneGetter = parentBoneMap[class]
+	local parentBone = parentEntity:LookupBone(boneName)
+	if parentBoneGetter then
+		parentBone = parentBoneGetter(bonemergeEntity, parentEntity, bone)
+	end
+	local transformer = transformMap[class]
+	if parentBone and transformer then
+		transformer(bonemergeEntity, parentEntity, bone, parentBone, output)
 	else
 		-- Reset bone matrix back to identity.
 		output:Identity()

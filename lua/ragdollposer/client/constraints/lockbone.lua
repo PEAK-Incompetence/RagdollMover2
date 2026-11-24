@@ -276,7 +276,6 @@ function lock:EvaluatePose(entity, context)
 	return true
 end
 
--- FIXME: What's the point of these output stuff?
 function lock:GetOutputEntity()
 	local target = self.State.otherTarget
 	if self.State.enabled ~= false and IsValid(target) and target ~= self.State.target then

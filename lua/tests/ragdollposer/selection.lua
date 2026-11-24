@@ -15,7 +15,7 @@ if SERVER then
 		ragdoll:Spawn()
 		testEntities[player] = { ragdoll }
 
-		RagdollPoser.Data.RefreshEntities(player, ragdoll, 5, { ragdoll }, {})
+		RagdollPoser.Data:RefreshEntities(player, ragdoll, 5, { ragdoll }, {})
 	end)
 
 	net.Receive(requestMultipleMessage, function(_, player)
@@ -29,7 +29,7 @@ if SERVER then
 		end
 		testEntities[player] = ragdolls
 
-		RagdollPoser.Data.RefreshEntities(player, ragdolls[1], 5, ragdolls, {})
+		RagdollPoser.Data:RefreshEntities(player, ragdolls[1], 5, ragdolls, {})
 	end)
 
 	net.Receive(cleanupRefreshMessage, function(_, player)

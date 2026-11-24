@@ -307,10 +307,10 @@ local function constraintRemoved(ent)
 						local constrainedList, constrainedTab = MGR.GetConstrainedEntities(targetEnt)
 						local bone = data.SelectedBone
 						local constraints = data.Constraints or {}
-						MGR.RefreshEntities(player, targetEnt, bone, constrainedList, constraints)
+						MGR:RefreshEntities(player, targetEnt, bone, constrainedList, constraints)
 						MGR:Update(player, targetEnt, bone, constrainedList, constrainedTab)
 					else
-						MGR.RefreshEntities(player, NULL, 0, {}, {})
+						MGR:RefreshEntities(player, NULL, 0, {}, {})
 						MGR:Update(player, nil, nil, nil, nil)
 					end
 				end)
@@ -335,10 +335,26 @@ hook.Add("EntityRemoved", "RagdollPoser_EntityRemoved", entityRemoved)
 
 function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 	local data = MGR.Players[pl] or {}
-	data.SelectedEntity = entity
-	data.SelectedBone = bone
-	data.SelectedEntities = entities
-	data.SelectedEntitySet = constrainedEntities
+
+	if IsValid(data.SelectedEntity) then
+		data.SelectedEntity:CPPISetOwner(pl)
+	end
+	for _, e in ipairs(data.SelectedEntities) do
+		e:CPPISetOwner(NULL)
+	end
+
+	data.SelectedEntity = entity or NULL
+	data.SelectedBone = bone or -1
+	data.SelectedEntities = entities or {}
+	data.SelectedEntitySet = constrainedEntities or {}
+
+	if IsValid(entity) then
+		entity:CPPISetOwner(pl)
+	end
+	for _, e in ipairs(entities or {}) do
+		e:CPPISetOwner(pl)
+	end
+
 	MGR.Players[pl] = data
 end
 
@@ -392,7 +408,7 @@ local function sendPhysBoneCount(entity)
 			)
 
 			local count = countPhysics(entity:GetModel())
-			MGR.UpdatePhysBoneCount(entity, count > 0 and count or 1)
+			MGR:UpdatePhysBoneCount(entity, count > 0 and count or 1)
 		end
 	end)
 end

@@ -37,6 +37,12 @@ function TOOL:LeftClick(tr)
 		return true
 	end
 
+	local entity = tr.Entity
+
+	if IsValid(entity) and not entity:CPPICanTool(pl, self.Mode) then
+		return false
+	end
+
 	if CLIENT then
 		return false
 	end
@@ -52,7 +58,6 @@ function TOOL:LeftClick(tr)
 	end
 
 	local entitySet = data.SelectedEntitySet
-	local entity = tr.Entity
 	local phys = tr.PhysicsBone
 	if
 		entity
@@ -64,7 +69,6 @@ function TOOL:LeftClick(tr)
 		local constrainedList, constrainedTab = RagdollPoser.Data.GetConstrainedEntities(entity)
 		local constraints = data.Constraints or {}
 
-		-- PrintTable(constrainedList)
 		if not entity.rgpbonecached then -- also taken from locrotscale. some hacky way to cache the bones?
 			pl.rgpSwep = self.SWEP
 			local p = pl.rgpSwep:GetParent()
@@ -75,8 +79,8 @@ function TOOL:LeftClick(tr)
 
 		-- Send entity info to the client
 		local bone = math.max(entity:TranslatePhysBoneToBone(phys), 0)
-		RagdollPoser.Data.RefreshEntities(pl, entity, bone, constrainedList, constraints)
-		RagdollPoser.Data.UpdatePhysBoneCount(entity, entity:GetPhysicsObjectCount())
+		RagdollPoser.Data:RefreshEntities(pl, entity, bone, constrainedList, constraints)
+		RagdollPoser.Data:UpdatePhysBoneCount(entity, entity:GetPhysicsObjectCount())
 		RagdollPoser.Data:Update(pl, entity, bone, constrainedList, constrainedTab)
 	end
 
@@ -96,12 +100,29 @@ function TOOL:Deploy()
 			local constraints = data.Constraints or {}
 			if IsValid(entity) then
 				local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
-				RagdollPoser.Data.RefreshEntities(pl, entity, bone, entities, constraints)
+				RagdollPoser.Data:RefreshEntities(pl, entity, bone, entities, constraints)
 				RagdollPoser.Data:Update(pl, entity, bone, entities, constrainedEntities)
 			end
 		end
 	end
 end
+
+-- Lose everything if you die.
+local function clearOwners(pl)
+	local data = RagdollPoser.Data.Players[pl]
+	local entity = data.SelectedEntity
+	local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
+	if IsValid(entity) then
+		entity:CPPISetOwner(NULL)
+	end
+	for _, e in ipairs(entities) do
+		e:CPPISetOwner(NULL)
+	end
+	RagdollPoser.Data:RefreshEntities(pl, NULL, 0, {}, {})
+	RagdollPoser.Data:Update(player, nil, nil, nil, nil)
+	data.Hovering = false
+end
+hook.Add("PostPlayerDeath", "RagdollPoser_ClearOwners", clearOwners)
 
 if SERVER then
 	return

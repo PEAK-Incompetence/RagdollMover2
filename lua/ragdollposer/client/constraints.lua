@@ -524,7 +524,6 @@ end
 local function sendConstraints(stack, serializedConstraints)
 	net.WriteUInt(#stack.array, RagdollPoser.ConstraintBits)
 	for i, constraint in ipairs(serializedConstraints) do
-		print(constraint.Type, RagdollPoser.ConstraintTypes[constraint.Type], constraint.Name)
 		net.WriteUInt(RagdollPoser.ConstraintTypes[constraint.Type], RagdollPoser.ConstraintTypeBits)
 		net.WriteString(constraint.Name)
 		net.WriteTable(constraint.State)

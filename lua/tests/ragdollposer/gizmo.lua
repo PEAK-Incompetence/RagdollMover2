@@ -43,6 +43,7 @@ if SERVER then
 	end)
 end
 
+--- @type GLuaTest_TestGroup
 return {
 	groupName = "RagdollPoser: Gizmo",
 

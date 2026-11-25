@@ -111,12 +111,12 @@ end
 local function clearOwners(pl)
 	local data = RagdollPoser.Data.Players[pl]
 	local entity = data.SelectedEntity
-	local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
 	if IsValid(entity) then
 		entity:CPPISetOwner(NULL)
-	end
-	for _, e in ipairs(entities) do
-		e:CPPISetOwner(NULL)
+		local entities, constrainedEntities = RagdollPoser.Data.GetConstrainedEntities(entity)
+		for _, e in ipairs(entities) do
+			e:CPPISetOwner(NULL)
+		end
 	end
 	RagdollPoser.Data:RefreshEntities(pl, NULL, 0, {}, {})
 	RagdollPoser.Data:Update(player, nil, nil, nil, nil)

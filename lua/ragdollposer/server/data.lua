@@ -325,7 +325,7 @@ end
 function MGR.GetConstrainedEntities(entity)
 	local constrainedTab = constraint.GetAllConstrainedEntities(entity)
 	local constrainedList = {}
-	for _, ent in pairs(constrainedTab) do
+	for _, ent in pairs(constrainedTab or {}) do
 		if MGR.ValidateModelEntity(ent) then
 			table.insert(constrainedList, ent)
 		end
@@ -370,7 +370,7 @@ local function entityRemoved(ent)
 	local doUpdate = false
 	local players = {}
 	for player, info in pairs(MGR.Players) do
-		if info.Constraints[ent] then
+		if info.Constraints and info.Constraints[ent] then
 			doUpdate = true
 			info.Constraints[ent] = nil
 			table.insert(players, player)
@@ -384,9 +384,9 @@ function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 
 	if IsValid(data.SelectedEntity) then
 		data.SelectedEntity:CPPISetOwner(pl)
-	end
-	for _, e in ipairs(data.SelectedEntities) do
-		e:CPPISetOwner(NULL)
+		for _, e in ipairs(data.SelectedEntities) do
+			e:CPPISetOwner(NULL)
+		end
 	end
 
 	data.SelectedEntity = entity or NULL
@@ -396,9 +396,9 @@ function MGR:Update(pl, entity, bone, entities, constrainedEntities)
 
 	if IsValid(entity) then
 		entity:CPPISetOwner(pl)
-	end
-	for _, e in ipairs(entities or {}) do
-		e:CPPISetOwner(pl)
+		for _, e in ipairs(entities or {}) do
+			e:CPPISetOwner(pl)
+		end
 	end
 
 	MGR.Players[pl] = data

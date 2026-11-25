@@ -228,6 +228,7 @@ function MGR:CreateEntities()
 		self.ClientToEntity[client] = entity
 		self.ClientShouldUpdate[client] = true
 		self.EntityToClient[entity] = client
+		entity:SetupBones()
 		self.ClientBoneCallbacks[client] = client:AddCallback("BuildBonePositions", clientBoneManipulator)
 		local modelInfo = util.GetModelInfo(entity:GetModel())
 		local isStaticProp = modelInfo.StaticProp

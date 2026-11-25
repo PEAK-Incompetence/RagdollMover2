@@ -1,5 +1,89 @@
 local MGR = {}
 
+---Source: https://github.com/NO-LOAFING/AnimpropOverhaul/blob/a3a6268a5d57655611a8b8ed43dcf43051ecd93a/lua/entities/prop_animated.lua#L3550
+---@param ent Entity|CSEnt Entity in reference pose
+---@param clientRagdoll? Entity|CSEnt Ragdoll in reference pose. Used for ragdolls with slight offsets in their bones
+---@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
+local function getDefaultPoseTree(ent, clientRagdoll)
+	local defaultPose = {}
+	local entPos = ent:GetPos()
+	local entAngles = ent:GetAngles()
+	local rootMatrix = ent:GetBoneMatrix(0)
+	local rootPos = rootMatrix and rootMatrix:GetTranslation() or entPos
+	local rootAngles = rootMatrix and rootMatrix:GetAngles() or entAngles
+
+	for b = 0, ent:GetBoneCount() - 1 do
+		local parent = ent:GetBoneParent(b)
+		local isPhysBone = RagdollPoser.Helpers.BoneToPhysBone(ent, b) >= 0
+		local bMatrix = clientRagdoll and clientRagdoll:GetBoneMatrix(b) or ent:GetBoneMatrix(b)
+		if bMatrix then
+			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), rootPos, rootAngles)
+			local pos2, ang2 = pos1 * 1, ang1 * 1
+			if parent > -1 then
+				local pMatrix = clientRagdoll and clientRagdoll:GetBoneMatrix(parent) or ent:GetBoneMatrix(parent)
+				pos2, ang2 = WorldToLocal(
+					bMatrix:GetTranslation(),
+					bMatrix:GetAngles(),
+					pMatrix:GetTranslation(),
+					pMatrix:GetAngles()
+				)
+			end
+
+			defaultPose[b + 1] = { pos1, ang1, pos2, ang2, parent, isPhysBone }
+		else
+			defaultPose[b + 1] = { vector_origin, angle_zero, vector_origin, angle_zero, -1, false }
+		end
+	end
+
+	return defaultPose
+end
+
+---@alias BonePoseInfo {[1]: Vector, [2]: Angle, [3]: Vector, [4]: Angle, [5]: integer, [6]: integer}
+---@type {[string]: BonePoseInfo[]}
+local PoseTrees = {}
+
+---Get the default pose of an entity
+---
+---```lua
+---	local poseTree = GetDefaultPoseTreeFor(entity)
+---	PrintTable(poseTree[b + 1])
+---```
+---
+---@param entity Entity
+---@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
+function MGR.GetDefaultPoseTreeFor(entity)
+	local model = entity:GetModel()
+	local tree = PoseTrees[model]
+	if tree then
+		return tree
+	end
+
+	---@diagnostic disable
+	local csModel = ClientsideModel(model)
+	csModel:DrawModel()
+	csModel:SetupBones()
+	csModel:InvalidateBoneCache()
+	local csRagdoll
+	if util.IsValidRagdoll(model) then
+		print(entity, model)
+		csRagdoll = ClientsideRagdoll(model)
+		csRagdoll:SetNoDraw(false)
+		csRagdoll:DrawShadow(true)
+		csRagdoll:SetupBones()
+		csRagdoll:InvalidateBoneCache()
+	end
+	tree = getDefaultPoseTree(csModel, csRagdoll)
+	if IsValid(csRagdoll) then
+		csRagdoll:Remove()
+	end
+	csModel:Remove()
+
+	PoseTrees[model] = tree
+	---@diagnostic enable
+
+	return tree
+end
+
 ---Calculate the bone offsets with respect to the parent
 ---@source https://github.com/NO-LOAFING/AnimpropOverhaul/blob/a3a6268a5d57655611a8b8ed43dcf43051ecd93a/lua/entities/prop_animated.lua#L1889
 ---@param entity Entity Entity to obtain bone information
@@ -43,7 +127,7 @@ local boneToPhysMap = {}
 ---@param bone integer Bone
 ---@param outputMatrix VMatrix Matrix to write values to
 function MGR.GetNonPhysicalBonePose(entity, bone, outputMatrix)
-	local defaultBonePose = RagdollPoser.Entity:GetDefaultPoseTreeFor(entity)
+	local defaultBonePose = MGR.GetDefaultPoseTreeFor(entity)
 
 	if entity:GetBoneParent(bone) > -1 then
 		local dPos, dAng = getBoneOffsetsOf(entity, bone, defaultBonePose)

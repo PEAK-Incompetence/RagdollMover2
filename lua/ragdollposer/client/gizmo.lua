@@ -59,7 +59,7 @@ local MGR = {
 		ang = Angle(),
 		scale = 30,
 		width = 0.25,
-		offset = Vector(), -- user specified offset
+		offset = Vector(),    -- user specified offset
 		boneSelectedPos = Vector(), -- averaged selected bone position
 		partial = false,
 		sensitivity = 1,
@@ -528,7 +528,7 @@ function MGR:PreTransform()
 		-- We work with the bones with less depth first (parent bones) and then bones with more depth last (child bones)
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
-			local tree = RagdollPoser.Entity:GetDefaultPoseTreeFor(client)
+			local tree = RagdollPoser.Helpers.GetDefaultPoseTreeFor(client)
 
 			local count = 0
 			local walk = bone
@@ -964,7 +964,7 @@ function MGR:ResetSelected(transformType, bone, entity)
 	local resetAll = transformType == 4
 
 	local function handleReset(bone, client)
-		local defaultPose = RagdollPoser.Entity:GetDefaultPoseTreeFor(client)
+		local defaultPose = RagdollPoser.Helpers.GetDefaultPoseTreeFor(client)
 		local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		local selectedMatrix = matrices and matrices[bone + 1]

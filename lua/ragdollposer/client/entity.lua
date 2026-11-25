@@ -32,10 +32,6 @@ MGR.ClientBoneCallbacks = MGR.ClientBoneCallbacks or {}
 ---@type {[Entity]: integer}
 MGR.EntityPhysBoneCount = MGR.EntityPhysBoneCount or {}
 
----@alias BonePoseInfo {[1]: Vector, [2]: Angle, [3]: Vector, [4]: Angle, [5]: integer, [6]: integer}
----@type {[string]: BonePoseInfo[]}
-local PoseTrees = {}
-
 local function refreshClientData()
 	MGR.ClientEntities = {}
 	MGR.ClientToEntity = {}
@@ -87,7 +83,6 @@ end
 ---Display the entity
 ---@param self ClientEntity
 local function renderOverride(self, flags)
-	local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_DRAWTRANSLUCENTSUBMODELS)
 	if RagdollPoser.Helpers.Equipped() then
 		-- Draw the entity underneath the ghost
 		local entity = MGR.ClientToEntity[self]
@@ -111,6 +106,8 @@ local function renderOverride(self, flags)
 		end
 
 		if IsValid(entity) then
+			local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_TRANSPARENCY, STUDIO_SKIP_DECALS)
+
 			copyVisualsToClient(self, entity)
 
 			entity:DrawModel(flags)
@@ -301,71 +298,6 @@ function MGR:UpdateRenderBounds(entity)
 	end
 end
 
----Source: https://github.com/NO-LOAFING/AnimpropOverhaul/blob/a3a6268a5d57655611a8b8ed43dcf43051ecd93a/lua/entities/prop_animated.lua#L3550
----@param ent Entity|CSEnt Entity in reference pose
----@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
-local function getDefaultPoseTree(ent)
-	local defaultPose = {}
-	local entPos = ent:GetPos()
-	local entAngles = ent:GetAngles()
-	local rootMatrix = ent:GetBoneMatrix(0)
-	local rootPos = rootMatrix and rootMatrix:GetTranslation() or entPos
-	local rootAngles = rootMatrix and rootMatrix:GetAngles() or entAngles
-	for b = 0, ent:GetBoneCount() - 1 do
-		local parent = ent:GetBoneParent(b)
-		local isPhysBone = RagdollPoser.Helpers.BoneToPhysBone(ent, b) >= 0
-		local bMatrix = ent:GetBoneMatrix(b)
-		if bMatrix then
-			local pos1, ang1 = WorldToLocal(bMatrix:GetTranslation(), bMatrix:GetAngles(), rootPos, rootAngles)
-			local pos2, ang2 = pos1 * 1, ang1 * 1
-			if parent > -1 then
-				local pMatrix = ent:GetBoneMatrix(parent)
-				pos2, ang2 = WorldToLocal(
-					bMatrix:GetTranslation(),
-					bMatrix:GetAngles(),
-					pMatrix:GetTranslation(),
-					pMatrix:GetAngles()
-				)
-			end
-
-			defaultPose[b + 1] = { pos1, ang1, pos2, ang2, parent, isPhysBone }
-		else
-			defaultPose[b + 1] = { vector_origin, angle_zero, vector_origin, angle_zero, -1, false }
-		end
-	end
-
-	return defaultPose
-end
-
----Get the default pose of an entity
----
----```lua
----	local poseTree = GetDefaultPoseTreeFor(entity)
----	PrintTable(poseTree[b + 1])
----```
----
----@param entity Entity
----@return BonePoseInfo[] defaultPose Array consisting of a bones offsets from the entity, and offsets from its parent bones
-function MGR:GetDefaultPoseTreeFor(entity)
-	local model = entity:GetModel()
-	local tree = PoseTrees[model]
-	if tree then
-		return tree
-	end
-
-	---@diagnostic disable
-	local csModel = ClientsideModel(entity:GetModel())
-	csModel:DrawModel()
-	csModel:SetupBones()
-	csModel:InvalidateBoneCache()
-	tree = getDefaultPoseTree(csModel)
-	csModel:Remove()
-
-	PoseTrees[model] = tree
-	---@diagnostic enable
-
-	return tree
-end
 
 ---Bone indices for the matrices are offset by 1, i.e.
 ---
@@ -433,8 +365,8 @@ local function readConstraints()
 	local count = net.ReadUInt(RagdollPoser.ConstraintBits)
 	for i = 1, count do
 		local type = net.ReadUInt(RagdollPoser.ConstraintTypeBits) -- Type
-		local name = net.ReadString() -- Name
-		local state = net.ReadTable() -- State
+		local name = net.ReadString()                        -- Name
+		local state = net.ReadTable()                        -- State
 		networkedConstraints[i] = {
 			Type = type,
 			Name = name,
@@ -455,7 +387,6 @@ local function sendAssemblyInfo()
 	local count = net.ReadUInt(RagdollPoser.Constants.MAX_ENTITY_LIST_BITS)
 	---@type Entity[]
 	local entities = {}
-	-- print(ent, bone, count)
 	local constraintCount = 0
 	---@type table<Entity, NetworkedConstraint[]>
 	local entityConstraints = {}

@@ -74,6 +74,13 @@ local MGR = {
 		surface = false,
 	},
 
+	---@type table<ClientEntity, integer[]>
+	_transformedBones = {},
+	---@type table<ClientEntity, table<integer, integer>>
+	_transformedBoneSet = {},
+	---@type table<ClientEntity, VMatrix[]>
+	_transformed = {},
+
 	_moving = false,
 	_enabled = true,
 	_movingUI = false,
@@ -528,6 +535,8 @@ function MGR:PreTransform()
 		-- We work with the bones with less depth first (parent bones) and then bones with more depth last (child bones)
 		for i = 1, #selection - 1, 2 do
 			local bone, client = selection[i], selection[i + 1]
+			---@cast bone integer
+			---@cast client ClientEntity
 			local tree = RagdollPoser.Helpers.GetDefaultPoseTreeFor(client)
 
 			local count = 0
@@ -727,6 +736,7 @@ function MGR:Transform()
 		local function transformSelected(selection, pivots, doMirror)
 			for i = 1, #selection - 1, 2 do
 				local bone, client = selection[i], selection[i + 1]
+				---@cast bone integer
 				---@cast client ClientEntity
 				local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 				RagdollPoser.Entity:ExposeBones(client)
@@ -1238,8 +1248,8 @@ function MGR:DrawBones()
 				local childSelected = false
 				for _, childBone in ipairs(ent:GetChildBones(b)) do
 					ent:CopyBoneMatrix(childBone, mat)
-					local p = mat:GetTranslation()
-					local data = p:ToScreen()
+					local c = mat:GetTranslation()
+					local data = c:ToScreen()
 					if not data.visible then
 						continue
 					end

@@ -24,7 +24,11 @@ function MGR:GetView()
 end
 
 ---@type TraceResult
-local output = {}
+local output = {
+	HitPos = Vector(),
+	StartPos = Vector(),
+	Normal = Vector(),
+}
 ---@type Trace
 local traceConfig = {
 	filter = {},
@@ -32,7 +36,7 @@ local traceConfig = {
 	endPos = Vector(),
 	output = output,
 }
----@param filter Entity[]
+---@param filter Entity[]?
 function MGR:GetTrace(filter)
 	local eyepos, eyevec = self:GetView()
 

@@ -13,6 +13,7 @@ function PANEL:Init()
 	self:SetPaintBackground(false)
 	self:SetSize(0, 0)
 
+	---@diagnostic disable-next-line
 	self.ToggleButton:Remove()
 	self.ToggleButton = vgui.Create("DButton", self:GetParent())
 	self.ToggleButton:SetSize(18, 18)

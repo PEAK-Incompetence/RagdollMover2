@@ -201,7 +201,8 @@ local COLOR = Color(255, 0, 0)
 ---@param props GizmoProps
 function scale:Transform(directions, deltaProps, transform, accumulations, initials, props)
 	local delta = deltaProps[1]
-	---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix}
+	---[1] Initial Transform, [2]: Scale, [3]: Rotation Matrix, [4]: Last snap value
+	---@type {[1]: VMatrix, [2]: Vector, [3]: VMatrix, [4]: number}
 	local initialTransformTable = initials[1]
 
 	if not initialTransformTable then

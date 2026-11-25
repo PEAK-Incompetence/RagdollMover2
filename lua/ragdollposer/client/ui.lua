@@ -33,7 +33,11 @@ local getModelIcon, getNiceModelName = RagdollPoser.Helpers.GetModelNodeIconPath
 ---@field action InputAction
 ---@field keyChangedCallback fun(newKey: BUTTON_CODE)?
 
----@param listLayout DListLayout
+---@class ConstraintListLayout: DListLayout
+---@field DropAction_Normal fun(self: ConstraintListLayout, Drops: table<ConstraintEntry>, bDoDrop: boolean, Command: string, x: integer, y: integer)
+---@field DropAction_Simple fun(self: ConstraintListLayout, Drops: table<ConstraintEntry>, bDoDrop: boolean, Command: string, x: integer, y: integer)
+
+---@param listLayout ConstraintListLayout
 local function constraintListHook(listLayout)
 	function listLayout:DropAction_Simple(Drops, bDoDrop, Command, x, y)
 		self:SetDropTarget(0, 0, self:GetWide(), 2)
@@ -197,14 +201,11 @@ local function numpadHooks(numpad, action, keyChangedCallback)
 	end
 end
 
----@param cpanel ControlPanel|DForm
+---@param cpanel ControlPanel
 ---@param leftProps KeyBinderProps
 ---@param rightProps KeyBinderProps?
 ---@return CtrlNumPad
 local function keyBinder(cpanel, leftProps, rightProps)
-	---@class CtrlNumPad
-	---@field NumPad1 DBinder
-	---@field NumPad2 DBinder
 	local binder
 	if rightProps then
 		binder = cpanel:KeyBinder(leftProps.label, leftProps.cvar, rightProps.label, rightProps.cvar)
@@ -457,6 +458,7 @@ local function populateEntities(entityTree, clients, selectedEntities)
 			entityTree.selected = entity
 			entityTree:EntitySelected(entity)
 		end
+
 		entityTree[entity] = node
 	end
 
@@ -521,6 +523,7 @@ local function addBoneNode(parentNode, entity, bone, boneName, boneType)
 	function child:TestHover()
 		hook.Run("RagdollPoser_Selection_Hover", bone, entity)
 	end
+
 	function child:DoClick()
 		local root = getRootNode(self)
 		if not input.IsShiftDown() then
@@ -1094,6 +1097,7 @@ function MGR:BuildCPanel(cpanel)
 		batch = false
 		onGizmoChange(sliders)
 	end
+
 	gizmoOffsets:SetExpanded(false)
 
 	local function offsetChanged(offset)
@@ -1208,9 +1212,11 @@ function MGR:BuildCPanel(cpanel)
 	function phys.DoClick()
 		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.Phys)
 	end
+
 	function all.DoClick()
 		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.All)
 	end
+
 	function nonPhys.DoClick()
 		hook.Run("RagdollPoser_UI_Bone_Show", self.BoneCategory.NonPhys)
 	end

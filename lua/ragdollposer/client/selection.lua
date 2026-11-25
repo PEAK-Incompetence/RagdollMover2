@@ -296,13 +296,13 @@ local function getBones(x, y)
 			local childSelected = false
 			for _, childBone in ipairs(entity:GetChildBones(b)) do
 				entity:CopyBoneMatrix(childBone, matrix)
-				local parentScreenData = matrix and matrix:GetTranslation():ToScreen()
+				local childScreenData = matrix and matrix:GetTranslation():ToScreen()
 				if
 					not onBone
 					and not childSelected
-					and parentScreenData
-					and parentScreenData.visible
-					and MGR:RaycastBoneLine(x, y, screenData.x, screenData.y, parentScreenData.x, parentScreenData.y)
+					and childScreenData
+					and childScreenData.visible
+					and MGR:RaycastBoneLine(x, y, screenData.x, screenData.y, childScreenData.x, childScreenData.y)
 				then
 					MGR:SetWasOnBone(true)
 					table.insert(selectionBuffer, b)

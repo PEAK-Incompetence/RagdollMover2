@@ -138,6 +138,23 @@ function MGR.GetAncestor(entity)
 end
 
 if CLIENT then
+	---Gamemode friendly GetTool
+	---@param pl Player
+	---@param mode string?
+	local function getTool(pl, mode)
+		local wep = pl:GetWeapon("gmod_tool")
+		if not IsValid(wep) or not wep.GetToolObject then
+			return nil
+		end
+
+		local tool = wep:GetToolObject(mode)
+		if not tool then
+			return nil
+		end
+
+		return tool
+	end
+
 	---[CLIENT]
 	---
 	---Check if the player has the RagdollPoser tool equipped
@@ -146,7 +163,7 @@ if CLIENT then
 	function MGR.Equipped()
 		local pl = LocalPlayer()
 		local weap = pl:GetActiveWeapon()
-		local tool = pl:GetTool()
+		local tool = getTool(pl)
 		---@cast tool TOOL
 		return not gui.IsGameUIVisible()
 			and IsValid(weap)

@@ -260,6 +260,23 @@ local sendTransformMap = {
 			output:SetScale(currentMatrix:GetScale())
 		end
 	end,
+	ent_bonemerged = function(bonemergeEntity, parentEntity, bone, parentBone, output)
+		local bmMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
+		local pmMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
+		local currentMatrix = bmMatrices and bmMatrices[bone + 1]
+		local parentMatrix = pmMatrices and pmMatrices[parentBone + 1]
+
+		if not currentMatrix or not parentMatrix then
+			output:Identity()
+			return
+		end
+
+		local localMatrix = parentMatrix:GetInverse() * currentMatrix
+
+
+		output:Identity()
+		output:SetScale(localMatrix:GetScale())
+	end
 }
 
 ---@type table<string, fun(bonemergeEntity: Entity, parentEntity: Entity, bone: integer, output: VMatrix)>

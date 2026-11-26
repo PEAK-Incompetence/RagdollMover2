@@ -253,6 +253,8 @@ end
 local aliases = {
 	hl_camera = "prop_physics",
 	gmod_cameraprop = "prop_physics",
+	phys_bonemerge = "ent_bonemerged",
+	phys_bonemerge_parent = "ent_bonemerged",
 }
 
 function MGR:SendTransform(entity, bones)

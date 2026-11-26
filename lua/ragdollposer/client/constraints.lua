@@ -407,7 +407,6 @@ function MGR:PushBatch(entity, batch)
 	EntityConstraintStacks[entity] = stack
 	refreshStack(entity)
 	local constraints = {}
-	-- print("pushing constraint batch")
 	for _, b in ipairs(batch) do
 		local type, state, name = b.type, b.state, b.name
 		local constraint = constructConstraint(entity, type, state, name)
@@ -419,9 +418,6 @@ function MGR:PushBatch(entity, batch)
 			EntityConstraintStacks[entity] = stack
 		end
 	end
-	-- print("wow new constraints?")
-	-- PrintTable(stack)
-	-- print(debug.traceback())
 	hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, constraints)
 	EntityConstraintStacks[entity] = stack
 	self:UpdateConstraints()
@@ -430,8 +426,6 @@ end
 
 ---@param constraints table<Entity, NetworkedConstraint[]>
 function MGR:SetConstraints(constraints)
-	-- print("setting constraints")
-	-- PrintTable(constraints)
 	---Clear the existing constraint stack for the upcoming one
 	---@diagnostic disable-next-line
 	EntityConstraintStacks = {}
@@ -687,7 +681,6 @@ local function onKeyPress(actions, key)
 
 			for _, constraint in ipairs(stack.array) do
 				if constraint.State.key == key then
-					-- print("pressed")
 					checked = true
 					constraint.State.enabled = not constraint.State.enabled
 				end

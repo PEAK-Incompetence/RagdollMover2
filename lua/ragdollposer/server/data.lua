@@ -409,7 +409,6 @@ RagdollPoser.Networking.EntityPhysBoneCount = RagdollPoser.Networking.DefineSend
 ---@param entity Entity
 function MGR:UpdatePhysBoneCount(entity, count)
 	RagdollPoser.Networking.EntityPhysBoneCount()
-	-- print("entityphysbonecount send", entity, entity:GetPhysicsObjectCount())
 	net.WriteEntity(entity)
 	net.WriteUInt(count, RagdollPoser.Constants.MAX_PHYSBONE_BITS)
 	net.Broadcast()
@@ -477,6 +476,7 @@ function MGR:SetOffset(ply, offset)
 	net.WriteVector(offset)
 	net.Send(ply)
 end
+
 RagdollPoser.Networking.SetOffset = RagdollPoser.Networking.DefineSender("SetOffset")
 
 RagdollPoser.Data = MGR

@@ -1344,8 +1344,6 @@ function MGR:BuildCPanel(cpanel)
 	hook.Add("RagdollPoser_Selection_Selected", "UI_UpdateEntities", function(selection, selectedEntities)
 		populateEntities(entitySelector, RagdollPoser.Entity:GetClientEntities(), selectedEntities)
 		updateBoneTree(boneTree, selection, boneTypeRestriction)
-		-- print("selected check ui")
-		-- PrintTable(selection)
 		local selectedEntity = selection[#selection]
 		entitySelector.selected = selectedEntity
 		updateConstraintUI(selectedEntity)
@@ -1369,9 +1367,6 @@ function MGR:BuildCPanel(cpanel)
 
 	hook.Add("RagdollPoser_Constraints_ConstraintCreated", "UI_UpdateEntities", function(entity, constraints)
 		local client = RagdollPoser.Entity:GetClientFromEntity(entity)
-		-- print("update constraints")
-		-- print(entity, client, entitySelector.selected, constraints)
-		-- print("selected equals us?", entitySelector.selected == client)
 		if client == entitySelector.selected then
 			for _, constraint in ipairs(constraints) do
 				makeConstraintEntry(constraintList, entity, constraint)

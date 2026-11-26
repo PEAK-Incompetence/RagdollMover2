@@ -294,7 +294,6 @@ end
 local function createConstraint(entity, state, name)
 	local base = lock:Init(entity, state, name)
 	---@cast base BoneLockConstraint
-	-- print("lock bruh")
 	base.State.target = base.Owner
 	return base
 end

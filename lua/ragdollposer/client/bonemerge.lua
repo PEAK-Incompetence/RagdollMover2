@@ -182,7 +182,7 @@ local parentBoneMap = {
 }
 
 ---@type table<string, fun(bonemergeEntity: Entity, parentEntity: Entity, bone: integer, parentBone: integer, output: VMatrix): integer>
-local transformMap = {
+local sendTransformMap = {
 	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone, parentBone, output)
 		local childMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
 		local parentMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
@@ -222,35 +222,43 @@ local transformMap = {
 		local bmMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
 		local pMatrices = RagdollPoser.Entity:GetMatrices(parentEntity)
 
-		local currentMatrix = Matrix()
-		currentMatrix:Set(bmMatrices[bone + 1])
-		currentMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+		if bonemergeEntity:GetBoneParent(bone) == -1 then
+			local currentMatrix = Matrix()
+			currentMatrix:Set(bmMatrices[bone + 1])
+			currentMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
 
-		local currentParentTransform = Matrix()
-		currentParentTransform:Set(pMatrices[bone + 1])
-		currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+			local currentParentTransform = Matrix()
+			currentParentTransform:Set(pMatrices[parentBone + 1])
+			currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
 
-		local currentLocal = currentParentTransform:GetInverse() * currentMatrix
+			local currentLocal = currentParentTransform:GetInverse() * currentMatrix
 
-		local pastMatrix = bonemergeEntity:GetBoneMatrix(bone)
-		pastMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+			local pastMatrix = bonemergeEntity:GetBoneMatrix(bone)
+			pastMatrix:SetScale(RagdollPoser.Constants.VECTOR_ONE)
 
-		local pastParentTransform = parentEntity:GetBoneMatrix(parentBone)
-		pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+			local pastParentTransform = parentEntity:GetBoneMatrix(parentBone)
+			pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
 
-		local pastLocal = pastParentTransform:GetInverse() * pastMatrix
+			local pastLocal = pastParentTransform:GetInverse() * pastMatrix
 
-		local existingLocal = Matrix()
-		existingLocal:Translate(bonemergeEntity:GetLocalPos())
-		existingLocal:Rotate(bonemergeEntity:GetLocalAngles())
+			-- Get the difference between the new offset and current offset
+			local delta = currentLocal * pastLocal:GetInverse()
+			local existingLocal = Matrix()
+			existingLocal:Translate(bonemergeEntity:GetLocalPos())
+			existingLocal:Rotate(bonemergeEntity:GetLocalAngles())
 
-		-- Get the difference between the new offset and current offset
-		local delta = currentLocal * pastLocal:GetInverse()
+			local finalLocal = delta * existingLocal
 
-		local finalLocal = delta * existingLocal
-		output:Identity()
-		output:Translate(finalLocal:GetTranslation())
-		output:Rotate(finalLocal:GetAngles())
+			output:Identity()
+			output:Set(finalLocal)
+			output:SetScale(currentMatrix:GetScale())
+		else
+			local currentMatrix = bmMatrices[bone + 1]
+			output:Identity()
+			local client = RagdollPoser.Entity:GetClientFromEntity(bonemergeEntity)
+			RagdollPoser.Helpers.GetNonPhysicalBonePose(client, bone, output)
+			output:SetScale(currentMatrix:GetScale())
+		end
 	end,
 }
 
@@ -346,7 +354,7 @@ function MGR:GetBonemergePose(bonemergeEntity, bone, output)
 	if parentBoneGetter then
 		parentBone = parentBoneGetter(bonemergeEntity, parentEntity, bone)
 	end
-	local transformer = transformMap[class]
+	local transformer = sendTransformMap[class]
 	if parentBone and transformer then
 		transformer(bonemergeEntity, parentEntity, bone, parentBone, output)
 	else

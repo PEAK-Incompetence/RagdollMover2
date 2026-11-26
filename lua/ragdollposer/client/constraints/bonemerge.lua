@@ -263,6 +263,8 @@ function lock:EvaluatePose(entity, context)
 		childRoot:Set(parentRoot * self._offset)
 	end
 
+	RagdollPoser.Entity:ExposeBones(childTarget)
+	RagdollPoser.Entity:ExposeBones(parentTarget)
 	-- Take the L and iterate over all child bone targets during transform
 	for childBone = 0, childTarget:GetBoneCount() - 1 do
 		if self._offset and childBone == childRootBone then
@@ -283,13 +285,29 @@ function lock:EvaluatePose(entity, context)
 		end
 
 		local parentMatrix = transforms[parentBone + 1]
-
 		if parentMatrix and childMatrix then
-			childMatrix:Set(parentMatrix)
-			if not self._offset or childBone ~= childRootBone then
-				childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
-				childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
-				childMatrix:Scale(childTarget:GetManipulateBoneScale(childBone))
+			-- TODO: Add a DoTransform section in bonemerge.lua for this stuff
+			if childTarget:GetClass() == "ent_advbonemerge" then
+				childMatrix:Set(parentMatrix)
+				if not self._offset or childBone ~= childRootBone then
+					childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
+					childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
+					childMatrix:Scale(childTarget:GetManipulateBoneScale(childBone))
+				end
+			elseif childTarget:GetClass() == "ent_composite" then
+				if childTarget:GetParentAttachment() ~= 0 then
+					local pastParentMatrix = parentTarget:GetBoneMatrix(parentBone)
+					local previousMatrix = childTarget:GetBoneMatrix(childBone)
+					local pastLocal = pastParentMatrix:GetInverse() * previousMatrix
+
+					childMatrix:Set(parentMatrix * pastLocal)
+				else
+					childMatrix:Set(parentMatrix)
+					if not self._offset or childBone ~= childRootBone then
+						-- Composite bonemerges don't move at all, only scale
+						childMatrix:Scale(childTarget:GetManipulateBoneScale(childBone))
+					end
+				end
 			end
 		end
 	end
@@ -316,7 +334,6 @@ end
 local function createConstraint(entity, state, name)
 	local base = lock:Init(entity, state, name)
 	---@cast base BonemergeConstraint
-	-- print("lock bruh")
 	base.State.target = base.Owner
 	return base
 end

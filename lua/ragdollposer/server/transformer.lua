@@ -109,7 +109,18 @@ function MGR:RestoreDefaults()
 		end,
 		prop_effect = genericPhysicsProp,
 		ent_advbonemerge = genericManipulate,
-		ent_composite = genericManipulate,
+		ent_composite = function(entity, bones, boneSet, matrices)
+			local index = boneSet[0]
+			local rootMatrix = matrices[0]
+			if rootMatrix then
+				entity:SetLocalPos(rootMatrix:GetTranslation())
+				entity:SetLocalAngles(rootMatrix:GetAngles())
+				entity:ManipulateBoneScale(0, rootMatrix:GetScale())
+				table.remove(bones, index)
+				matrices[0] = nil
+			end
+			genericManipulate(entity, bones, boneSet, matrices)
+		end,
 		ent_bonemerged = genericManipulate,
 	}
 end

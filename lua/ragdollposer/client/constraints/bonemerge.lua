@@ -33,13 +33,16 @@ function lock:Draw()
 	self:DrawIcon(self.State.otherTarget, self.State.otherBone, spriteMat, RED, DISABLED_RED)
 end
 
+---@param parentTarget Entity
+---@param childTarget Entity
+---@param fallbackParentBone integer
 local function getMergeRootBones(parentTarget, childTarget, fallbackParentBone)
 	if childTarget:GetBoneCount() <= 0 then
 		return
 	end
 
 	local childBone = 0
-	local parentBone = parentTarget:LookupBone(childTarget:GetBoneName(childBone))
+	local parentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, childBone)
 	if not isnumber(parentBone) or parentBone < 0 then
 		parentBone = fallbackParentBone
 	end
@@ -50,6 +53,11 @@ local function getMergeRootBones(parentTarget, childTarget, fallbackParentBone)
 	return parentBone, childBone
 end
 
+---@param constraint BonemergeConstraint
+---@param parentTarget Entity
+---@param childTarget Entity
+---@param parentMatrices VMatrix[]
+---@param childMatrices VMatrix[]
 local function captureOffset(constraint, parentTarget, childTarget, parentMatrices, childMatrices)
 	local parentBone, childBone = getMergeRootBones(parentTarget, childTarget, constraint.State.bone)
 	local parentRoot = parentBone and parentMatrices[parentBone + 1]
@@ -174,14 +182,20 @@ function lock:PreEvaluate(entity)
 		visited[bone] = true
 
 		local matrix = childMatrices[bone + 1]
+		local parent = childClient:GetBoneParent(bone)
+		local parentBoneMatrix = parent >= 0 and childMatrices[parent + 1]
 		if matrix then
 			transformedBones[#transformedBones + 1] = bone
+			if parentBoneMatrix then
+				self.transformedBonesLocal[bone] = parentBoneMatrix:GetInverse() * matrix
+			end
 		end
 
 		for _, child in ipairs(childClient:GetChildBones(bone)) do
 			capture(child)
 		end
 	end
+	self.transformedBonesLocal = {}
 
 	capture(0)
 	return transformedBones
@@ -191,11 +205,14 @@ end
 function lock:EvaluatePose(entity, context)
 	local transforms = context and context.transforms
 	local transformedBones = context and context.transformedBones
+	local transformedClientBones = context and context.transformedByClient
 	local parentTarget = self.State.target
+	local parentClient = RagdollPoser.Entity:GetClientFromEntity(parentTarget)
 	local childTarget = self.State.otherTarget
 	if self.State.enabled == false or not IsValid(parentTarget) or not IsValid(childTarget) or not context then
 		return false
 	end
+	local parentTransformedBoneSet = transformedClientBones[parentClient]
 
 	local influence = math.Clamp(self.State.influence or 1, 0, 1)
 	if influence == 0 then
@@ -240,26 +257,35 @@ function lock:EvaluatePose(entity, context)
 		return captureOffset(self, parentTarget, childTarget, transforms, childMatrices)
 	end
 
-	-- FIXME: this messes up some bonemerged cosmetics
-	-- e.g. models/workshop/player/items/heavy/dec24_cossack_camo_style2/dec24_cossack_camo_style2.mdl
-	-- what it does is flip the model on every click on the gizmo
-	--
-	-- ai made this.
-	-- the point of this is to preserve the offset of a bonemerged entity
-	-- when it is currently away from its parent
-	local worldOffset
-	if self._offset and parentRoot then
-		-- Rotate the saved root-relative offset with the parent's current root pose.
-		worldOffset = parentRoot * self._offset * parentRoot:GetInverse()
+	local childRoot = childMatrices[childRootBone + 1]
+
+	if self._offset and parentRoot and childRoot then
+		childRoot:Set(parentRoot * self._offset)
 	end
 
-	for _, bone in ipairs(transformedBones) do
-		local boneName = entity:GetBoneName(bone)
-		local childBone = childTarget:LookupBone(boneName)
-		local parentMatrix = transforms[bone + 1]
-		local childMatrix = childBone and childMatrices[childBone + 1]
+	-- Take the L and iterate over all child bone targets during transform
+	for childBone = 0, childTarget:GetBoneCount() - 1 do
+		if self._offset and childBone == childRootBone then
+			continue
+		end
+
+		local parentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, childBone)
+		local childMatrix = childMatrices[childBone + 1]
+		-- At least not all of them, but still.
+		if not parentBone or not parentTransformedBoneSet[parentBone] then
+			-- Let's make sure we're situated with respect to our parents
+			-- local childParent = childTarget:GetBoneParent(childBone)
+			-- -- If we're moving that we've selected, don't lock it
+			-- if childParent >= 0 then
+			-- 	childMatrix:Set(childMatrix * self.transformedBonesLocal[childBone]:GetInverse())
+			-- end
+			continue
+		end
+
+		local parentMatrix = transforms[parentBone + 1]
+
 		if parentMatrix and childMatrix then
-			childMatrix:Set(worldOffset and worldOffset * parentMatrix or parentMatrix)
+			childMatrix:Set(parentMatrix)
 			if not self._offset or childBone ~= childRootBone then
 				childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
 				childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
@@ -268,12 +294,11 @@ function lock:EvaluatePose(entity, context)
 		end
 	end
 
-	-- TODO: Account for child bones of the bonemerged entity that the parent entity doesn't have
+	-- TODO: Account for bones of the bonemerged entity that the parent entity doesn't have
 
 	return true
 end
 
--- FIXME: What's the point of these output stuff?
 function lock:GetOutputEntity()
 	local target = self.State.otherTarget
 	if IsValid(target) and target ~= self.State.target then

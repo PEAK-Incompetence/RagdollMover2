@@ -62,7 +62,6 @@ local badEntities = {
 ---@return boolean
 function MGR:VerifySpawned(parentEntity)
 	local firstSpawned = parentEntity:GetNWBool("rgp_firstSpawned")
-	-- print(firstSpawned, parentEntity)
 	return firstSpawned ~= nil and firstSpawned
 end
 
@@ -168,9 +167,9 @@ end
 ---@type table<string, fun(b: Entity, p: Entity, bone: integer): integer>
 local parentBoneMap = {
 	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone)
-		if parentEntity.AdvBone_BoneInfo then
-			local info = parentEntity.AdvBone_BoneInfo[bone]
-			return info and info.parent
+		if bonemergeEntity.AdvBone_BoneInfo then
+			local info = bonemergeEntity.AdvBone_BoneInfo[bone]
+			return info and info.parent and parentEntity:LookupBone(info.parent)
 		end
 	end,
 	ent_composite = function(bonemergeEntity, parentEntity, bone)
@@ -182,6 +181,7 @@ local parentBoneMap = {
 	end,
 }
 
+---@type table<string, fun(bonemergeEntity: Entity, parentEntity: Entity, bone: integer, parentBone: integer, output: VMatrix): integer>
 local transformMap = {
 	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone, parentBone, output)
 		local childMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
@@ -254,6 +254,77 @@ local transformMap = {
 	end,
 }
 
+---@type table<string, fun(bonemergeEntity: Entity, parentEntity: Entity, bone: integer, output: VMatrix)>
+local transformOriginMap = {
+	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone, output)
+		-- Steps for preserving origin
+		-- 1. Get our current parent and bone matrix and calculate their local offset
+		-- 2. Get our past parent and bone matrix and calculate their local offset
+		-- 3. Calculate delta between local offsets, also calculate delta between past parent and current parent
+		-- 4. Apply deltas to the current bone manipulate angles
+
+		output:Identity()
+		local bmMatrices = RagdollPoser.Entity:GetMatrices(bonemergeEntity)
+		local parentClient = RagdollPoser.Entity:GetClientFromEntity(parentEntity)
+
+		local currentTransform = Matrix()
+		currentTransform:Set(bmMatrices[bone + 1])
+		currentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local currentParentTransform = Matrix()
+		currentParentTransform:Set(parentClient:GetBoneMatrix(0))
+		currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local currentLocal = currentParentTransform:GetInverse() * currentTransform
+
+		local pastTransform = bonemergeEntity:GetBoneMatrix(bone)
+		pastTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local pastParentTransform = parentEntity:GetBoneMatrix(0)
+		pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+		local pastLocal = pastParentTransform:GetInverse() * pastTransform
+		local parentDelta = currentParentTransform * pastParentTransform:GetInverse()
+
+		-- Get the difference between the new offset and current offset
+		local delta = currentLocal:GetInverse() * pastLocal
+
+		local parentMatrix = parentEntity:GetBoneMatrix(0)
+		local childMatrix = bmMatrices and bmMatrices[bone + 1]
+		if not parentMatrix or not childMatrix then
+			output:Identity()
+			return
+		end
+
+		output:Identity()
+		output:Translate(childMatrix:GetTranslation() - parentMatrix:GetTranslation())
+		-- First, if we have rotated our parent, rotate it first
+		output:Rotate(parentDelta:GetAngles())
+		-- Then get the bone manipulate angles
+		output:Rotate(bonemergeEntity:GetManipulateBoneAngles(bone))
+		-- and apply our deltas
+		output:Rotate(delta:GetInverse():GetAngles())
+		output:SetScale(childMatrix:GetScale())
+	end,
+	ent_composite = function(bonemergeEntity, parentEntity, bone, output)
+		output:Identity()
+	end,
+}
+
+
+---@param bonemergeEntity Entity
+---@param parentEntity Entity
+---@param bone integer
+function MGR:GetParentBone(bonemergeEntity, parentEntity, bone)
+	local class = bonemergeEntity:GetClass()
+	local func = parentBoneMap[class]
+	local parentBone = parentEntity:LookupBone(bonemergeEntity:GetBoneName(bone))
+	if func then
+		parentBone = func(bonemergeEntity, parentEntity, bone) or parentBone
+	end
+	return parentBone
+end
+
 ---@param bonemergeEntity Entity
 ---@param bone integer
 ---@param output VMatrix
@@ -281,6 +352,10 @@ function MGR:GetBonemergePose(bonemergeEntity, bone, output)
 	else
 		-- Reset bone matrix back to identity.
 		output:Identity()
+		local originFunc = transformOriginMap[class]
+		if originFunc then
+			originFunc(bonemergeEntity, parentEntity, bone, output)
+		end
 	end
 end
 

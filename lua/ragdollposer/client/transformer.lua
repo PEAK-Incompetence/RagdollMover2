@@ -61,7 +61,6 @@ function MGR:RestoreDefaults()
 				else
 					if isBonemerge then
 						RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
-					-- boneMatrix:SetScale(matrix:GetScale())
 					else
 						RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
 						boneMatrix:SetScale(matrix:GetScale())
@@ -129,6 +128,7 @@ function MGR:RestoreDefaults()
 						-- Get the difference between the new offset and current offset
 						local delta = currentLocal * pastLocal:GetInverse()
 
+						-- TODO: Do scaling for effect props
 						local finalLocal = delta * existingLocal
 						boneMatrix:Identity()
 						boneMatrix:Translate(finalLocal:GetTranslation())

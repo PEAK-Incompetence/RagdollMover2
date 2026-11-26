@@ -65,7 +65,6 @@ function MGR.GetDefaultPoseTreeFor(entity)
 	csModel:InvalidateBoneCache()
 	local csRagdoll
 	if util.IsValidRagdoll(model) then
-		print(entity, model)
 		csRagdoll = ClientsideRagdoll(model)
 		csRagdoll:SetNoDraw(false)
 		csRagdoll:DrawShadow(true)

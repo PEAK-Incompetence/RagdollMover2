@@ -145,6 +145,8 @@ local aliases = {
 	gmod_cameraprop = "prop_physics",
 	phys_bonemerge = "ent_bonemerged",
 	phys_bonemerge_parent = "ent_bonemerged",
+	ent_peplus_grip = "prop_effect",
+	ent_peplus = "prop_dynamic"
 }
 
 ---@param class string

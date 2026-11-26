@@ -39,12 +39,30 @@ local function fixAngleOffset(entity, bone, matrix)
 	end
 end
 
-local function genericManipulate() end
-
 local IDENTITY_MATRIX = Matrix()
 IDENTITY_MATRIX:Identity()
 local boneMatrix = Matrix()
 boneMatrix:Identity()
+
+local function genericPhysics(entity, client, bones, matrices)
+	for _, b in ipairs(bones) do
+		net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
+		local matrix = matrices[b + 1]
+
+		local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
+		if physbone >= 0 then
+			-- Send world transforms and everything
+			fixAngleOffset(entity, b, matrix)
+			net.WriteMatrix(matrix)
+		else
+			RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
+			boneMatrix:SetScale(matrix:GetScale())
+			net.WriteMatrix(boneMatrix)
+		end
+	end
+end
+
+local function genericManipulate() end
 
 function MGR:RestoreDefaults()
 	---Entity classes that map to a function that does the transforming
@@ -69,29 +87,14 @@ function MGR:RestoreDefaults()
 				end
 			end
 		end,
-		prop_physics = function(entity, client, bones, matrices)
-			for _, b in ipairs(bones) do
-				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
-				local matrix = matrices[b + 1]
-
-				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-				if physbone >= 0 then
-					-- Send world transforms and everything
-					fixAngleOffset(entity, b, matrix)
-					net.WriteMatrix(matrix)
-				else
-					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
-					boneMatrix:SetScale(matrix:GetScale())
-					net.WriteMatrix(boneMatrix)
-				end
-			end
-		end,
+		prop_physics = genericPhysics,
 		prop_dynamic = function(entity, client, bones, matrices)
 			local parent = entity:GetParent()
 			local clientParent = IsValid(parent) and RagdollPoser.Entity:GetClientFromEntity(parent)
 			for _, b in ipairs(bones) do
 				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
+				print(entity, b)
 
 				if b == 0 then
 					boneMatrix:Set(matrix)
@@ -190,23 +193,7 @@ function MGR:RestoreDefaults()
 				end
 			end
 		end,
-		prop_effect = function(entity, client, bones, matrices)
-			for _, b in ipairs(bones) do
-				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
-				local matrix = matrices[b + 1]
-
-				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
-				if physbone >= 0 then
-					-- Send world transforms and everything
-					fixAngleOffset(entity, b, matrix)
-					net.WriteMatrix(matrix)
-				else
-					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
-					boneMatrix:SetScale(matrix:GetScale())
-					net.WriteMatrix(boneMatrix)
-				end
-			end
-		end,
+		prop_effect = genericPhysics,
 		ent_advbonemerge = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
 				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
@@ -250,11 +237,14 @@ function MGR:AddTransform(class, transformFunction, override)
 	self.EntityMap[class] = transformFunction
 end
 
+-- TODO: Make this available across realms
 local aliases = {
 	hl_camera = "prop_physics",
 	gmod_cameraprop = "prop_physics",
 	phys_bonemerge = "ent_bonemerged",
 	phys_bonemerge_parent = "ent_bonemerged",
+	ent_peplus_grip = "prop_effect",
+	ent_peplus = "prop_dynamic"
 }
 
 function MGR:SendTransform(entity, bones)

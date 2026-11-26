@@ -217,7 +217,14 @@ function lock:PreEvaluate(entity)
 
 		local matrix = childMatrices[bone + 1]
 		if matrix then
-			snapshot.locals[bone] = parentMatrix:GetInverse() * matrix
+			-- Suppose our matrix doesn't have an inverse (scale is zero), then just use the transpose
+			-- FIXME: When will this fail?
+			local inverse = parentMatrix:GetInverse() or parentMatrix:GetTransposed()
+			if not parentMatrix:GetInverse() then
+				RagdollPoser.Log("Detected an entity with an non-invertible matrix: ", entity, ", with model ",
+					entity:GetModel())
+			end
+			snapshot.locals[bone] = inverse * matrix
 			transformedBones[#transformedBones + 1] = bone
 		end
 

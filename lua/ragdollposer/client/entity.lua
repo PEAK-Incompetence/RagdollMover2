@@ -123,6 +123,11 @@ local function renderOverride(self, flags)
 	end
 end
 
+-- We want these entities to move
+local noShadowList = {
+	ent_peplus = true
+}
+
 ---@param self ClientEntity
 ---@param numbones integer
 ---@param staticProp boolean? Only called from explicitly
@@ -146,8 +151,8 @@ local function clientBoneManipulator(self, numbones, staticProp)
 		if shouldUpdate or (not static and not isMoving) then
 			entity:CopyBoneMatrix(b, m)
 			renderBounds[1], renderBounds[2] = entity:GetRenderBounds()
-			if entity:GetClass() == "prop_effect" then
-				-- TODO: Are there other entities that have a delay unless you hover over them?
+			-- Entities without a shadow don't update immediately (prop_effect), so detect that and set our placement
+			if entity:IsEffectActive(EF_NOSHADOW) and (not IsValid(entity:GetParent()) or noShadowList[entity:GetClass()]) then
 				m:SetTranslation(entity:GetPos())
 				m:SetAngles(entity:GetAngles())
 			end

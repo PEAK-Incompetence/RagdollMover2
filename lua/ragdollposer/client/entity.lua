@@ -71,14 +71,65 @@ local function copyVisualsToClient(client, source)
 		client:SetBodygroup(bodyGroup.id, source:GetBodygroup(bodyGroup.id))
 	end
 
-	client:SetFlexScale(source:GetFlexScale())
-	for i = 0, source:GetFlexNum() - 1 do
-		client:SetFlexWeight(i, source:GetFlexWeight(i))
+	if source:HasFlexManipulatior() then
+		client:SetFlexScale(source:GetFlexScale())
+		for i = 0, source:GetFlexNum() - 1 do
+			client:SetFlexWeight(i, source:GetFlexWeight(i))
+		end
 	end
 
 	client:SetRenderMode(source:GetRenderMode())
 	client:SetColor(source:GetColor())
 end
+
+-- 4x4 Bayer threshold matrix (values 0..15)
+local bayer4x4 = {
+	{ 0,  8,  2,  10 },
+	{ 12, 4,  14, 6 },
+	{ 3,  11, 1,  9 },
+	{ 15, 7,  13, 5 },
+}
+
+-- Create a render target to store the above 4x4 Bayer slop
+local checkerRT = GetRenderTargetEx(
+	"_rt_rgp_ghost",
+	4, 4,
+	RT_SIZE_NO_CHANGE,
+	MATERIAL_RT_DEPTH_NONE,
+	bit.bor(1, 256), -- TEXTUREFLAGS_POINTSAMPLE (1) + TEXTUREFLAGS_NOLOD (256)
+	0,
+	IMAGE_FORMAT_RGBA8888
+)
+
+-- Opacity threshold: 8 out of 16 pixels = 50% opacity (adjust 1..15 as desired)
+local opacityThreshold = 13
+local function initRT()
+	render.PushRenderTarget(checkerRT)
+	render.OverrideAlphaWriteEnable(true, true)
+	render.Clear(0, 0, 0, 0, false, false)
+
+	for y = 0, 3 do
+		for x = 0, 3 do
+			if bayer4x4[y + 1][x + 1] < opacityThreshold then
+				render.SetViewPort(x, y, 1, 1)
+				render.Clear(255, 255, 255, 255, false, false)
+			end
+		end
+	end
+
+	render.SetViewPort(0, 0, ScrW(), ScrH())
+	render.OverrideAlphaWriteEnable(false, false)
+	render.PopRenderTarget()
+end
+initRT()
+
+local checkerMat = CreateMaterial("ghost_bayer4x4_mat", "UnlitGeneric", {
+	["$basetexture"] = checkerRT:GetName(),
+	["$alphatest"] = 1,
+	["$alphatestreference"] = 0.5,
+})
+
+local texMatrix = Matrix()
 
 ---Display the entity
 ---@param self ClientEntity
@@ -106,19 +157,51 @@ local function renderOverride(self, flags)
 		end
 
 		if IsValid(entity) then
-			local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_TRANSPARENCY, STUDIO_SKIP_DECALS)
+			local transparentFlags = bit.bor(flags, STUDIO_NOSHADOWS, STUDIO_STATIC_LIGHTING, STUDIO_SKIP_DECALS,
+				STUDIO_DRAWTRANSLUCENTSUBMODELS)
 
 			copyVisualsToClient(self, entity)
-
 			entity:DrawModel(flags)
-			cam.IgnoreZ(xray:GetBool())
+
+			-- 1. Map the 4x4 Bayer pattern 1:1 to screen pixels (w / 4, h / 4)
+			local w, h = ScrW(), ScrH()
+			texMatrix:Identity()
+			texMatrix:SetScale(Vector(w * 0.25, h * 0.25, 1))
+			checkerMat:SetMatrix("$basetexturetransform", texMatrix)
+
+			render.SetStencilEnable(true)
+			render.ClearStencil()
+
+			-- Isolate on stencil bit 8 (0x08) so hover halos on bit 1 don't collide
+			render.SetStencilWriteMask(0x08)
+			render.SetStencilTestMask(0x08)
+			render.SetStencilReferenceValue(8)
+			render.SetStencilCompareFunction(STENCIL_ALWAYS)
+			render.SetStencilPassOperation(STENCIL_REPLACE)
+			render.SetStencilFailOperation(STENCIL_KEEP)
+			render.SetStencilZFailOperation(STENCIL_KEEP)
+
 			render.OverrideColorWriteEnable(true, false)
-			self:DrawModel(transparentFlags)
+			render.OverrideDepthEnable(true, false)
+
+			render.SetMaterial(checkerMat)
+			render.DrawScreenQuadEx(0, 0, w, h)
+
+			render.OverrideDepthEnable(false, false)
 			render.OverrideColorWriteEnable(false, false)
-			render.SetBlend(0.5)
+
+			-- 2. Draw ghost with softened contrast modulation to prevent strobing
+			render.SetStencilWriteMask(0x00)
+			render.SetStencilCompareFunction(STENCIL_EQUAL)
+			render.SetStencilPassOperation(STENCIL_KEEP)
+
+			render.SetColorModulation(0.85, 0.85, 0.85)
+			cam.IgnoreZ(xray:GetBool())
 			self:DrawModel(transparentFlags)
-			render.SetBlend(1)
 			cam.IgnoreZ(false)
+			render.SetColorModulation(1, 1, 1)
+
+			render.SetStencilEnable(false)
 		end
 	end
 end

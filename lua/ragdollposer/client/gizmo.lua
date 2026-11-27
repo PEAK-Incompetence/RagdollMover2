@@ -1192,33 +1192,41 @@ local function updateTheme(theme)
 end
 hook.Add("RagdollPoser_Themes_Update", "Gizmo", updateTheme)
 
+function MGR:GetDrawSelected()
+	return self._gizmoProps.drawselected
+end
+
 -- Make sure you are in the 2D rendering context
 function MGR:DrawBones()
 	local mouseHovered = {}
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
 	local selection = RagdollPoser.Selection
+	local selected = RagdollPoser.Selection:GetSelectedEntities()
 	local inSelectMode = selection:GetEnabled()
 	local alphaMultiplier = inSelectMode and 1 or 0.25
 	if inSelectMode or self._gizmoProps.skeleton then
-		local ents = RagdollPoser.Entity:GetClientEntities()
-		for _, ent in ipairs(ents) do
-			if not IsValid(ent) then
+		local clients = RagdollPoser.Entity:GetClientEntities()
+		for _, client in ipairs(clients) do
+			if not IsValid(client) then
+				continue
+			end
+			if self._gizmoProps.drawselected and not selected[client] then
 				continue
 			end
 
-			RagdollPoser.Entity:ExposeBones(ent)
+			RagdollPoser.Entity:ExposeBones(client)
 
 			if inSelectMode then
-				table.insert(mouseHovered, ent)
+				table.insert(mouseHovered, client)
 			end
-			for b = 0, ent:GetBoneCount() - 1 do
-				local name = ent:GetBoneName(b)
+			for b = 0, client:GetBoneCount() - 1 do
+				local name = client:GetBoneName(b)
 				if name == "__INVALIDBONE__" then
 					continue
 				end
 
-				ent:CopyBoneMatrix(b, mat)
+				client:CopyBoneMatrix(b, mat)
 				local p = mat:GetTranslation()
 				local data = p:ToScreen()
 				if not data.visible then
@@ -1226,7 +1234,7 @@ function MGR:DrawBones()
 				end
 				local tx, ty = data.x, data.y
 				local x, y = input.GetCursorPos()
-				local boneType = bones:GetBoneType(ent, b)
+				local boneType = bones:GetBoneType(client, b)
 				if boneType == boneTypes.Procedural then
 					continue
 				end
@@ -1246,8 +1254,8 @@ function MGR:DrawBones()
 				surface.DrawCircle(tx, ty, MAX_BONE_SIZE, color.r, color.g, color.b, color.a * alphaMultiplier)
 
 				local childSelected = false
-				for _, childBone in ipairs(ent:GetChildBones(b)) do
-					ent:CopyBoneMatrix(childBone, mat)
+				for _, childBone in ipairs(client:GetChildBones(b)) do
+					client:CopyBoneMatrix(childBone, mat)
 					local c = mat:GetTranslation()
 					local data = c:ToScreen()
 					if not data.visible then
@@ -1686,6 +1694,7 @@ local function initializeGizmo(gizmo)
 		MGR._gizmoProps.snap = GetConVar("ragdollposer_snap"):GetBool()
 		MGR._gizmoProps.snapValue = GetConVar("ragdollposer_snap_value"):GetFloat()
 		MGR._gizmoProps.skeleton = GetConVar("ragdollposer_skeleton"):GetBool()
+		MGR._gizmoProps.drawselected = GetConVar("ragdollposer_drawselected"):GetBool()
 	end
 	MGR:UpdateOffset()
 	MGR:OnModeChanged(MGR._mode)
@@ -1758,6 +1767,10 @@ end)
 
 convarUpdater("ragdollposer_skeleton", function(_, old, new)
 	MGR._gizmoProps.skeleton = tobool(tonumber(new))
+end)
+
+convarUpdater("ragdollposer_drawselected", function(_, old, new)
+	MGR._gizmoProps.drawselected = tobool(tonumber(new))
 end)
 
 concommand.Add("ragdollposer_resetgizmo", function()

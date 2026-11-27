@@ -20,6 +20,7 @@ TOOL.ClientConVar["selection"] = 1
 TOOL.ClientConVar["snap"] = 0
 TOOL.ClientConVar["snap_value"] = 45
 TOOL.ClientConVar["skeleton"] = 0
+TOOL.ClientConVar["drawselected"] = 0
 
 ---@param tr TraceResult
 function TOOL:LeftClick(tr)
@@ -149,7 +150,7 @@ end)
 
 TOOL.Information = {
 	{ name = "left" },
-	{ name = "left_use", icon2 = "gui/e.png" },
+	{ name = "left_use",      icon2 = "gui/e.png" },
 	{ name = "info_advselect" },
 	{ name = "info_c" },
 }

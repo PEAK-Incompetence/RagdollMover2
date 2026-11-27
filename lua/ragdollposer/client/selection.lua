@@ -271,16 +271,20 @@ local selectionBuffer = {}
 ---@param y integer
 local function getBones(x, y)
 	selectionBuffer = {}
-	local entities = RagdollPoser.Entity:GetClientEntities()
+	local clients = RagdollPoser.Entity:GetClientEntities()
 	local bones = RagdollPoser.Bones
 	local boneTypes = bones.BoneType
-	for _, entity in ipairs(entities) do
-		RagdollPoser.Entity:ExposeBones(entity)
-		for b = 0, entity:GetBoneCount() - 1 do
-			if entity:GetBoneName(b) == "__INVALIDBONE__" then
+	for _, client in ipairs(clients) do
+		if RagdollPoser.Gizmo:GetDrawSelected() and not selectedEntities[client] then
+			continue
+		end
+
+		RagdollPoser.Entity:ExposeBones(client)
+		for b = 0, client:GetBoneCount() - 1 do
+			if client:GetBoneName(b) == "__INVALIDBONE__" then
 				continue
 			end
-			local boneType = bones:GetBoneType(entity, b)
+			local boneType = bones:GetBoneType(client, b)
 			if boneType == boneTypes.Procedural then
 				continue
 			end
@@ -288,13 +292,13 @@ local function getBones(x, y)
 				continue
 			end
 
-			entity:CopyBoneMatrix(b, matrix)
+			client:CopyBoneMatrix(b, matrix)
 			local screenData = matrix and matrix:GetTranslation():ToScreen()
 			local onBone = MGR:RaycastBone(x, y, screenData.x, screenData.y)
 
 			local childSelected = false
-			for _, childBone in ipairs(entity:GetChildBones(b)) do
-				entity:CopyBoneMatrix(childBone, matrix)
+			for _, childBone in ipairs(client:GetChildBones(b)) do
+				client:CopyBoneMatrix(childBone, matrix)
 				local childScreenData = matrix and matrix:GetTranslation():ToScreen()
 				if
 					not onBone
@@ -305,14 +309,14 @@ local function getBones(x, y)
 				then
 					MGR:SetWasOnBone(true)
 					table.insert(selectionBuffer, b)
-					table.insert(selectionBuffer, entity)
+					table.insert(selectionBuffer, client)
 					childSelected = true
 				end
 			end
 			if screenData and screenData.visible and onBone then
 				MGR:SetWasOnBone(true)
 				table.insert(selectionBuffer, b)
-				table.insert(selectionBuffer, entity)
+				table.insert(selectionBuffer, client)
 			end
 		end
 	end

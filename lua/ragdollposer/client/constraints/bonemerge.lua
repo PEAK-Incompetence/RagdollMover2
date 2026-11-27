@@ -313,6 +313,8 @@ function lock:EvaluatePose(entity, context)
 	end
 
 	-- TODO: Account for bones of the bonemerged entity that the parent entity doesn't have
+	-- Doesn't seem to work right with IK. The parent bone may move, but the child bones doesn't that's what is missing
+	-- heere
 
 	return true
 end

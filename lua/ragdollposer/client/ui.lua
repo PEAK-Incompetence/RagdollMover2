@@ -1284,9 +1284,13 @@ function MGR:BuildCPanel(cpanel)
 	end
 
 	local function clearConstraintsUI()
+		local oldScroll = constraintList:GetVBar():GetScroll()
 		constraintList:Clear()
 		constraintList.List = vgui.Create("DListLayout", constraintList)
 		constraintListHook(constraintList.List)
+		return function()
+			constraintList:GetVBar():AnimateTo(oldScroll, 0.1, 0, 0)
+		end
 	end
 
 	function clearConstraints:DoClick()
@@ -1307,13 +1311,14 @@ function MGR:BuildCPanel(cpanel)
 	local function updateConstraintUI(client)
 		local entity = RagdollPoser.Entity:GetEntityFromClient(client)
 		-- constraintList.List:Dock(FILL)
-		clearConstraintsUI()
+		local restoreScroll = clearConstraintsUI()
 		local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
 		if constraints then
 			for _, constraint in ipairs(constraints) do
 				makeConstraintEntry(constraintList, entity, constraint)
 			end
 		end
+		restoreScroll()
 	end
 
 	---@param client ClientEntity

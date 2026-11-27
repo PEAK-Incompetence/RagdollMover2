@@ -71,16 +71,37 @@ function MGR:RestoreDefaults()
 		prop_ragdoll = function(entity, client, bones, matrices)
 			for _, b in ipairs(bones) do
 				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
-				local matrix = matrices[b + 1]
+				local matrix = matrices[b + 1] * IDENTITY_MATRIX
 				local physbone = RagdollPoser.Helpers.BoneToPhysBone(entity, b)
 				if physbone >= 0 then
+					-- Since we're already given physics scales by Ragdoll Resizer, use them ourselves
+					local physObjScale = entity.PhysBones and entity.PhysBones[b] and
+						entity.PhysBones[b].scalevec
+					if physObjScale then
+						matrix:SetScale(matrix:GetScale() / physObjScale)
+					end
+
 					-- Send world transforms and everything
 					net.WriteMatrix(matrix)
 				else
-					if isBonemerge then
-						RagdollPoser.Bonemerge:GetBonemergePose(entity, b, boneMatrix)
+					RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
+					local physParent = RagdollPoser.Helpers.GetPhysBoneParentFromBone(entity, b)
+					local boneParent = entity:TranslatePhysBoneToBone(physParent)
+					local physObjScale = boneParent >= 0 and entity.PhysBones and entity.PhysBones[boneParent] and
+						entity.PhysBones[boneParent].scalevec
+					-- If we're a nonphys bone and we're a resized ragdoll, our nonphys bones are scaled along with our phys bones so
+					if physObjScale then
+						-- First get the manips from our past matrix
+						local pastMatrix = Matrix()
+						RagdollPoser.Helpers.GetNonPhysicalBonePose(entity, b, pastMatrix)
+						-- Calculate the delta between our current and past
+						local delta = boneMatrix:GetInverse() * pastMatrix
+						local existing = Matrix()
+						existing:Translate(entity:GetManipulateBonePosition(b))
+						existing:Rotate(entity:GetManipulateBoneAngles(b))
+						-- apply the deltas to our existing transform
+						boneMatrix:Set(existing * delta:GetInverse())
 					else
-						RagdollPoser.Helpers.GetNonPhysicalBonePose(client, b, boneMatrix)
 						boneMatrix:SetScale(matrix:GetScale())
 					end
 					net.WriteMatrix(boneMatrix)
@@ -94,7 +115,6 @@ function MGR:RestoreDefaults()
 			for _, b in ipairs(bones) do
 				net.WriteUInt(b, RagdollPoser.Constants.MAX_BONE_BITS)
 				local matrix = matrices[b + 1]
-				print(entity, b)
 
 				if b == 0 then
 					boneMatrix:Set(matrix)

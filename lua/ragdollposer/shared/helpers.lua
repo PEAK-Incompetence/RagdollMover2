@@ -151,6 +151,41 @@ function MGR.GetNonPhysicalBonePose(entity, bone, outputMatrix)
 	end
 end
 
+--- @type {[string]: {[integer]: integer}}
+local bonePhysBoneParents = {}
+
+--- @param entity Entity Entity to translate bone
+--- @param bone integer Bone id
+--- @return integer physBone Physics object id
+function MGR.GetPhysBoneParentFromBone(entity, bone)
+	local model = entity:GetModel()
+	if bonePhysBoneParents[model] and bonePhysBoneParents[model][bone] then
+		return bonePhysBoneParents[model][bone]
+	end
+	bonePhysBoneParents[model] = bonePhysBoneParents[model] or {}
+	local b = bone
+	local i = 1
+	local bones = {}
+	while true do
+		b = entity:GetBoneParent(b)
+		local parent = MGR.BoneToPhysBone(entity, b)
+		if parent >= 0 and parent ~= bone then
+			bonePhysBoneParents[model][bone] = parent
+			for c = 1, #bones do
+				bonePhysBoneParents[model][c] = parent
+			end
+			return parent
+		end
+		table.insert(bones, b)
+		i = i + 1
+		if i > 255 then --We've gone through all possible bones, so we get out.
+			break
+		end
+	end
+	bonePhysBoneParents[model][bone] = -1
+	return -1
+end
+
 ---@param ent Entity Entity to translate bone
 ---@param bone integer Bone id
 ---@return integer physBone Physics object id

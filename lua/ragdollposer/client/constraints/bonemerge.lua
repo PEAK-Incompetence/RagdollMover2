@@ -274,7 +274,9 @@ function lock:EvaluatePose(entity, context)
 		local parentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, childBone)
 		local childMatrix = childMatrices[childBone + 1]
 		-- At least not all of them, but still.
-		if not parentBone or not parentTransformedBoneSet[parentBone] then
+		-- TODO: Can we only check the bones that we are moving, including those from an IK chain or lock bones? Currently iterates through all bones if we have bonemerge
+		-- Which can be expensive if we have alot of bonemerged stuff
+		if not parentBone or not transforms[parentBone] then
 			-- Let's make sure we're situated with respect to our parents
 			-- local childParent = childTarget:GetBoneParent(childBone)
 			-- -- If we're moving that we've selected, don't lock it
@@ -313,8 +315,6 @@ function lock:EvaluatePose(entity, context)
 	end
 
 	-- TODO: Account for bones of the bonemerged entity that the parent entity doesn't have
-	-- Doesn't seem to work right with IK. The parent bone may move, but the child bones doesn't that's what is missing
-	-- heere
 
 	return true
 end

@@ -1562,7 +1562,7 @@ function MGR:Render()
 	cam.End2D()
 
 	cam.Start3D()
-	if RagdollPoser.UI.snapValue and RagdollPoser.UI.snapValue:IsEditing() then
+	if IsValid(RagdollPoser.UI.snapValue) and RagdollPoser.UI.snapValue:IsEditing() then
 		self:DrawGrid()
 	end
 	self:Draw()

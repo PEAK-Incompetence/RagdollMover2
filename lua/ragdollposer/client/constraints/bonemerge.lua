@@ -278,11 +278,12 @@ function lock:EvaluatePose(entity, context)
 		-- Which can be expensive if we have alot of bonemerged stuff
 		if not parentBone or not transforms[parentBone] then
 			-- Let's make sure we're situated with respect to our parents
-			-- local childParent = childTarget:GetBoneParent(childBone)
+			local childParent = childTarget:GetBoneParent(childBone)
+			local childParentMatrix = childParent >= 0 and childMatrices[childParent + 1]
 			-- -- If we're moving that we've selected, don't lock it
-			-- if childParent >= 0 then
-			-- 	childMatrix:Set(childMatrix * self.transformedBonesLocal[childBone]:GetInverse())
-			-- end
+			if childParentMatrix then
+				childMatrix:Set(childParentMatrix * self.transformedBonesLocal[childBone])
+			end
 			continue
 		end
 
@@ -313,8 +314,6 @@ function lock:EvaluatePose(entity, context)
 			end
 		end
 	end
-
-	-- TODO: Account for bones of the bonemerged entity that the parent entity doesn't have
 
 	return true
 end

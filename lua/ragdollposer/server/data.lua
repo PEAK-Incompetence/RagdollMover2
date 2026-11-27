@@ -133,6 +133,10 @@ local function trackEntityDuplicators(entity)
 	end
 end
 
+hook.Add("LoadGModSave", "RagdollPoser_ClearCopiedEntities", function(savedata, mapname, maptime)
+	copiedEntities = {}
+end)
+
 hook.Remove("CanTool", "RagdollPoser_Data_TrackDuplicator")
 hook.Add("CanTool", "RagdollPoser_Data_TrackDuplicator", function(ply, tr, toolname)
 	if toolname == "duplicator" and ply:KeyDown(IN_ATTACK2) then
@@ -260,6 +264,8 @@ local function entityModifier(ply, ent, data)
 	ent.PostEntityPaste = function(self, pastePlayer, pastedEntity, createdEntities)
 		restoreDuplicatedConstraintReferences(data, self, createdEntities)
 		d.Constraints[self] = data
+		duplicator.ClearEntityModifier(pastedEntity, MGR.DuplicatorKey)
+		duplicator.StoreEntityModifier(pastedEntity, MGR.DuplicatorKey, prepareConstraintsForDuplication(data))
 		if previousPostEntityPaste then
 			previousPostEntityPaste(self, pastePlayer, pastedEntity, createdEntities)
 		end

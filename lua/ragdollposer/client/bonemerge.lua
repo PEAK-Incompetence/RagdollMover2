@@ -164,7 +164,7 @@ local function getIndependentManipulationScale(worldScale, parentScale, relative
 	return localScale
 end
 
----@type table<string, fun(b: Entity, p: Entity, bone: integer): integer>
+---@type table<string, fun(b: Entity, p: Entity, bone: integer): integer?>
 local parentBoneMap = {
 	ent_advbonemerge = function(bonemergeEntity, parentEntity, bone)
 		if bonemergeEntity.AdvBone_BoneInfo then

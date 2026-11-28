@@ -41,6 +41,13 @@ local function getMergeRootBones(parentTarget, childTarget, fallbackParentBone)
 		return
 	end
 
+	-- AdvBonemerge: do we have an origin?
+	local originParentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, -1)
+	if isnumber(originParentBone) and originParentBone >= 0 then
+		return originParentBone, -1
+	end
+
+	-- if not, just work with standard bonemerge tools
 	local childBone = 0
 	local parentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, childBone)
 	if not isnumber(parentBone) or parentBone < 0 then
@@ -61,7 +68,23 @@ end
 local function captureOffset(constraint, parentTarget, childTarget, parentMatrices, childMatrices)
 	local parentBone, childBone = getMergeRootBones(parentTarget, childTarget, constraint.State.bone)
 	local parentRoot = parentBone and parentMatrices[parentBone + 1]
-	local childRoot = childBone and childMatrices[childBone + 1]
+	local childRoot = nil
+
+	if childBone == -1 then
+		-- Build current -1 origin matrix from parentRoot + origin manipulations (or AdvBone_OriginMatrix)
+		if parentRoot then
+			childRoot = Matrix()
+			childRoot:Set(parentRoot)
+			childRoot:Translate(childTarget:GetManipulateBonePosition(-1))
+			childRoot:Rotate(childTarget:GetManipulateBoneAngles(-1))
+			childRoot:Scale(childTarget:GetManipulateBoneScale(-1))
+		else
+			childRoot = childTarget.AdvBone_OriginMatrix
+		end
+	elseif childBone then
+		childRoot = childMatrices[childBone + 1]
+	end
+
 	if not parentRoot or not childRoot then
 		return false
 	end
@@ -184,6 +207,11 @@ function lock:PreEvaluate(entity)
 		local matrix = childMatrices[bone + 1]
 		local parent = childClient:GetBoneParent(bone)
 		local parentBoneMatrix = parent >= 0 and childMatrices[parent + 1]
+
+		if not parentBoneMatrix and parent == -1 then
+			parentBoneMatrix = childTarget.AdvBone_OriginMatrix
+		end
+
 		if matrix then
 			transformedBones[#transformedBones + 1] = bone
 			if parentBoneMatrix then
@@ -195,6 +223,7 @@ function lock:PreEvaluate(entity)
 			capture(child)
 		end
 	end
+
 	self.transformedBonesLocal = {}
 
 	capture(0)
@@ -212,7 +241,6 @@ function lock:EvaluatePose(entity, context)
 	if self.State.enabled == false or not IsValid(parentTarget) or not IsValid(childTarget) or not context then
 		return false
 	end
-	local parentTransformedBoneSet = transformedClientBones[parentClient]
 
 	local influence = math.Clamp(self.State.influence or 1, 0, 1)
 	if influence == 0 then
@@ -257,31 +285,38 @@ function lock:EvaluatePose(entity, context)
 		return captureOffset(self, parentTarget, childTarget, transforms, childMatrices)
 	end
 
-	local childRoot = childMatrices[childRootBone + 1]
+	local originMatrix = nil
+	local childRoot = childRootBone == -1 and Matrix() or (childRootBone and childMatrices[childRootBone + 1])
 
 	if self._offset and parentRoot and childRoot then
 		childRoot:Set(parentRoot * self._offset)
+		if childRootBone == -1 then
+			originMatrix = childRoot
+		end
 	end
 
 	RagdollPoser.Entity:ExposeBones(childTarget)
 	RagdollPoser.Entity:ExposeBones(parentTarget)
+
 	-- Take the L and iterate over all child bone targets during transform
-	for childBone = 0, childTarget:GetBoneCount() - 1 do
+	for childBone = -1, childTarget:GetBoneCount() - 1 do
 		if self._offset and childBone == childRootBone then
 			continue
 		end
 
 		local parentBone = RagdollPoser.Bonemerge:GetParentBone(childTarget, parentTarget, childBone)
-		local childMatrix = childMatrices[childBone + 1]
+		local childMatrix = childBone == -1 and Matrix() or childMatrices[childBone + 1]
+
 		-- At least not all of them, but still.
 		-- TODO: Can we only check the bones that we are moving, including those from an IK chain or lock bones? Currently iterates through all bones if we have bonemerge
 		-- Which can be expensive if we have alot of bonemerged stuff
-		if not parentBone or not transforms[parentBone] then
+		if not parentBone or not transforms[parentBone + 1] then
 			-- Let's make sure we're situated with respect to our parents
 			local childParent = childTarget:GetBoneParent(childBone)
-			local childParentMatrix = childParent >= 0 and childMatrices[childParent + 1]
+			local childParentMatrix = childParent >= 0 and childMatrices[childParent + 1] or
+				(childParent == -1 and originMatrix)
 			-- -- If we're moving that we've selected, don't lock it
-			if childParentMatrix then
+			if childParentMatrix and childMatrix and self.transformedBonesLocal[childBone] then
 				childMatrix:Set(childParentMatrix * self.transformedBonesLocal[childBone])
 			end
 			continue
@@ -289,13 +324,15 @@ function lock:EvaluatePose(entity, context)
 
 		local parentMatrix = transforms[parentBone + 1]
 		if parentMatrix and childMatrix then
-			-- TODO: Add a DoTransform section in bonemerge.lua for this stuff
 			if childTarget:GetClass() == "ent_advbonemerge" then
 				childMatrix:Set(parentMatrix)
 				if not self._offset or childBone ~= childRootBone then
 					childMatrix:Translate(childTarget:GetManipulateBonePosition(childBone))
 					childMatrix:Rotate(childTarget:GetManipulateBoneAngles(childBone))
 					childMatrix:Scale(childTarget:GetManipulateBoneScale(childBone))
+				end
+				if childBone == -1 then
+					originMatrix = childMatrix
 				end
 			elseif childTarget:GetClass() == "ent_composite" then
 				if childTarget:GetParentAttachment() ~= 0 then

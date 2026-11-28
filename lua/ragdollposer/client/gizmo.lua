@@ -974,6 +974,8 @@ function MGR:ResetSelected(transformType, bone, entity)
 	local resetAll = transformType == 4
 
 	local function handleReset(bone, client)
+		-- TODO: Add support for bonemerged entities
+
 		local defaultPose = RagdollPoser.Helpers.GetDefaultPoseTreeFor(client)
 		local matrices = RagdollPoser.Entity:GetMatricesFromClient(client)
 		local entity = RagdollPoser.Entity:GetEntityFromClient(client)

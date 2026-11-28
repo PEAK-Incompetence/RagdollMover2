@@ -334,6 +334,7 @@ local transformOriginMap = {
 			output:Identity()
 			output:SetTranslation(newManipPos)
 			output:SetAngles(newManipRot:GetAngles())
+			-- TODO: add scaling checks
 		else
 			-- Use existing Advanced Bonemerge implementation for transforming from origin to manip space
 
@@ -409,7 +410,8 @@ local transformOriginMap = {
 			output:Identity()
 			output:SetTranslation(newManipPos)
 			output:SetAngles(newManipRot:GetAngles())
-			output:SetScale(childMatrix:GetScale())
+			-- why is this scaling itself again and again?
+			output:SetScale(childMatrix:GetScale() / curParentMat:GetScale())
 		end
 	end,
 	ent_composite = function(bonemergeEntity, parentEntity, bone, output)

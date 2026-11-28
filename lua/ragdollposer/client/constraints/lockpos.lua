@@ -43,6 +43,8 @@ end
 local function createConstraint(entity, state, name)
 	local base = lock:Init(entity, state, name)
 	---@cast base PositionLockConstraint
+	base:ValidateBoneName()
+
 	return base
 end
 

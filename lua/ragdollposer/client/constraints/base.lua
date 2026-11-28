@@ -226,12 +226,25 @@ end
 ---@return table<any, Panel>
 function Base:ConstructUI(entry, props, state) end
 
+function Base:ValidateBoneName()
+	if self.State.boneName and IsValid(self.State.target) then
+		self.State.bone = self.State.target:LookupBone(self.State.boneName)
+	end
+end
+
+---@param preserveBoneName boolean Whether to store bone names as well. Only useful for constraint presets
 ---@return SerializedConstraint
-function Base:Serialize()
+function Base:Serialize(preserveBoneName)
+	local state = table.Copy(self.State)
+	if preserveBoneName and IsValid(self.State.target) then
+		print("how do this", self.State.target:GetBoneName(state.bone))
+		state.boneName = self.State.target:GetBoneName(state.bone)
+	end
+
 	return {
 		Type = self.Properties.type,
 		Name = self.Properties.name,
-		State = self.State,
+		State = state,
 		_id = self._id,
 	}
 end

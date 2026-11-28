@@ -401,8 +401,9 @@ end
 
 ---@param entity Entity
 ---@param batch ConstraintBatch[]
+---@param offset integer? Where to insert new constraints
 ---@return Constraint[]?
-function MGR:PushBatch(entity, batch)
+function MGR:PushBatch(entity, batch, offset)
 	local stack = EntityConstraintStacks[entity] or createSetArray()
 	EntityConstraintStacks[entity] = stack
 	refreshStack(entity)
@@ -411,15 +412,50 @@ function MGR:PushBatch(entity, batch)
 		local type, state, name = b.type, b.state, b.name
 		local constraint = constructConstraint(entity, type, state, name)
 		if constraint then
-			local index = #stack.array + 1
-			stack.array[index] = constraint
-			stack.set[constraint._id] = index
-			constraints[#constraints + 1] = constraint
-			EntityConstraintStacks[entity] = stack
+			if offset then
+				-- TODO: Figure out logic for doing this. maybe use table.insert
+				-- even then, another hook would need to run for ui to handle constraints being inserted in arbitrary positions
+			else
+				local index = #stack.array + 1
+				stack.array[index] = constraint
+				stack.set[constraint._id] = index
+				constraints[#constraints + 1] = constraint
+				EntityConstraintStacks[entity] = stack
+			end
 		end
 	end
 	hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, constraints)
 	EntityConstraintStacks[entity] = stack
+	self:UpdateConstraints()
+	self:UpdateGraph()
+end
+
+---Load constraints for the selected entity. Only call this when we use the constraint preset menu
+---Because we then do UpdateConstraints here
+---@param constraints NetworkedConstraint[]
+function MGR:SetEntityConstraints(entity, constraints)
+	---Clear the existing constraint stack for the upcoming one
+	if EntityConstraintStacks[entity] then
+		EntityConstraintStacks[entity] = nil
+	end
+
+	local array = {}
+	local set = {}
+	for _, s in ipairs(constraints) do
+		-- Difference between this function and SetConstraints is that we pass the string directly, instead of converting it from uint
+		local constraint = constructConstraint(entity, s.Type, s.State, s.Name)
+		if constraint then
+			local index = #array + 1
+			array[index] = constraint
+			set[constraint._id] = index
+		end
+	end
+	local stack = { set = set, array = array }
+	EntityConstraintStacks[entity] = stack
+	-- This should be called in the clientside when we load something
+
+	hook.Run("RagdollPoser_Constraints_ConstraintCreated", entity, array)
+
 	self:UpdateConstraints()
 	self:UpdateGraph()
 end

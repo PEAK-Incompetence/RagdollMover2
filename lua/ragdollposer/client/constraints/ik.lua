@@ -479,6 +479,7 @@ function ik:ConstructUI(entry, props, state)
 		ui.rotationWeight:SetEnabled(enabled)
 		RagdollPoser.Constraints:UpdateConstraint(self.Owner, self)
 	end
+
 	entry:AddItem(ui.weightRotation)
 
 	ui.rotationWeight = entry:NumSlider("#tool.ragdollposer.constraint.ik.rotationweight.value", "", 0, 1, 2)
@@ -876,6 +877,8 @@ local function createConstraint(entity, state, name)
 		base.State.weightRotation = true
 		base.State.weightRotationConfigured = true
 	end
+	base:ValidateBoneName()
+
 	return base
 end
 

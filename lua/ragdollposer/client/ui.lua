@@ -1,3 +1,8 @@
+if RagdollPoser.UI and IsValid(RagdollPoser.UI.ConstraintFrame) then
+	RagdollPoser.UI.ConstraintFrame:Remove()
+	RagdollPoser.UI.ConstraintFrame = nil
+end
+
 ---[CLIENT]
 ---
 ---Tool panel UI and HUD
@@ -787,6 +792,10 @@ function MGR:BoneMenu(client, bone, keepOpen, parentMenu)
 	menu:AddOption("#tool.ragdollposer.bone.scale.zero.children", function()
 		-- TODO: Implement recursive children operation in Gizmo
 	end)
+	menu:AddOption("#tool.ragdollposer.bone.copy", function()
+		RagdollPoser.Entity:ExposeBones(client)
+		SetClipboardText(client:GetBoneName(bone))
+	end)
 
 	if not parentMenu then
 		menu:Open()
@@ -1046,6 +1055,164 @@ local function transformEntry(cPanel, sliderType, valueChanged)
 	return entry
 end
 
+---@param MGR RagdollPoser.UI
+local function openConstraintBrowser(MGR)
+	if not MGR.ConstraintFrame then
+		local w, h = ScrW() * 0.25, ScrH() * 0.25
+
+		local dFrame = vgui.Create("DFrame")
+		local fileBrowser = dFrame:Add("DFileBrowser")
+		fileBrowser:Dock(FILL)
+		fileBrowser:SetPath("DATA")
+		fileBrowser:SetFileTypes("*.txt")
+		fileBrowser:SetBaseFolder("ragdollposer/constraints")
+		fileBrowser:SetCurrentFolder("ragdollposer/constraints")
+		dFrame.FileBrowser = fileBrowser
+
+		dFrame.ButtonLayout = dFrame:Add("DPanel")
+		dFrame.ButtonLayout:Dock(BOTTOM)
+
+		dFrame:SetSizable(true)
+
+		local load, save = dFrame.ButtonLayout:Add("DButton"), dFrame.ButtonLayout:Add("DButton")
+		save:SetText("#tool.ragdollposer.save")
+		load:SetText("#tool.ragdollposer.load")
+
+		local settingsContainer = dFrame:Add("DPanel")
+		settingsContainer:Dock(RIGHT)
+		settingsContainer:SetWide(w * 0.375)
+		local settings = settingsContainer:Add("ControlPanel")
+		settings:SetLabel("#tool.ragdollposer.settings")
+		settings:Dock(FILL)
+		local check = settings:CheckBox("#tool.ragdollposer.constraint.browser.target", "")
+		-- By default, always target the selected entity
+		check:SetChecked(true)
+		dFrame.Settings = settings
+		dFrame.Settings.Target = check
+
+		local label = dFrame.ButtonLayout:Add("DTextEntry")
+		label:Dock(RIGHT)
+		label:DockMargin(0, 0, 2, 0)
+		label:SetSize(w * 0.5, save:GetTall())
+		dFrame.ButtonLayout.FileName = label
+
+		local selectedPath = ""
+		function fileBrowser:OnSelect(filePath, panel)
+			selectedPath = filePath
+			local tab = string.Split(selectedPath, "/")
+			label:SetText(tab[#tab])
+		end
+
+		function label:OnChange()
+			local currentPath = fileBrowser:GetCurrentFolder()
+			selectedPath = currentPath .. "/" .. label:GetValue() .. ".txt"
+		end
+
+		local function loadCallback(success, errMsg)
+			if not success then
+				ErrorNoHalt("[Ragdoll Poser] Failed to load constraint preset: \n", errMsg)
+			end
+		end
+
+		function load:DoClick()
+			local selected = MGR.EntitySelector.selected
+			if IsValid(selected) then
+				local entity = RagdollPoser.Entity:GetEntityFromClient(selected)
+				local result, msg = RagdollPoser.File:LoadConstraintPreset(entity, selectedPath,
+					RagdollPoser.File.ConstraintLoadType.Replace,
+					check:GetChecked(), loadCallback)
+			end
+		end
+
+		function load:DoRightClick()
+			local selected = MGR.EntitySelector.selected
+			if IsValid(selected) then
+				local entity = RagdollPoser.Entity:GetEntityFromClient(selected)
+				local menu = DermaMenu()
+				menu:AddOption("#tool.ragdollposer.constraint.browser.replace", function()
+					RagdollPoser.File:LoadConstraintPreset(entity, selectedPath,
+						RagdollPoser.File.ConstraintLoadType.Replace,
+						check:GetChecked(), loadCallback)
+				end)
+				-- TODO: Figure ouot how to handle inserting constraint entries at arbitrary positions
+				-- menu:AddOption("#tool.ragdollposer.constraint.browser.prepend", function()
+				-- 	RagdollPoser.File:LoadConstraintPreset(entity, selectedPath,
+				-- 		RagdollPoser.File.ConstraintLoadType.Prepend,
+				-- 		check:GetChecked(), loadCallback)
+				-- end)
+				menu:AddOption("#tool.ragdollposer.constraint.browser.append", function()
+					RagdollPoser.File:LoadConstraintPreset(entity, selectedPath,
+						RagdollPoser.File.ConstraintLoadType.Append,
+						check:GetChecked(), loadCallback)
+				end)
+				menu:Open()
+			end
+		end
+
+		function save:DoClick()
+			local currentPath = fileBrowser:GetCurrentFolder()
+			local files = file.Find(string.Trim(currentPath .. "/" .. (fileBrowser:GetFileTypes()), "/"), "DATA")
+			local currentFile = label:GetValue()
+			local displayWarning = false
+			for _, file in ipairs(files) do
+				if file == currentFile then
+					displayWarning = true
+					break
+				end
+			end
+
+			local function doSave()
+				local selected = MGR.EntitySelector.selected
+				if IsValid(selected) then
+					local entity = RagdollPoser.Entity:GetEntityFromClient(selected)
+					local constraints = RagdollPoser.Constraints:GetConstraintStack(entity)
+					local result, msg = RagdollPoser.File:SaveConstraintPreset(constraints, selectedPath)
+				end
+			end
+
+			if displayWarning then
+				Derma_Query(
+					language.FormatPhrase("#tool.ragdollposer.constraint.save.warning", currentFile),
+					"#tool.ragdollposer.warning",
+					"#tool.ragdollposer.save", doSave,
+					"#tool.ragdollposer.cancel")
+			else
+				doSave()
+			end
+		end
+
+		load:Dock(RIGHT)
+		load:DockMargin(0, 0, 2, 0)
+		save:Dock(RIGHT)
+		save:DockMargin(0, 0, 2, 0)
+
+		dFrame.ButtonLayout.Load = load
+		dFrame.ButtonLayout.Save = save
+
+		dFrame.ButtonLayout:SetTall(save:GetTall())
+
+		dFrame:SetSize(w, h)
+		dFrame:SetPos(w * 1.5, h * 1.5)
+
+		-- For debugging purpose, set this to true
+		dFrame:SetDeleteOnClose(false)
+
+		local oldLayout = dFrame.PerformLayout
+		function dFrame:PerformLayout(width, height)
+			oldLayout(self)
+			self.ButtonLayout.FileName:SetWide(width * 0.5)
+		end
+
+		MGR.ConstraintFrame = dFrame
+	end
+
+	if IsValid(MGR.ConstraintFrame.FileBrowser) then
+		MGR.ConstraintFrame.FileBrowser:SetCurrentFolder(MGR.ConstraintFrame.FileBrowser:GetCurrentFolder())
+	end
+	MGR.ConstraintFrame:SetVisible(true)
+	MGR.ConstraintFrame:MakePopup()
+end
+
 ---@param cpanel ControlPanel
 function MGR:BuildCPanel(cpanel)
 	local gizmoCategory = makeCategory(cpanel, language.GetPhrase("#tool.ragdollposer.gizmo"), "ControlPanel")
@@ -1239,6 +1406,7 @@ function MGR:BuildCPanel(cpanel)
 	---@field [ClientEntity] DTree_Node
 	---@field selected ClientEntity
 	local entitySelector = entitySelectorContainer:Add("rgp_tree")
+	self.EntitySelector = entitySelector
 
 	---@class BoneTree: rgp_tree
 	---@field [ClientEntity] DTree_Node
@@ -1256,6 +1424,8 @@ function MGR:BuildCPanel(cpanel)
 
 	local constraintCategory = makeCategory(cpanel, language.GetPhrase("tool.ragdollposer.constraint"), "ControlPanel")
 	local addConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.add"))
+	local openConstraint = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.open"))
+	constraintCategory:AddItem(addConstraint, openConstraint)
 	local clearConstraints = constraintCategory:Button(language.GetPhrase("tool.ragdollposer.constraint.clear"))
 
 	local constraintListForm =
@@ -1274,13 +1444,22 @@ function MGR:BuildCPanel(cpanel)
 	-- print("constraint list items!")
 	-- print(constraintList.Items)
 
-	local enable = IsValid(entitySelector.selected)
-	addConstraint:SetEnabled(enable)
-	clearConstraints:SetEnabled(enable)
+	local function setEnabledConstraintButtons()
+		local enable = IsValid(entitySelector.selected)
+		addConstraint:SetEnabled(enable)
+		openConstraint:SetEnabled(enable)
+		clearConstraints:SetEnabled(enable)
+	end
+	setEnabledConstraintButtons()
+
 	function addConstraint:DoClick()
 		if IsValid(entitySelector.selected) then
 			MGR:ConstraintMenu(entitySelector.selected)
 		end
+	end
+
+	function openConstraint:DoClick()
+		openConstraintBrowser(MGR)
 	end
 
 	local function clearConstraintsUI()
@@ -1355,9 +1534,7 @@ function MGR:BuildCPanel(cpanel)
 		entitySelector.selected = selectedEntity
 		updateConstraintUI(selectedEntity)
 
-		local enable = IsValid(selectedEntity)
-		addConstraint:SetEnabled(enable)
-		clearConstraints:SetEnabled(enable)
+		setEnabledConstraintButtons()
 
 		-- If we've only selected one entity
 		if #selection == 2 then

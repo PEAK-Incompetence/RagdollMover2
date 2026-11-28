@@ -1,0 +1,78 @@
+[
+	{
+		"Type": "ik",
+		"Name": "IK: Left Hand",
+		"State": {
+			"weightPositionValue": 1,
+			"influence": 1,
+			"length": 2,
+			"bone": 11,
+			"iterations": 32,
+			"weightRotationConfigured": true,
+			"offset": "[0 0 0]",
+			"weightRotationValue": 1,
+			"weightPosition": true,
+			"weightRotation": true,
+			"enabled": true,
+			"key": -1,
+			"boneName": "ValveBiped.Bip01_L_Hand"
+		}
+	},
+	{
+		"Type": "ik",
+		"Name": "IK: Right Hand",
+		"State": {
+			"weightPositionValue": 1,
+			"influence": 1,
+			"length": 2,
+			"bone": 17,
+			"iterations": 32,
+			"weightRotationConfigured": true,
+			"offset": "[0 0 0]",
+			"weightRotationValue": 1,
+			"weightPosition": true,
+			"weightRotation": true,
+			"enabled": true,
+			"key": -1,
+			"boneName": "ValveBiped.Bip01_R_Hand"
+		}
+	},
+	{
+		"Type": "ik",
+		"Name": "IK: Left Foot",
+		"State": {
+			"weightPositionValue": 1,
+			"influence": 1,
+			"length": 2,
+			"bone": 24,
+			"iterations": 32,
+			"weightRotationConfigured": true,
+			"offset": "[0 0 0]",
+			"weightRotationValue": 1,
+			"weightPosition": true,
+			"weightRotation": true,
+			"enabled": true,
+			"key": -1,
+			"boneName": "ValveBiped.Bip01_L_Foot"
+		}
+	},
+	{
+		"Type": "ik",
+		"Name": "IK: Right Foot",
+		"State": {
+			"weightPositionValue": 1,
+			"influence": 1,
+			"length": 2,
+			"bone": 28,
+			"iterations": 32,
+			"weightRotationConfigured": true,
+			"offset": "[0 0 0]",
+			"weightRotationValue": 1,
+			"weightPosition": true,
+			"weightRotation": true,
+			"enabled": true,
+			"key": -1,
+			"boneName": "ValveBiped.Bip01_R_Foot"
+		}
+	}
+]

@@ -302,6 +302,8 @@ local function createConstraint(entity, state, name)
 	local base = lock:Init(entity, state, name)
 	---@cast base BoneLockConstraint
 	base.State.target = base.Owner
+	base:ValidateBoneName()
+
 	return base
 end
 

@@ -1478,7 +1478,7 @@ local defaultScaleVector = Vector(1, 1, 1)
 function MGR:DrawScaling(mouseHovered)
 	local targetEntity = NULL
 
-	local sin = 1 + 0.1 * math.sin(2.666 * math.pi * RealTime()) ^ 2
+	local sin = 1 + 0.125 * math.sin(1.666 * math.pi * RealTime()) ^ 2
 	scaleVector:SetUnpacked(sin, sin, sin)
 
 	for ent, bone in pairs(hovered) do

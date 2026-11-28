@@ -305,17 +305,17 @@ local transformOriginMap = {
 
 			local pastLocal = pastParentTransform:GetInverse() * pastTransform
 
-			-- 2. Get existing manipulation
+			-- Get existing manipulation
 			local existingPos = bonemergeEntity:GetManipulateBonePosition(bone)
 			local existingAng = bonemergeEntity:GetManipulateBoneAngles(bone)
 
-			-- 3. Position: ManipulateBonePosition is purely in parentBone's space
+			-- ManipulateBonePosition is purely in parentBone's space
 			-- Since localPos = bindPos + ManipulateBonePosition, and bindPos never changes:
 			-- currentLocalPos - pastLocalPos == newManipPos - existingPos
 			local posDelta = currentLocal:GetTranslation() - pastLocal:GetTranslation()
 			local newManipPos = existingPos + posDelta
 
-			-- 4. Rotation: ManipulateBoneAngles is in the bone's bind space (localAng = bindAng * ManipulateBoneAngles)
+			-- ManipulateBoneAngles is in the bone's bind space (localAng = bindAng * ManipulateBoneAngles)
 			-- First find bindAng from pastLocal and existingAng:
 			local existingRot = Matrix()
 			existingRot:SetAngles(existingAng)
@@ -335,51 +335,80 @@ local transformOriginMap = {
 			output:SetTranslation(newManipPos)
 			output:SetAngles(newManipRot:GetAngles())
 		else
-			-- if the bone we're doing origin with doesn't have a parent bone, then we use the parent entity's origin
-			-- Steps for preserving origin
-			-- 1. Get our current parent and bone matrix and calculate their local offset
-			-- 2. Get our past parent and bone matrix and calculate their local offset
-			-- 3. Calculate delta between local offsets, also calculate delta between past parent and current parent
-			-- 4. Apply deltas to the current bone manipulate angles
+			-- Use existing Advanced Bonemerge implementation for transforming from origin to manip space
+
+			local originInfo = bonemergeEntity.AdvBone_BoneInfo and bonemergeEntity.AdvBone_BoneInfo[-1]
+			local hasParentBone = originInfo and originInfo.parent and originInfo.parent ~= ""
+			local originBone = hasParentBone and parentEntity:LookupBone(originInfo.parent) or nil
+
 			local parentClient = RagdollPoser.Entity:GetClientFromEntity(parentEntity)
 
-			local currentTransform = Matrix()
-			currentTransform:Set(bmMatrices[bone + 1])
-			currentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
-
-			local currentParentTransform = Matrix()
-			currentParentTransform:Set(parentClient:GetBoneMatrix(0))
-			currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
-
-			local currentLocal = currentParentTransform:GetInverse() * currentTransform
-
-			local pastTransform = bonemergeEntity:GetBoneMatrix(bone)
-			pastTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
-
-			local pastParentTransform = parentEntity:GetBoneMatrix(0)
-			pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
-
-			local pastLocal = pastParentTransform:GetInverse() * pastTransform
-			local parentDelta = currentParentTransform * pastParentTransform:GetInverse()
-
-			-- Get the difference between the new offset and current offset
-			local delta = currentLocal:GetInverse() * pastLocal
-
-			local parentMatrix = parentEntity:GetBoneMatrix(0)
 			local childMatrix = bmMatrices and bmMatrices[bone + 1]
-			if not parentMatrix or not childMatrix then
+			local pastChildMat = bonemergeEntity and bonemergeEntity:GetBoneMatrix(bone)
+
+			local curParentMat = originBone and (parentClient and parentClient:GetBoneMatrix(originBone)) or
+				(parentClient and parentClient:GetWorldTransformMatrix())
+			local pastParentMat = originBone and (parentEntity and parentEntity:GetBoneMatrix(originBone)) or
+				(parentEntity and parentEntity:GetWorldTransformMatrix())
+
+			if not curParentMat or not childMatrix or not pastParentMat or not pastChildMat then
 				output:Identity()
 				return
 			end
 
+			-- Build AdvBone's origin manipulation matrix
+			local originManip = Matrix()
+			originManip:Translate(bonemergeEntity:GetManipulateBonePosition(-1))
+			originManip:Rotate(bonemergeEntity:GetManipulateBoneAngles(-1))
+
+			local currentTransform = Matrix()
+			currentTransform:Set(childMatrix)
+			currentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+			local currentParentTransform = Matrix()
+			currentParentTransform:Set(curParentMat)
+			currentParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+			currentParentTransform:Mul(originManip) -- these move the parent transform to our modified origin
+
+			local currentLocal = currentParentTransform:GetInverse() * currentTransform
+
+			local pastTransform = Matrix()
+			pastTransform:Set(pastChildMat)
+			pastTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+
+			local pastParentTransform = Matrix()
+			pastParentTransform:Set(pastParentMat)
+			pastParentTransform:SetScale(RagdollPoser.Constants.VECTOR_ONE)
+			pastParentTransform:Mul(originManip)
+
+			local pastLocal = pastParentTransform:GetInverse() * pastTransform
+
+			-- Do position deltas
+			local existingPos = bonemergeEntity:GetManipulateBonePosition(bone)
+			local posDelta = currentLocal:GetTranslation() - pastLocal:GetTranslation()
+			local newManipPos = existingPos + posDelta
+
+			local existingAng = bonemergeEntity:GetManipulateBoneAngles(bone)
+			local existingRot = Matrix()
+			existingRot:SetAngles(existingAng)
+
+			local pastRot = Matrix()
+			pastRot:SetAngles(pastLocal:GetAngles())
+
+			-- Get bone manip rotation
+			local bindRot = pastRot * existingRot:GetInverse()
+
+			local currentRot = Matrix()
+			currentRot:SetAngles(currentLocal:GetAngles())
+
+			-- Bone delta (expands to existingRot * pastRot:GetInverse() * currentRot),
+			-- last two means what is the angle offset from the past rot to the current one
+			-- and apply that to the bone manip. makes sense
+			local newManipRot = bindRot:GetInverse() * currentRot
+
 			output:Identity()
-			output:Translate(childMatrix:GetTranslation() - parentMatrix:GetTranslation())
-			-- First, if we have rotated our parent, rotate it first
-			output:Rotate(parentDelta:GetAngles())
-			-- Then get the bone manipulate angles
-			output:Rotate(bonemergeEntity:GetManipulateBoneAngles(bone))
-			-- and apply our deltas
-			output:Rotate(delta:GetInverse():GetAngles())
+			output:SetTranslation(newManipPos)
+			output:SetAngles(newManipRot:GetAngles())
 			output:SetScale(childMatrix:GetScale())
 		end
 	end,
